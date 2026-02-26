@@ -23,6 +23,13 @@ describe('PortableIdentityService', () => {
       agent: {
         findFirst: jest.fn().mockResolvedValue({ name: 'TestAgent' }),
       },
+      agentCapabilityProfile: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      taskCompletion: {
+        findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
