@@ -52,10 +52,10 @@ export class MemoryGraphService {
       },
       select: {
         id: true,
+        userId: true,
         raw: true,
         layer: true,
         source: true,
-        userId: true,
         importanceScore: true,
         effectiveScore: true,
         safetyCritical: true,

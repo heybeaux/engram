@@ -71,7 +71,14 @@ export class RateLimitService implements OnModuleInit, OnModuleDestroy {
     windowMs: number = 60_000,
   ): Promise<{ allowed: boolean; retryAfterMs: number; remaining: number }> {
     if (this.redis) {
-      return this.consumeRedis(key, limit, windowMs);
+      try {
+        return await this.consumeRedis(key, limit, windowMs);
+      } catch (err) {
+        this.logger.warn(
+          `Redis rate-limit failed, falling back to in-memory: ${(err as Error).message}`,
+        );
+        return this.consumeInMemory(key, limit, windowMs);
+      }
     }
     return this.consumeInMemory(key, limit, windowMs);
   }
