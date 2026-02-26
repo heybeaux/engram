@@ -20,6 +20,7 @@ import { ResultFusionService } from '../multi-query/result-fusion.service';
 import { ContextualRecallService } from './contextual-recall.service';
 import { MemoryJobQueueService } from './memory-job-queue.service';
 import { MemoryJobProcessorService } from './memory-job-processor.service';
+import { EmbeddingRetryCronService } from './embedding-retry-cron.service';
 import { MemoryPoolModule } from '../memory-pool/memory-pool.module';
 import { MemoryAccessLogModule } from '../memory-access-log/memory-access-log.module';
 import { AccountModule } from '../account/account.module';
@@ -58,6 +59,7 @@ import { QueueModule } from '../queue/queue.module';
     ContextualRecallService,
     MemoryJobQueueService,
     MemoryJobProcessorService,
+    EmbeddingRetryCronService,
   ],
   exports: [
     MemoryService,

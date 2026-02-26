@@ -65,6 +65,8 @@ describe('MemoryController', () => {
         getEmbeddingStatus: jest.fn().mockResolvedValue({
           withEmbedding: 10,
           withoutEmbedding: 2,
+          pending: 1,
+          failed: 1,
           retryQueueSize: 1,
           exhaustedRetries: 0,
         }),

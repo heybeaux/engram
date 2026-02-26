@@ -10,7 +10,7 @@ describe('MemoryPipelineService', () => {
   beforeEach(() => {
     prisma = {
       memoryExtraction: { create: jest.fn() },
-      memory: { update: jest.fn() },
+      memory: { update: jest.fn().mockResolvedValue({}) },
       entity: { upsert: jest.fn() },
       memoryEntity: { upsert: jest.fn() },
       memoryChainLink: { upsert: jest.fn() },
@@ -48,7 +48,7 @@ describe('MemoryPipelineService', () => {
     };
     hierarchy = {
       isEnabled: jest.fn().mockReturnValue(false),
-      processMemory: jest.fn(),
+      processMemory: jest.fn().mockResolvedValue(undefined),
     };
     service = new MemoryPipelineService(
       prisma,

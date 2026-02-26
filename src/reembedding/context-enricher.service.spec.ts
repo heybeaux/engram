@@ -71,6 +71,7 @@ describe('ContextEnricherService', () => {
       importanceHint: null,
       confidence: 1.0,
       sessionPosition: null,
+      embeddingStatus: 'PENDING' as any,
       embeddingId: null,
       embeddingModel: null,
       retrievalCount: 0,

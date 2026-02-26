@@ -68,7 +68,7 @@ describe('MemoryPipelineService — Embedding Decoupling (HEY-345)', () => {
       );
       expect(mockPrisma.memory.update).toHaveBeenCalledWith({
         where: { id: 'mem-1' },
-        data: { embeddingId: 'emb-1' },
+        data: { embeddingId: 'emb-1', embeddingStatus: 'COMPLETE' },
       });
     });
 
@@ -81,7 +81,11 @@ describe('MemoryPipelineService — Embedding Decoupling (HEY-345)', () => {
         'user-1',
       );
       expect(result).toBe(false);
-      expect(mockPrisma.memory.update).not.toHaveBeenCalled();
+      // Should update embeddingStatus to FAILED
+      expect(mockPrisma.memory.update).toHaveBeenCalledWith({
+        where: { id: 'mem-1' },
+        data: { embeddingStatus: 'FAILED' },
+      });
     });
 
     it('should remove from retry queue on success after previous failure', async () => {
@@ -149,12 +153,16 @@ describe('MemoryPipelineService — Embedding Decoupling (HEY-345)', () => {
   describe('getEmbeddingStatus', () => {
     it('should return counts', async () => {
       mockPrisma.memory.count
-        .mockResolvedValueOnce(50) // with embedding
-        .mockResolvedValueOnce(5); // without
+        .mockResolvedValueOnce(50) // with embedding (COMPLETE)
+        .mockResolvedValueOnce(5) // without (PENDING+FAILED)
+        .mockResolvedValueOnce(3) // pending
+        .mockResolvedValueOnce(2); // failed
 
       const status = await service.getEmbeddingStatus('user-1');
       expect(status.withEmbedding).toBe(50);
       expect(status.withoutEmbedding).toBe(5);
+      expect(status.pending).toBe(3);
+      expect(status.failed).toBe(2);
       expect(status.retryQueueSize).toBe(0);
       expect(status.exhaustedRetries).toBe(0);
     });

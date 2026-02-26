@@ -161,6 +161,7 @@ model Memory {
   importanceScore  Float                  @default(0.5) @map("importance_score")
   confidence       Float                  @default(1.0)
   sessionPosition  Int?                   @map("session_position")
+  embeddingStatus  EmbeddingPipelineStatus @default(PENDING) @map("embedding_status")
   embeddingId      String?                @unique @map("embedding_id")
   embeddingModel   String?                @map("embedding_model")
   retrievalCount   Int                    @default(0) @map("retrieval_count")
@@ -660,6 +661,13 @@ enum ConsolidationStatus {
 }
 
 /// Webhook event types
+/// HEY-345: Embedding pipeline status
+enum EmbeddingPipelineStatus {
+  PENDING
+  COMPLETE
+  FAILED
+}
+
 enum WebhookEvent {
   PROACTIVE_SURFACE
   CONTRADICTION_DETECTED

@@ -301,7 +301,7 @@ export class MemoryPipelineService {
 
       await this.prisma.memory.update({
         where: { id: memoryId },
-        data: { embeddingId },
+        data: { embeddingId, embeddingStatus: 'COMPLETE' },
       });
 
       // Link to related memories
@@ -315,6 +315,19 @@ export class MemoryPipelineService {
         `[Memory] Embedding failed for ${memoryId} — queued for retry:`,
         embedError instanceof Error ? embedError.message : embedError,
       );
+
+      // Mark as FAILED in DB (HEY-345)
+      await this.prisma.memory
+        .update({
+          where: { id: memoryId },
+          data: { embeddingStatus: 'FAILED' },
+        })
+        .catch((e: unknown) =>
+          this.logger.warn(
+            `[Memory] Could not update embeddingStatus for ${memoryId}:`,
+            e instanceof Error ? e.message : e,
+          ),
+        );
 
       // Add to retry queue
       const existing = this.embeddingRetryQueue.get(memoryId);
@@ -340,10 +353,10 @@ export class MemoryPipelineService {
     failed: number;
     discovered: number;
   }> {
-    // 1. Discover memories without embeddings from DB (up to 100)
+    // 1. Discover memories with PENDING/FAILED embeddingStatus from DB (up to 100)
     const unembedded = await this.prisma.memory.findMany({
       where: {
-        embeddingId: null,
+        embeddingStatus: { in: ['PENDING', 'FAILED'] },
         deletedAt: null,
       },
       select: { id: true, userId: true, raw: true },
@@ -400,20 +413,32 @@ export class MemoryPipelineService {
   async getEmbeddingStatus(userId?: string): Promise<{
     withEmbedding: number;
     withoutEmbedding: number;
+    pending: number;
+    failed: number;
     retryQueueSize: number;
     exhaustedRetries: number;
   }> {
     const baseWhere: any = { deletedAt: null };
     if (userId) baseWhere.userId = userId;
 
-    const [withEmbedding, withoutEmbedding] = await Promise.all([
-      this.prisma.memory.count({
-        where: { ...baseWhere, embeddingId: { not: null } },
-      }),
-      this.prisma.memory.count({
-        where: { ...baseWhere, embeddingId: null },
-      }),
-    ]);
+    const [withEmbedding, withoutEmbedding, pendingCount, failedCount] =
+      await Promise.all([
+        this.prisma.memory.count({
+          where: { ...baseWhere, embeddingStatus: 'COMPLETE' },
+        }),
+        this.prisma.memory.count({
+          where: {
+            ...baseWhere,
+            embeddingStatus: { in: ['PENDING', 'FAILED'] },
+          },
+        }),
+        this.prisma.memory.count({
+          where: { ...baseWhere, embeddingStatus: 'PENDING' },
+        }),
+        this.prisma.memory.count({
+          where: { ...baseWhere, embeddingStatus: 'FAILED' },
+        }),
+      ]);
 
     const retryQueueSize = this.embeddingRetryQueue.size;
     let exhaustedRetries = 0;
@@ -426,6 +451,8 @@ export class MemoryPipelineService {
     return {
       withEmbedding,
       withoutEmbedding,
+      pending: pendingCount,
+      failed: failedCount,
       retryQueueSize,
       exhaustedRetries,
     };
