@@ -160,9 +160,9 @@ export class InboundEmailService {
       return null;
     }
 
-    // Truncate content
-    const textBody = data.text ? data.text.slice(0, MAX_CONTENT_LENGTH) : null;
-    const htmlBody = data.html ? data.html.slice(0, MAX_CONTENT_LENGTH) : null;
+    // Use webhook body if present, otherwise will fetch from API
+    let textBody = data.text ? data.text.slice(0, MAX_CONTENT_LENGTH) : null;
+    let htmlBody = data.html ? data.html.slice(0, MAX_CONTENT_LENGTH) : null;
 
     const toStr = data.to.join(', ');
 
@@ -181,6 +181,40 @@ export class InboundEmailService {
 
     this.logger.log(`Stored inbound email ${record.id} from ${data.from}`);
 
+    // If webhook payload didn't include body content, fetch from Resend API
+    if (!textBody && !htmlBody) {
+      const emailId = data.id ?? null;
+      if (emailId) {
+        const fetched = await this.fetchEmailContent(emailId);
+        if (fetched) {
+          textBody = fetched.text
+            ? fetched.text.slice(0, MAX_CONTENT_LENGTH)
+            : null;
+          htmlBody = fetched.html
+            ? fetched.html.slice(0, MAX_CONTENT_LENGTH)
+            : null;
+
+          await this.prisma.inboundEmail.update({
+            where: { id: record.id },
+            data: { textBody, htmlBody },
+          });
+
+          this.logger.log(
+            `Fetched email content from Resend API for ${record.id}`,
+          );
+        } else {
+          this.logger.warn(
+            `Failed to fetch email content from Resend API for ${record.id}`,
+          );
+          await this.updateEmailStatus(record.id, 'content_fetch_failed');
+        }
+      } else {
+        this.logger.warn(
+          `No email ID in webhook payload for ${record.id} — cannot fetch content`,
+        );
+      }
+    }
+
     // Route to agent by recipient address
     const addresses = toStr.split(',').map((a) => a.trim());
     let resolved: ResolvedAgent | null = null;
@@ -194,14 +228,63 @@ export class InboundEmailService {
       this.logger.log(
         `Routed email ${record.id} to agent ${resolved.agentId} (user: ${resolved.userId})`,
       );
-      // Create memory with the resolved user
-      await this.createMemoryFromEmail(record, data, resolved);
+      // Create memory with the resolved user — use fetched content
+      await this.createMemoryFromEmail(
+        { ...record, textBody, htmlBody },
+        { ...data, text: textBody ?? data.text, html: htmlBody ?? data.html },
+        resolved,
+      );
     } else {
       this.logger.warn(`No agent found for email ${record.id} (to: ${toStr})`);
       await this.updateEmailStatus(record.id, 'unrouted');
     }
 
     return record;
+  }
+
+  /**
+   * Fetch full email content from Resend API.
+   * The webhook payload may not include body content — this retrieves it.
+   */
+  private async fetchEmailContent(
+    emailId: string,
+  ): Promise<{ text: string | null; html: string | null } | null> {
+    const apiKey = this.configService.get<string>('RESEND_API_KEY');
+    if (!apiKey) {
+      this.logger.warn(
+        'RESEND_API_KEY not configured — cannot fetch email content',
+      );
+      return null;
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.resend.com/emails/${emailId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        this.logger.warn(
+          `Resend API returned ${response.status} for email ${emailId}`,
+        );
+        return null;
+      }
+
+      const data = await response.json();
+      return {
+        text: data.text ?? null,
+        html: data.html ?? null,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch email content from Resend API: ${error.message}`,
+      );
+      return null;
+    }
   }
 
   private async createMemoryFromEmail(

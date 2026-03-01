@@ -2,6 +2,10 @@ import { IsString, IsArray, IsOptional, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class InboundEmailDataDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @IsString()
   from: string;
 
