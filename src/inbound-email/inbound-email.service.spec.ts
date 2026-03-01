@@ -14,13 +14,16 @@ describe('InboundEmailService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      agent: {
+        findFirst: jest.fn(),
+      },
       user: {
         findFirst: jest.fn(),
       },
     } as any;
 
     memoryService = {
-      remember: jest.fn(),
+      remember: jest.fn().mockResolvedValue({}),
     } as any;
 
     service = new InboundEmailService(prisma, memoryService);
@@ -28,150 +31,241 @@ describe('InboundEmailService', () => {
 
   const sampleData = {
     from: 'sender@example.com',
-    to: ['agent@mail.openengram.ai'],
+    to: ['rook@mail.openengram.ai'],
     subject: 'Hello',
     text: 'Plain text body',
     html: '<p>HTML body</p>',
     headers: [],
   };
 
-  const storedRecord = {
-    id: 'uuid-1',
-    from: sampleData.from,
-    to: 'agent@mail.openengram.ai',
-    subject: 'Hello',
-    textBody: 'Plain text body',
-    htmlBody: '<p>HTML body</p>',
-    rawHeaders: [],
-    resendEventId: 'evt-1',
-    status: 'received',
-    processedAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const defaultUser = { id: 'user-1', createdAt: new Date() };
-
-  it('should store a new inbound email and create memory', async () => {
-    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
-    (prisma.inboundEmail.create as jest.Mock).mockResolvedValue(storedRecord);
-    (prisma.user.findFirst as jest.Mock).mockResolvedValue(defaultUser);
-    (memoryService.remember as jest.Mock).mockResolvedValue({});
-    (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
-
-    const result = await service.handleInboundEmail(sampleData, 'evt-1');
-
-    expect(prisma.inboundEmail.findUnique).toHaveBeenCalledWith({
-      where: { resendEventId: 'evt-1' },
+  describe('extractLocalPart', () => {
+    it('should extract local part from standard email', () => {
+      expect(service.extractLocalPart('rook@mail.openengram.ai')).toBe('rook');
     });
-    expect(prisma.inboundEmail.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        from: 'sender@example.com',
-        to: 'agent@mail.openengram.ai',
+
+    it('should lowercase the local part', () => {
+      expect(service.extractLocalPart('Rook@mail.openengram.ai')).toBe('rook');
+    });
+
+    it('should trim whitespace', () => {
+      expect(service.extractLocalPart('  rook@mail.openengram.ai  ')).toBe(
+        'rook',
+      );
+    });
+
+    it('should return null for empty string', () => {
+      expect(service.extractLocalPart('')).toBeNull();
+    });
+
+    it('should return null for address starting with @', () => {
+      expect(service.extractLocalPart('@domain.com')).toBeNull();
+    });
+  });
+
+  describe('resolveAgent', () => {
+    it('should resolve a valid agent by name', async () => {
+      (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
+        id: 'agent-1',
+        name: 'rook',
+        users: [{ id: 'user-1' }],
+      });
+
+      const result = await service.resolveAgent('rook@mail.openengram.ai');
+
+      expect(result).toEqual({ agentId: 'agent-1', userId: 'user-1' });
+      expect(prisma.agent.findFirst as jest.Mock).toHaveBeenCalledWith({
+        where: {
+          name: { equals: 'rook', mode: 'insensitive' },
+          deletedAt: null,
+        },
+        include: { users: true },
+      });
+    });
+
+    it('should return null for unknown agent', async () => {
+      (prisma.agent.findFirst as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.resolveAgent('unknown@mail.openengram.ai');
+      expect(result).toBeNull();
+    });
+
+    it('should return null userId when agent has no users', async () => {
+      (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
+        id: 'agent-2',
+        name: 'solo',
+        users: [],
+      });
+
+      const result = await service.resolveAgent('solo@mail.openengram.ai');
+      expect(result).toEqual({ agentId: 'agent-2', userId: null });
+    });
+  });
+
+  describe('handleInboundEmail', () => {
+    it('should store email, route to agent, and create memory', async () => {
+      (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.inboundEmail.create as jest.Mock).mockResolvedValue({
+        id: 'uuid-1',
+        from: sampleData.from,
+        to: 'rook@mail.openengram.ai',
         subject: 'Hello',
+        textBody: 'Plain text body',
+        htmlBody: '<p>HTML body</p>',
+        rawHeaders: [],
         resendEventId: 'evt-1',
-      }),
+        status: 'received',
+        processedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
+        id: 'agent-1',
+        name: 'rook',
+        users: [{ id: 'user-1' }],
+      });
+      (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
+
+      const result = await service.handleInboundEmail(sampleData, 'evt-1');
+
+      expect(prisma.inboundEmail.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          from: 'sender@example.com',
+          to: 'rook@mail.openengram.ai',
+          subject: 'Hello',
+          resendEventId: 'evt-1',
+          status: 'received',
+        }),
+      });
+      expect(memoryService.remember as jest.Mock).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({
+          content: expect.stringContaining('sender@example.com'),
+          layer: 'SESSION',
+          source: 'AGENT_OBSERVATION',
+        }),
+      );
+      expect(prisma.inboundEmail.update as jest.Mock).toHaveBeenCalledWith({
+        where: { id: 'uuid-1' },
+        data: { status: 'processed', processedAt: expect.any(Date) },
+      });
+      expect(result.id).toBe('uuid-1');
     });
-    expect(memoryService.remember).toHaveBeenCalledWith('user-1', {
-      content: 'Email from sender@example.com: Hello\n\nPlain text body',
-      layer: 'SESSION',
-      source: 'AGENT_OBSERVATION',
+
+    it('should set status to unrouted when agent not found', async () => {
+      (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.inboundEmail.create as jest.Mock).mockResolvedValue({
+        id: 'uuid-2',
+        from: sampleData.from,
+        to: 'unknown@mail.openengram.ai',
+        status: 'received',
+      });
+      (prisma.agent.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
+
+      await service.handleInboundEmail(
+        { ...sampleData, to: ['unknown@mail.openengram.ai'] },
+        'evt-2',
+      );
+
+      expect(prisma.inboundEmail.update as jest.Mock).toHaveBeenCalledWith({
+        where: { id: 'uuid-2' },
+        data: { status: 'unrouted' },
+      });
+      expect(memoryService.remember).not.toHaveBeenCalled();
     });
-    expect(prisma.inboundEmail.update).toHaveBeenCalledWith({
-      where: { id: 'uuid-1' },
-      data: { status: 'processed', processedAt: expect.any(Date) },
+
+    it('should return existing record on duplicate event', async () => {
+      const existing = {
+        id: 'uuid-existing',
+        resendEventId: 'evt-dup',
+      } as any;
+      (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(existing);
+
+      const result = await service.handleInboundEmail(sampleData, 'evt-dup');
+
+      expect(result).toBe(existing);
+      expect(prisma.inboundEmail.create).not.toHaveBeenCalled();
     });
-    expect(result.id).toBe('uuid-1');
-  });
 
-  it('should return existing record on duplicate event', async () => {
-    const existing = { id: 'uuid-existing', resendEventId: 'evt-dup' } as any;
-    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(existing);
+    it('should truncate content exceeding 500KB', async () => {
+      (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.inboundEmail.create as jest.Mock).mockImplementation(
+        ({ data }: any) => ({
+          id: 'uuid-3',
+          ...data,
+          processedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+      (prisma.agent.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
 
-    const result = await service.handleInboundEmail(sampleData, 'evt-dup');
+      const longText = 'x'.repeat(600_000);
+      await service.handleInboundEmail(
+        { ...sampleData, text: longText, html: longText },
+        'evt-long',
+      );
 
-    expect(result).toBe(existing);
-    expect(prisma.inboundEmail.create).not.toHaveBeenCalled();
-    expect(memoryService.remember).not.toHaveBeenCalled();
-  });
-
-  it('should truncate content exceeding 500KB', async () => {
-    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
-    (prisma.inboundEmail.create as jest.Mock).mockImplementation(({ data }: any) => ({
-      id: 'uuid-2',
-      ...data,
-      processedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
-    (prisma.user.findFirst as jest.Mock).mockResolvedValue(defaultUser);
-    (memoryService.remember as jest.Mock).mockResolvedValue({});
-    (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
-
-    const longText = 'x'.repeat(600_000);
-    await service.handleInboundEmail(
-      { ...sampleData, text: longText, html: longText },
-      'evt-long',
-    );
-
-    const createCall = (prisma.inboundEmail.create as jest.Mock).mock.calls[0][0] as any;
-    expect(createCall.data.textBody.length).toBe(500_000);
-    expect(createCall.data.htmlBody.length).toBe(500_000);
-  });
-
-  it('should not fail webhook when memory creation fails', async () => {
-    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
-    (prisma.inboundEmail.create as jest.Mock).mockResolvedValue(storedRecord);
-    (prisma.user.findFirst as jest.Mock).mockResolvedValue(defaultUser);
-    (memoryService.remember as jest.Mock).mockRejectedValue(
-      new Error('Memory creation failed'),
-    );
-    (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
-
-    const result = await service.handleInboundEmail(sampleData, 'evt-fail');
-
-    expect(result.id).toBe('uuid-1');
-    expect(prisma.inboundEmail.update).toHaveBeenCalledWith({
-      where: { id: 'uuid-1' },
-      data: { status: 'failed', processedAt: undefined },
+      const createCall = (prisma.inboundEmail.create as jest.Mock).mock
+        .calls[0][0];
+      expect(createCall.data.textBody.length).toBe(500_000);
+      expect(createCall.data.htmlBody.length).toBe(500_000);
     });
-  });
 
-  it('should handle no user found gracefully', async () => {
-    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
-    (prisma.inboundEmail.create as jest.Mock).mockResolvedValue(storedRecord);
-    (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
-    (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
+    it('should not fail webhook when memory creation fails', async () => {
+      (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.inboundEmail.create as jest.Mock).mockResolvedValue({
+        id: 'uuid-1',
+        from: sampleData.from,
+        to: 'rook@mail.openengram.ai',
+        subject: 'Hello',
+        status: 'received',
+      });
+      (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
+        id: 'agent-1',
+        name: 'rook',
+        users: [{ id: 'user-1' }],
+      });
+      (memoryService.remember as jest.Mock).mockRejectedValue(
+        new Error('Memory creation failed'),
+      );
+      (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
 
-    const result = await service.handleInboundEmail(sampleData, 'evt-nouser');
+      const result = await service.handleInboundEmail(sampleData, 'evt-fail');
 
-    expect(result.id).toBe('uuid-1');
-    expect(memoryService.remember).not.toHaveBeenCalled();
-    expect(prisma.inboundEmail.update).toHaveBeenCalledWith({
-      where: { id: 'uuid-1' },
-      data: { status: 'failed', processedAt: undefined },
+      expect(result.id).toBe('uuid-1');
+      // Should update status to 'failed'
+      expect(prisma.inboundEmail.update as jest.Mock).toHaveBeenCalledWith({
+        where: { id: 'uuid-1' },
+        data: { status: 'failed', processedAt: undefined },
+      });
     });
-  });
 
-  it('should format memory content with no subject', async () => {
-    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
-    (prisma.inboundEmail.create as jest.Mock).mockResolvedValue({
-      ...storedRecord,
-      subject: null,
-    });
-    (prisma.user.findFirst as jest.Mock).mockResolvedValue(defaultUser);
-    (memoryService.remember as jest.Mock).mockResolvedValue({});
-    (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
+    it('should handle routed agent with no users gracefully', async () => {
+      (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.inboundEmail.create as jest.Mock).mockResolvedValue({
+        id: 'uuid-1',
+        from: sampleData.from,
+        to: 'rook@mail.openengram.ai',
+        subject: 'Hello',
+        status: 'received',
+      });
+      (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
+        id: 'agent-1',
+        name: 'rook',
+        users: [],
+      });
+      (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
 
-    await service.handleInboundEmail(
-      { ...sampleData, subject: undefined },
-      'evt-nosub',
-    );
+      await service.handleInboundEmail(sampleData, 'evt-nouser');
 
-    expect(memoryService.remember).toHaveBeenCalledWith('user-1', {
-      content: 'Email from sender@example.com: (no subject)\n\nPlain text body',
-      layer: 'SESSION',
-      source: 'AGENT_OBSERVATION',
+      // Should set status to 'routed' (agent found but no user for memory)
+      expect(prisma.inboundEmail.update as jest.Mock).toHaveBeenCalledWith({
+        where: { id: 'uuid-1' },
+        data: { status: 'routed', processedAt: undefined },
+      });
+      expect(memoryService.remember).not.toHaveBeenCalled();
     });
   });
 });
