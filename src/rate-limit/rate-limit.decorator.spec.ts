@@ -1,4 +1,9 @@
-import { RATE_LIMIT_KEY, RateLimit, SKIP_RATE_LIMIT_KEY, SkipRateLimit } from './rate-limit.decorator';
+import {
+  RATE_LIMIT_KEY,
+  RateLimit,
+  SKIP_RATE_LIMIT_KEY,
+  SkipRateLimit,
+} from './rate-limit.decorator';
 
 describe('RateLimit Decorators', () => {
   describe('RateLimit', () => {

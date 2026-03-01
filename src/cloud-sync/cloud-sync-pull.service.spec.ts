@@ -125,7 +125,10 @@ describe('CloudSyncPullService', () => {
     });
 
     it('should propagate tombstones (soft delete)', async () => {
-      prisma.memory.findUnique.mockResolvedValueOnce({ id: 'local-1', deletedAt: null });
+      prisma.memory.findUnique.mockResolvedValueOnce({
+        id: 'local-1',
+        deletedAt: null,
+      });
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -158,7 +161,9 @@ describe('CloudSyncPullService', () => {
     it('should throw when cloud link not found', async () => {
       prisma.cloudLink.findUnique.mockResolvedValue(null);
 
-      await expect(service.triggerPull('bad-acc')).rejects.toThrow(BadRequestException);
+      await expect(service.triggerPull('bad-acc')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw on cloud API failure', async () => {
@@ -168,12 +173,17 @@ describe('CloudSyncPullService', () => {
         text: async () => 'Internal error',
       });
 
-      await expect(service.triggerPull('acc-1')).rejects.toThrow('Cloud pull failed: 500');
+      await expect(service.triggerPull('acc-1')).rejects.toThrow(
+        'Cloud pull failed: 500',
+      );
     });
 
     it('should update existing local memory when content hash differs', async () => {
       prisma.memory.findFirst.mockResolvedValueOnce(null); // no hash match
-      prisma.memory.findUnique.mockResolvedValueOnce({ id: 'local-1', contentHash: 'old-hash' });
+      prisma.memory.findUnique.mockResolvedValueOnce({
+        id: 'local-1',
+        contentHash: 'old-hash',
+      });
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -302,7 +312,12 @@ describe('CloudSyncPullService', () => {
         },
       ]);
 
-      const result = await service.handleSyncPull('acc-1', 'inst-1', new Date(0), 100);
+      const result = await service.handleSyncPull(
+        'acc-1',
+        'inst-1',
+        new Date(0),
+        100,
+      );
 
       expect(result.memories).toHaveLength(1);
       expect(result.hasMore).toBe(false);
@@ -323,7 +338,12 @@ describe('CloudSyncPullService', () => {
       }));
       prisma.memory.findMany = jest.fn().mockResolvedValue(mems);
 
-      const result = await service.handleSyncPull('acc-1', 'inst-1', new Date(0), 2);
+      const result = await service.handleSyncPull(
+        'acc-1',
+        'inst-1',
+        new Date(0),
+        2,
+      );
 
       expect(result.hasMore).toBe(true);
       expect(result.memories).toHaveLength(2);

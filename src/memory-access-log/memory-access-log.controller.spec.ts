@@ -5,7 +5,9 @@ import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 
 describe('MemoryAccessLogController', () => {
   let controller: MemoryAccessLogController;
-  let service: jest.Mocked<Pick<MemoryAccessLogService, 'getAttribution' | 'getSessionSummary'>>;
+  let service: jest.Mocked<
+    Pick<MemoryAccessLogService, 'getAttribution' | 'getSessionSummary'>
+  >;
 
   beforeEach(async () => {
     service = {
@@ -15,9 +17,7 @@ describe('MemoryAccessLogController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MemoryAccessLogController],
-      providers: [
-        { provide: MemoryAccessLogService, useValue: service },
-      ],
+      providers: [{ provide: MemoryAccessLogService, useValue: service }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })
@@ -30,7 +30,11 @@ describe('MemoryAccessLogController', () => {
     it('should call service.getAttribution with memory id', async () => {
       const mockResult = {
         memoryId: 'mem-1',
-        createdBy: { sessionKey: 'agent:main', label: 'Main', createdAt: new Date() },
+        createdBy: {
+          sessionKey: 'agent:main',
+          label: 'Main',
+          createdAt: new Date(),
+        },
         accessHistory: [],
         accessCount: 3,
         uniqueSessions: 2,
@@ -45,7 +49,9 @@ describe('MemoryAccessLogController', () => {
 
     it('should propagate service errors', async () => {
       service.getAttribution.mockRejectedValue(new Error('Not found'));
-      await expect(controller.getAttribution('bad-id')).rejects.toThrow('Not found');
+      await expect(controller.getAttribution('bad-id')).rejects.toThrow(
+        'Not found',
+      );
     });
   });
 
@@ -69,8 +75,12 @@ describe('MemoryAccessLogController', () => {
     });
 
     it('should propagate service errors', async () => {
-      service.getSessionSummary.mockRejectedValue(new Error('Session not found'));
-      await expect(controller.getSessionSummary('bad-key')).rejects.toThrow('Session not found');
+      service.getSessionSummary.mockRejectedValue(
+        new Error('Session not found'),
+      );
+      await expect(controller.getSessionSummary('bad-key')).rejects.toThrow(
+        'Session not found',
+      );
     });
   });
 });

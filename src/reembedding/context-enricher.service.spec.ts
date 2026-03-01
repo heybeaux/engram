@@ -88,6 +88,8 @@ describe('ContextEnricherService', () => {
       visibility: 'PRIVATE' as any,
       createdBySession: null,
       lastDreamCycleAt: null,
+      lastDreamedAt: null,
+      tier: null,
       patternSourceIds: [],
       cloudSyncedAt: null,
       contentHash: null,

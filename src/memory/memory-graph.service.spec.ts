@@ -59,7 +59,10 @@ describe('MemoryGraphService', () => {
   });
 
   it('should return nodes, edges, and entities for a user', async () => {
-    mockPrisma.memory.findMany.mockResolvedValue([baseMemory('m1'), baseMemory('m2')]);
+    mockPrisma.memory.findMany.mockResolvedValue([
+      baseMemory('m1'),
+      baseMemory('m2'),
+    ]);
     mockPrisma.graphEntityMention.findMany.mockResolvedValue([]);
     mockPrisma.graphRelationship.findMany.mockResolvedValue([]);
     mockPrisma.memoryChainLink.findMany.mockResolvedValue([]);
@@ -72,10 +75,19 @@ describe('MemoryGraphService', () => {
   });
 
   it('should create shared-entity edges between memories mentioning the same entity', async () => {
-    mockPrisma.memory.findMany.mockResolvedValue([baseMemory('m1'), baseMemory('m2')]);
+    mockPrisma.memory.findMany.mockResolvedValue([
+      baseMemory('m1'),
+      baseMemory('m2'),
+    ]);
     mockPrisma.graphEntityMention.findMany.mockResolvedValue([
-      { memoryId: 'm1', entity: { id: 'e1', name: 'Coffee', type: 'CONCEPT', mentionCount: 5 } },
-      { memoryId: 'm2', entity: { id: 'e1', name: 'Coffee', type: 'CONCEPT', mentionCount: 5 } },
+      {
+        memoryId: 'm1',
+        entity: { id: 'e1', name: 'Coffee', type: 'CONCEPT', mentionCount: 5 },
+      },
+      {
+        memoryId: 'm2',
+        entity: { id: 'e1', name: 'Coffee', type: 'CONCEPT', mentionCount: 5 },
+      },
     ]);
     mockPrisma.graphRelationship.findMany.mockResolvedValue([]);
     mockPrisma.memoryChainLink.findMany.mockResolvedValue([]);
@@ -83,13 +95,18 @@ describe('MemoryGraphService', () => {
     const result = await service.getGraphData('user-1');
 
     expect(result.edges.length).toBeGreaterThanOrEqual(1);
-    const sharedEdge = result.edges.find((e) => e.linkType.startsWith('shared:'));
+    const sharedEdge = result.edges.find((e) =>
+      e.linkType.startsWith('shared:'),
+    );
     expect(sharedEdge).toBeDefined();
     expect(sharedEdge!.linkType).toBe('shared:Coffee');
   });
 
   it('should include chain link edges', async () => {
-    mockPrisma.memory.findMany.mockResolvedValue([baseMemory('m1'), baseMemory('m2')]);
+    mockPrisma.memory.findMany.mockResolvedValue([
+      baseMemory('m1'),
+      baseMemory('m2'),
+    ]);
     mockPrisma.graphEntityMention.findMany.mockResolvedValue([]);
     mockPrisma.graphRelationship.findMany.mockResolvedValue([]);
     mockPrisma.memoryChainLink.findMany.mockResolvedValue([
@@ -112,8 +129,14 @@ describe('MemoryGraphService', () => {
   it('should include entity relationship edges', async () => {
     mockPrisma.memory.findMany.mockResolvedValue([baseMemory('m1')]);
     mockPrisma.graphEntityMention.findMany.mockResolvedValue([
-      { memoryId: 'm1', entity: { id: 'e1', name: 'A', type: 'PERSON', mentionCount: 1 } },
-      { memoryId: 'm1', entity: { id: 'e2', name: 'B', type: 'ORG', mentionCount: 1 } },
+      {
+        memoryId: 'm1',
+        entity: { id: 'e1', name: 'A', type: 'PERSON', mentionCount: 1 },
+      },
+      {
+        memoryId: 'm1',
+        entity: { id: 'e2', name: 'B', type: 'ORG', mentionCount: 1 },
+      },
     ]);
     mockPrisma.graphRelationship.findMany.mockResolvedValue([
       {
@@ -135,7 +158,10 @@ describe('MemoryGraphService', () => {
   });
 
   it('should include agent memories when includeAgent is true', async () => {
-    mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', agentId: 'agent-1' });
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      agentId: 'agent-1',
+    });
     mockPrisma.user.findFirst.mockResolvedValue({ id: 'agent-user-1' });
     mockPrisma.memory.findMany.mockResolvedValue([
       baseMemory('m1', { userId: 'user-1' }),

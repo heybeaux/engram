@@ -111,7 +111,9 @@ describe('FeedbackService', () => {
     });
 
     it('should re-buffer events on DB failure', async () => {
-      prisma.anticipatoryEvent.createMany.mockRejectedValueOnce(new Error('DB down'));
+      prisma.anticipatoryEvent.createMany.mockRejectedValueOnce(
+        new Error('DB down'),
+      );
       service.recordEvent({
         userId: 'user-1',
         recallId: 'r1',

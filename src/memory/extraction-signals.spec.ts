@@ -60,7 +60,10 @@ describe('extractPreferenceSignals', () => {
   });
 
   it('should extract "like" as moderate', () => {
-    const result = extractPreferenceSignals('I like coffee in the morning.', null);
+    const result = extractPreferenceSignals(
+      'I like coffee in the morning.',
+      null,
+    );
     expect(result).toHaveLength(1);
     expect(result[0].strength).toBe('moderate');
   });
@@ -72,7 +75,10 @@ describe('extractPreferenceSignals', () => {
   });
 
   it('should fallback to raw text for PREFERENCE type with no pattern match', () => {
-    const result = extractPreferenceSignals('Vim over Emacs', 'PREFERENCE' as any);
+    const result = extractPreferenceSignals(
+      'Vim over Emacs',
+      'PREFERENCE' as any,
+    );
     expect(result).toHaveLength(1);
     expect(result[0].strength).toBe('moderate');
   });
@@ -133,7 +139,9 @@ describe('basicExtraction', () => {
   });
 
   it('should extract topics from text', () => {
-    const result = basicExtraction('Deploy the API to the server for the client.');
+    const result = basicExtraction(
+      'Deploy the API to the server for the client.',
+    );
     expect(result.topics).toContain('coding');
     expect(result.topics).toContain('business');
   });
