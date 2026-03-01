@@ -3,12 +3,26 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmbeddingService } from '../../memory/embedding.service';
 import { LLMService } from '../../llm/llm.service';
+import {
+  TemporalSamplingService,
+  SampledMemory,
+} from '../temporal-sampling.service';
 
 export interface DedupStageResult {
   merged: number;
   flagged: number;
   scanned: number;
   llmCalls: number;
+  samplingStats: {
+    totalAvailable: number;
+    sampleSize: number;
+    tierBreakdown: {
+      recent: number;
+      midRange: number;
+      deep: number;
+      random: number;
+    };
+  };
 }
 
 @Injectable()
@@ -16,12 +30,14 @@ export class DreamCycleDedupStage {
   private readonly dedupThreshold: number;
   private readonly maxMergesPerRun: number;
   private readonly maxLlmCalls: number;
+  private readonly sampleSize: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly embedding: EmbeddingService,
     private readonly llm: LLMService,
     private readonly config: ConfigService,
+    private readonly temporalSampling: TemporalSamplingService,
   ) {
     this.dedupThreshold = parseFloat(
       this.config.get('DREAM_DEDUP_THRESHOLD') ?? '0.85',
@@ -32,6 +48,10 @@ export class DreamCycleDedupStage {
     );
     this.maxLlmCalls = parseInt(
       this.config.get('DREAM_MAX_LLM_CALLS') ?? '50',
+      10,
+    );
+    this.sampleSize = parseInt(
+      this.config.get('DREAM_SAMPLE_SIZE') ?? '2000',
       10,
     );
   }
@@ -45,27 +65,32 @@ export class DreamCycleDedupStage {
     let flagged = 0;
     let llmCalls = 0;
 
-    const memories = await this.prisma.memory.findMany({
-      where: {
+    // Use temporal sampling strategy instead of simple LIMIT 500
+    // TemporalSamplingService provides all required fields for dedup processing:
+    // id, raw, memoryType, importanceScore, effectiveScore, createdAt, layer
+    // plus additional fields: lastDreamedAt, retrievalCount, tier
+    const sampleSize = maxMemories ?? this.sampleSize;
+    const { memories, tierStats, totalAvailable } =
+      await this.temporalSampling.sampleMemories({
         userId,
-        deletedAt: null,
-        consolidatedInto: null,
-      },
-      select: {
-        id: true,
-        raw: true,
-        memoryType: true,
-        importanceScore: true,
-        effectiveScore: true,
-        createdAt: true,
-        layer: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: maxMemories ?? 500,
-    });
+        sampleSize,
+        // No includeFields needed - all required fields are included by default
+      });
 
     const scanned = memories.length;
-    if (scanned < 2) return { merged: 0, flagged: 0, scanned, llmCalls: 0 };
+    if (scanned < 2) {
+      return {
+        merged: 0,
+        flagged: 0,
+        scanned,
+        llmCalls: 0,
+        samplingStats: {
+          totalAvailable,
+          sampleSize: scanned,
+          tierBreakdown: tierStats,
+        },
+      };
+    }
 
     const processed = new Set<string>();
 
@@ -159,22 +184,22 @@ export class DreamCycleDedupStage {
       processed.add(memory.id);
     }
 
-    return { merged, flagged, scanned, llmCalls };
+    return {
+      merged,
+      flagged,
+      scanned,
+      llmCalls,
+      samplingStats: {
+        totalAvailable,
+        sampleSize: scanned,
+        tierBreakdown: tierStats,
+      },
+    };
   }
 
   private async mergeMemories(
-    survivor: {
-      id: string;
-      raw: string;
-      importanceScore: number;
-      effectiveScore: number;
-    },
-    absorbed: {
-      id: string;
-      raw: string;
-      importanceScore: number;
-      effectiveScore: number;
-    },
+    survivor: SampledMemory,
+    absorbed: SampledMemory,
   ): Promise<void> {
     const [surv, abs] =
       survivor.effectiveScore >= absorbed.effectiveScore
@@ -209,12 +234,16 @@ export class DreamCycleDedupStage {
         consolidatedInto: surv.id,
         deletedAt: new Date(),
         lastDreamCycleAt: new Date(),
+        lastDreamedAt: new Date(), // Update the new field
       },
     });
 
     await this.prisma.memory.update({
       where: { id: surv.id },
-      data: { lastDreamCycleAt: new Date() },
+      data: {
+        lastDreamCycleAt: new Date(),
+        lastDreamedAt: new Date(), // Update the new field
+      },
     });
   }
 

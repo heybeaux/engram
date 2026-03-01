@@ -18,6 +18,7 @@ import { ImportanceScorerService } from '../memory/intelligence/importance-score
 import { FogIndexModule } from '../fog-index/fog-index.module';
 import { AccountModule } from '../account/account.module';
 import { IdentityModule } from '../identity/identity.module';
+import { TemporalSamplingService } from './temporal-sampling.service';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { IdentityModule } from '../identity/identity.module';
     DreamCycleIdentityStage,
     GenerateContextService,
     ImportanceScorerService,
+    TemporalSamplingService,
   ],
   exports: [DreamCycleService, GenerateContextService],
 })
