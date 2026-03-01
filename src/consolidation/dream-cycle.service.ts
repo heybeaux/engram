@@ -13,6 +13,7 @@ import {
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
+  DreamCyclePendingStage,
 } from './stages';
 import * as os from 'os';
 
@@ -22,6 +23,7 @@ const DREAM_CYCLE_LOCK_KEY = 294967;
 export type DreamCycleStage =
   | 'dedup'
   | 'staleness'
+  | 'pending'
   | 'patterns'
   | 'clustering'
   | 'drift'
@@ -43,6 +45,7 @@ export interface DreamCycleResult {
   duplicatesMerged: number;
   patternsCreated: number;
   memoriesArchived: number;
+  pendingResolved?: number;
   totalActive: number;
   avgEffectiveScore: number;
   stageDetails: Record<string, any>;
@@ -54,6 +57,7 @@ export interface DreamCycleResult {
 const ALL_STAGES: DreamCycleStage[] = [
   'dedup',
   'staleness',
+  'pending',
   'patterns',
   'clustering',
   'drift',
@@ -71,6 +75,7 @@ export class DreamCycleService {
     private config: ConfigService,
     private dedupStage: DreamCycleDedupStage,
     private stalenessStage: DreamCycleStalenessStage,
+    private pendingStage: DreamCyclePendingStage,
     private patternsStage: DreamCyclePatternsStage,
     private driftStage: DreamCycleDriftStage,
     private identityStage: DreamCycleIdentityStage,
@@ -115,6 +120,7 @@ export class DreamCycleService {
         duplicatesMerged: 0,
         patternsCreated: 0,
         memoriesArchived: 0,
+        pendingResolved: 0,
         totalActive: 0,
         avgEffectiveScore: 0,
         stageDetails: {},
@@ -179,6 +185,10 @@ export class DreamCycleService {
           (s, r) => s + (r.memoriesArchived ?? 0),
           0,
         ),
+        pendingResolved: allResults.reduce(
+          (s, r) => s + (r.pendingResolved ?? 0),
+          0,
+        ),
         llmCallsUsed: allResults.reduce((s, r) => s + (r.llmCallsUsed ?? 0), 0),
         errors: allResults.flatMap((r) => r.errors ?? []),
         usersProcessed: allResults.length,
@@ -197,6 +207,7 @@ export class DreamCycleService {
     let duplicatesMerged = 0;
     let patternsCreated = 0;
     let memoriesArchived = 0;
+    let pendingResolved = 0;
     let llmCallsUsed = 0;
 
     const report = await this.prisma.dreamCycleReport.create({
@@ -258,6 +269,28 @@ export class DreamCycleService {
           this.log('Stage 2 complete', pruneResult);
         } catch (err) {
           const msg = `Staleness stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
+      // Stage 2.5: PENDING merge resolution
+      if (stages.includes('pending') && llmCallsUsed < this.maxLlmCalls) {
+        this.log('Stage 2.5: PENDING merge resolution');
+        try {
+          const pendingResult = await this.pendingStage.run(
+            userId,
+            dryRun,
+            this.maxLlmCalls - llmCallsUsed,
+          );
+          pendingResolved = pendingResult.processed;
+          duplicatesMerged +=
+            pendingResult.autoMerged + pendingResult.llmMerged;
+          llmCallsUsed += pendingResult.llmCalls;
+          stageDetails.pending = pendingResult;
+          this.log('Stage 2.5 complete', pendingResult);
+        } catch (err) {
+          const msg = `Pending stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
         }
@@ -447,7 +480,10 @@ export class DreamCycleService {
           status: 'COMPLETED',
           completedAt: new Date(),
           memoriesProcessed:
-            scoresRefreshed + duplicatesMerged + memoriesArchived,
+            scoresRefreshed +
+            duplicatesMerged +
+            memoriesArchived +
+            pendingResolved,
           patternsDetected: patternsCreated,
           memoriesMerged: duplicatesMerged,
         },
@@ -459,6 +495,7 @@ export class DreamCycleService {
         duplicatesMerged,
         patternsCreated,
         memoriesArchived,
+        pendingResolved,
         errors: errors.length,
       });
 
@@ -480,6 +517,7 @@ export class DreamCycleService {
         duplicatesMerged,
         patternsCreated,
         memoriesArchived,
+        pendingResolved,
         totalActive,
         avgEffectiveScore,
         stageDetails,

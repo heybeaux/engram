@@ -9,6 +9,7 @@ import {
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
+  DreamCyclePendingStage,
 } from './stages';
 import { MemoryModule } from '../memory/memory.module';
 import { LLMModule } from '../llm/llm.module';
@@ -33,6 +34,7 @@ import { IdentityModule } from '../identity/identity.module';
     DreamCycleSchedulerService,
     DreamCycleDedupStage,
     DreamCycleStalenessStage,
+    DreamCyclePendingStage,
     DreamCyclePatternsStage,
     DreamCycleDriftStage,
     DreamCycleIdentityStage,

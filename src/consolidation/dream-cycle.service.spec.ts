@@ -12,6 +12,7 @@ import {
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
+  DreamCyclePendingStage,
 } from './stages';
 
 const mockPrisma = {
@@ -75,6 +76,18 @@ const mockStalenessStage = {
     .fn()
     .mockResolvedValue({ archived: 0, scoresRefreshed: 0, candidates: 0 }),
 };
+const mockPendingStage = {
+  run: jest.fn().mockResolvedValue({
+    processed: 0,
+    autoMerged: 0,
+    autoRejected: 0,
+    llmEvaluated: 0,
+    llmMerged: 0,
+    llmRejected: 0,
+    llmCalls: 0,
+    errors: 0,
+  }),
+};
 const mockPatternsStage = {
   run: jest
     .fn()
@@ -116,6 +129,16 @@ describe('DreamCycleService', () => {
       scoresRefreshed: 0,
       candidates: 0,
     });
+    mockPendingStage.run.mockResolvedValue({
+      processed: 0,
+      autoMerged: 0,
+      autoRejected: 0,
+      llmEvaluated: 0,
+      llmMerged: 0,
+      llmRejected: 0,
+      llmCalls: 0,
+      errors: 0,
+    });
     mockPatternsStage.run.mockResolvedValue({
       patternsCreated: 0,
       clustersFound: 0,
@@ -138,6 +161,7 @@ describe('DreamCycleService', () => {
         { provide: ConfigService, useValue: mockConfig },
         { provide: DreamCycleDedupStage, useValue: mockDedupStage },
         { provide: DreamCycleStalenessStage, useValue: mockStalenessStage },
+        { provide: DreamCyclePendingStage, useValue: mockPendingStage },
         { provide: DreamCyclePatternsStage, useValue: mockPatternsStage },
         { provide: DreamCycleDriftStage, useValue: mockDriftStage },
         { provide: DreamCycleIdentityStage, useValue: mockIdentityStage },
