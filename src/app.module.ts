@@ -49,6 +49,7 @@ import { ChallengeModule } from './challenge/challenge.module';
 import { TeamsModule } from './teams/teams.module';
 import { DelegationModule } from './delegation/delegation.module';
 import { SessionIndexingModule } from './session-indexing/session-indexing.module';
+import { InboundEmailModule } from './inbound-email/inbound-email.module';
 import { UsageLimitMiddleware } from './common/middleware/usage-limit.middleware';
 import { AuthModule } from './common/auth.module';
 import { PersistenceModule } from './common/persistence/persistence.module';
@@ -131,6 +132,7 @@ const coreModules = [
   TeamsModule,
   DelegationModule,
   SessionIndexingModule,
+  InboundEmailModule,
 ];
 
 const cloudModules = [

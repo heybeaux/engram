@@ -42,6 +42,7 @@
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/serve-static": "^5.0.4",
     "@nestjs/swagger": "^11.2.5",
+    "@nestjs/throttler": "^6.5.0",
     "@pinecone-database/pinecone": "^7.0.0",
     "@prisma/client": "^6.19.2",
     "@sentry/nestjs": "^10.38.0",
@@ -67,6 +68,7 @@
     "resend": "^6.9.2",
     "rxjs": "^7.8.1",
     "stripe": "^20.3.1",
+    "svix": "^1.84.1",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0"
   },
