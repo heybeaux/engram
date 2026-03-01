@@ -26,8 +26,8 @@ describe('InboundEmailService', () => {
   };
 
   it('should store a new inbound email', async () => {
-    prisma.inboundEmail.findUnique.mockResolvedValue(null);
-    prisma.inboundEmail.create.mockResolvedValue({
+    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.inboundEmail.create as jest.Mock).mockResolvedValue({
       id: 'uuid-1',
       from: sampleData.from,
       to: 'agent@mail.openengram.ai',
@@ -60,7 +60,7 @@ describe('InboundEmailService', () => {
 
   it('should return existing record on duplicate event', async () => {
     const existing = { id: 'uuid-existing', resendEventId: 'evt-dup' } as any;
-    prisma.inboundEmail.findUnique.mockResolvedValue(existing);
+    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(existing);
 
     const result = await service.handleInboundEmail(sampleData, 'evt-dup');
 
@@ -69,8 +69,8 @@ describe('InboundEmailService', () => {
   });
 
   it('should truncate content exceeding 500KB', async () => {
-    prisma.inboundEmail.findUnique.mockResolvedValue(null);
-    prisma.inboundEmail.create.mockImplementation(({ data }: any) => ({
+    (prisma.inboundEmail.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.inboundEmail.create as jest.Mock).mockImplementation(({ data }: any) => ({
       id: 'uuid-2',
       ...data,
       processedAt: null,
@@ -84,7 +84,7 @@ describe('InboundEmailService', () => {
       'evt-long',
     );
 
-    const createCall = prisma.inboundEmail.create.mock.calls[0][0] as any;
+    const createCall = (prisma.inboundEmail.create as jest.Mock).mock.calls[0][0] as any;
     expect(createCall.data.textBody.length).toBe(500_000);
     expect(createCall.data.htmlBody.length).toBe(500_000);
   });
