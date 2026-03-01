@@ -13,6 +13,8 @@ describe('InboundEmailService', () => {
     prisma = {
       inboundEmail: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -272,6 +274,113 @@ describe('InboundEmailService', () => {
         data: { status: 'routed', processedAt: undefined },
       });
       expect(memoryService.remember).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findEmails', () => {
+    beforeEach(() => {
+      (prisma.inboundEmail as any).findMany = jest.fn().mockResolvedValue([]);
+      (prisma.inboundEmail as any).count = jest.fn().mockResolvedValue(0);
+    });
+
+    it('should return paginated results with defaults', async () => {
+      (prisma.inboundEmail.findMany as jest.Mock).mockResolvedValue([
+        { id: '1' },
+      ]);
+      (prisma.inboundEmail.count as jest.Mock).mockResolvedValue(1);
+
+      const result = await service.findEmails({});
+
+      expect(result).toEqual({
+        data: [{ id: '1' }],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
+      expect(prisma.inboundEmail.findMany as jest.Mock).toHaveBeenCalledWith({
+        where: {},
+        orderBy: { createdAt: 'desc' },
+        skip: 0,
+        take: 20,
+      });
+    });
+
+    it('should apply search filter across subject and textBody', async () => {
+      (prisma.inboundEmail.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.inboundEmail.count as jest.Mock).mockResolvedValue(0);
+
+      await service.findEmails({ search: 'hello' });
+
+      const call = (prisma.inboundEmail.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where.OR).toEqual([
+        { subject: { contains: 'hello', mode: 'insensitive' } },
+        { textBody: { contains: 'hello', mode: 'insensitive' } },
+      ]);
+    });
+
+    it('should apply from/to/status filters', async () => {
+      (prisma.inboundEmail.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.inboundEmail.count as jest.Mock).mockResolvedValue(0);
+
+      await service.findEmails({
+        from: 'test@',
+        to: 'rook@',
+        status: 'processed',
+      });
+
+      const call = (prisma.inboundEmail.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where.from).toEqual({
+        contains: 'test@',
+        mode: 'insensitive',
+      });
+      expect(call.where.to).toEqual({ contains: 'rook@', mode: 'insensitive' });
+      expect(call.where.status).toBe('processed');
+    });
+
+    it('should apply date range filters', async () => {
+      (prisma.inboundEmail.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.inboundEmail.count as jest.Mock).mockResolvedValue(0);
+
+      await service.findEmails({
+        startDate: '2026-01-01T00:00:00Z',
+        endDate: '2026-02-01T00:00:00Z',
+      });
+
+      const call = (prisma.inboundEmail.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where.createdAt.gte).toEqual(
+        new Date('2026-01-01T00:00:00Z'),
+      );
+      expect(call.where.createdAt.lte).toEqual(
+        new Date('2026-02-01T00:00:00Z'),
+      );
+    });
+
+    it('should calculate totalPages correctly', async () => {
+      (prisma.inboundEmail.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.inboundEmail.count as jest.Mock).mockResolvedValue(45);
+
+      const result = await service.findEmails({ page: 1, limit: 20 });
+      expect(result.totalPages).toBe(3);
+    });
+
+    it('should handle custom pagination and sorting', async () => {
+      (prisma.inboundEmail.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.inboundEmail.count as jest.Mock).mockResolvedValue(0);
+
+      await service.findEmails({
+        page: 3,
+        limit: 10,
+        sortBy: 'from',
+        sortOrder: 'asc',
+      });
+
+      expect(prisma.inboundEmail.findMany as jest.Mock).toHaveBeenCalledWith({
+        where: {},
+        orderBy: { from: 'asc' },
+        skip: 20,
+        take: 10,
+      });
     });
   });
 });

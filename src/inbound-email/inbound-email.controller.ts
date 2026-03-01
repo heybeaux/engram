@@ -1,6 +1,8 @@
 import {
   Controller,
   Post,
+  Get,
+  Query,
   Req,
   HttpCode,
   Logger,
@@ -12,7 +14,10 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { Webhook } from 'svix';
 import { InboundEmailService } from './inbound-email.service';
 import { InboundEmailWebhookDto } from './dto/inbound-email-webhook.dto';
-@Controller('v1/webhooks')
+import { EmailQueryDto } from './dto/email-query.dto';
+import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
+
+@Controller('v1')
 @UseGuards(ThrottlerGuard)
 export class InboundEmailController {
   private readonly logger = new Logger(InboundEmailController.name);
@@ -22,7 +27,13 @@ export class InboundEmailController {
     private readonly configService: ConfigService,
   ) {}
 
-  @Post('inbound-email')
+  @Get('emails')
+  @UseGuards(ApiKeyOrJwtGuard)
+  async findEmails(@Query() query: EmailQueryDto) {
+    return this.inboundEmailService.findEmails(query);
+  }
+
+  @Post('webhooks/inbound-email')
   @HttpCode(200)
   async handleWebhook(@Req() req: any) {
     const rawBody = req.rawBody;

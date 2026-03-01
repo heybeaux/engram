@@ -28,6 +28,13 @@ describe('InboundEmailController', () => {
   beforeEach(() => {
     service = {
       handleInboundEmail: jest.fn().mockResolvedValue({ id: 'uuid-1' }),
+      findEmails: jest.fn().mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      }),
     } as any;
 
     configService = {
@@ -101,5 +108,21 @@ describe('InboundEmailController', () => {
 
     const result = await controller.handleWebhook(makeReq());
     expect(result).toEqual({ received: true });
+  });
+
+  describe('findEmails', () => {
+    it('should call service.findEmails with query params', async () => {
+      const query = { page: 1, limit: 10, search: 'test' };
+      const result = await controller.findEmails(query);
+
+      expect(service.findEmails).toHaveBeenCalledWith(query);
+      expect(result).toEqual({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      });
+    });
   });
 });

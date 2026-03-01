@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { MemoryService } from '../memory/memory.service';
 import { InboundEmailDataDto } from './dto/inbound-email-webhook.dto';
+import { EmailQueryDto } from './dto/email-query.dto';
 
 const MAX_CONTENT_LENGTH = 500_000;
 
@@ -24,7 +25,8 @@ export class InboundEmailService {
   ) {
     // Parse INBOUND_EMAIL_SENDER_ALLOWLIST — comma-separated emails or domains
     // e.g. "trevan@generositycatalyst.com,matt@generositycatalyst.com" or "@generositycatalyst.com"
-    const raw = this.configService.get<string>('INBOUND_EMAIL_SENDER_ALLOWLIST') || '';
+    const raw =
+      this.configService.get<string>('INBOUND_EMAIL_SENDER_ALLOWLIST') || '';
     this.senderAllowlist = raw
       .split(',')
       .map((s) => s.trim().toLowerCase())
@@ -79,6 +81,66 @@ export class InboundEmailService {
     };
   }
 
+  async findEmails(query: EmailQueryDto) {
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      from,
+      to,
+      status,
+      startDate,
+      endDate,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = query;
+
+    const where: any = {};
+
+    if (search) {
+      where.OR = [
+        { subject: { contains: search, mode: 'insensitive' } },
+        { textBody: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (from) {
+      where.from = { contains: from, mode: 'insensitive' };
+    }
+
+    if (to) {
+      where.to = { contains: to, mode: 'insensitive' };
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.inboundEmail.findMany({
+        where,
+        orderBy: { [sortBy]: sortOrder },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.inboundEmail.count({ where }),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async handleInboundEmail(data: InboundEmailDataDto, resendEventId: string) {
     // Idempotency check
     const existing = await this.prisma.inboundEmail.findUnique({
@@ -92,7 +154,9 @@ export class InboundEmailService {
 
     // Sender allowlist check
     if (!this.isSenderAllowed(data.from)) {
-      this.logger.warn(`Rejected email from ${data.from} — not on sender allowlist`);
+      this.logger.warn(
+        `Rejected email from ${data.from} — not on sender allowlist`,
+      );
       return null;
     }
 
