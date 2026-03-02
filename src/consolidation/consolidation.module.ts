@@ -11,6 +11,7 @@ import {
   DreamCycleIdentityStage,
   DreamCyclePendingStage,
   DreamCycleTieringStage,
+  DreamCycleConsolidationStage,
 } from './stages';
 import { MemoryModule } from '../memory/memory.module';
 import { LLMModule } from '../llm/llm.module';
@@ -41,6 +42,7 @@ import { TemporalSamplingService } from './temporal-sampling.service';
     DreamCycleDriftStage,
     DreamCycleIdentityStage,
     DreamCycleTieringStage,
+    DreamCycleConsolidationStage,
     GenerateContextService,
     ImportanceScorerService,
     TemporalSamplingService,

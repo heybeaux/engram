@@ -15,6 +15,7 @@ import {
   DreamCycleIdentityStage,
   DreamCyclePendingStage,
   DreamCycleTieringStage,
+  DreamCycleConsolidationStage,
 } from './stages';
 import * as os from 'os';
 
@@ -80,6 +81,7 @@ export class DreamCycleService {
     private stalenessStage: DreamCycleStalenessStage,
     private pendingStage: DreamCyclePendingStage,
     private tieringStage: DreamCycleTieringStage,
+    private consolidationStage: DreamCycleConsolidationStage,
     private patternsStage: DreamCyclePatternsStage,
     private driftStage: DreamCycleDriftStage,
     private identityStage: DreamCycleIdentityStage,
@@ -309,6 +311,25 @@ export class DreamCycleService {
           this.log('Stage 2.6 complete', tieringResult);
         } catch (err) {
           const msg = `Tiering stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
+      // Stage 2.7: Cold memory consolidation (Dream v2)
+      if (stages.includes('tiering')) {
+        this.log('Stage 2.7: Cold memory consolidation');
+        try {
+          const consolidationResult = await this.consolidationStage.run(
+            userId,
+            dryRun,
+          );
+          llmCallsUsed += consolidationResult.llmCalls;
+          memoriesArchived += consolidationResult.archived;
+          stageDetails.consolidation = consolidationResult;
+          this.log('Stage 2.7 complete', consolidationResult);
+        } catch (err) {
+          const msg = `Consolidation stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
         }
