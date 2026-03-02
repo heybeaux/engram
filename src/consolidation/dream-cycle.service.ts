@@ -14,6 +14,7 @@ import {
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
   DreamCyclePendingStage,
+  DreamCycleTieringStage,
 } from './stages';
 import * as os from 'os';
 
@@ -24,6 +25,7 @@ export type DreamCycleStage =
   | 'dedup'
   | 'staleness'
   | 'pending'
+  | 'tiering'
   | 'patterns'
   | 'clustering'
   | 'drift'
@@ -58,6 +60,7 @@ const ALL_STAGES: DreamCycleStage[] = [
   'dedup',
   'staleness',
   'pending',
+  'tiering',
   'patterns',
   'clustering',
   'drift',
@@ -76,6 +79,7 @@ export class DreamCycleService {
     private dedupStage: DreamCycleDedupStage,
     private stalenessStage: DreamCycleStalenessStage,
     private pendingStage: DreamCyclePendingStage,
+    private tieringStage: DreamCycleTieringStage,
     private patternsStage: DreamCyclePatternsStage,
     private driftStage: DreamCycleDriftStage,
     private identityStage: DreamCycleIdentityStage,
@@ -291,6 +295,20 @@ export class DreamCycleService {
           this.log('Stage 2.5 complete', pendingResult);
         } catch (err) {
           const msg = `Pending stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
+      // Stage 2.6: Memory tiering
+      if (stages.includes('tiering')) {
+        this.log('Stage 2.6: Memory tiering');
+        try {
+          const tieringResult = await this.tieringStage.run(userId, dryRun);
+          stageDetails.tiering = tieringResult;
+          this.log('Stage 2.6 complete', tieringResult);
+        } catch (err) {
+          const msg = `Tiering stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
         }
