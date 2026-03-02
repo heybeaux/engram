@@ -133,11 +133,11 @@ Wire `usedCount` into the fog index as a new component: **Recall Precision**.
 | Dedup Health | 15 | 15 | — |
 | Consolidation Health | 20 | 20 | — |
 | Memory Vitality | 10 | 10 | — |
-| Coverage Breadth | 10 | 10 | — |
+| Coverage Breadth | 10 | 5 | −5 |
 | **Recall Precision** | **—** | **8** | **+8** |
-| **Total** | **100** | **105** | — |
+| **Total** | **100** | **100** | **0** |
 
-> **Note:** Total exceeds 100 with the new component. Normalize to 100 at implementation time, or reduce another component by 5. The key decision: Freshness drops from 25 → 22 to fund Recall Precision at 8, reflecting that *quality* of recall matters more than raw access counts.
+> Freshness drops from 25 → 22 (rehearsal will inflate it anyway), Coverage Breadth from 10 → 5 (already at 100%, low signal). Recall Precision at 8 reflects that *quality* of recall matters more than raw access counts.
 
 ### 4.2 Contradiction Detection
 
@@ -188,9 +188,46 @@ Apply video codec concepts (I-frame/P-frame/B-frame) to memory structure. The GO
 - **Dream Cycle optimization:** Consolidation can operate on GOP clusters — merge P-frames into updated I-frames, discard stale B-frames
 - **Storage efficiency:** B-frames can be aggressively pruned; I-frames are protected from decay
 
-See full spec: `~/.openclaw/workspace/engram-codec-architecture.md`
+**Schema: Memory Reference Graph (not single FK)**
 
-> *Credit: Kit proposed this architecture mapping (HEY-431).*
+Kit's original spec uses `referenceMemoryId` (single FK) for frame dependencies. This works for simple I→P chains but breaks for memories that bridge multiple GOPs — e.g., *"Decided to apply codec architecture to fog index improvement"* belongs to both the codec GOP and the fog index GOP.
+
+**Use a many-to-many reference table from day one:**
+
+```prisma
+model MemoryReference {
+  id               String         @id @default(uuid())
+  sourceMemoryId   String         @map("source_memory_id")
+  targetMemoryId   String         @map("target_memory_id")
+  referenceType    ReferenceType  @default(DEPENDS_ON)
+
+  sourceMemory     Memory   @relation("MemoryRefsOut", fields: [sourceMemoryId], references: [id])
+  targetMemory     Memory   @relation("MemoryRefsIn", fields: [targetMemoryId], references: [id])
+
+  @@unique([sourceMemoryId, targetMemoryId, referenceType])
+  @@map("memory_references")
+}
+
+enum ReferenceType {
+  DEPENDS_ON    // P-frame → I-frame anchor dependency
+  BRIDGES       // B-frame connecting two GOPs
+  SUPERSEDES    // Contradiction resolution (newer wins)
+  DERIVED_FROM  // Consolidation lineage
+}
+```
+
+**Why this matters:**
+- `DEPENDS_ON` replaces single FK — same behavior, supports multiple anchors
+- `BRIDGES` solves cross-GOP memories from day one (no v1→v2 migration later)
+- `SUPERSEDES` gives contradiction detection (Phase 2) a schema to live in now
+- `DERIVED_FROM` preserves consolidation lineage the dream cycle currently loses
+- Recall logic stays clean: retrieve P-frame → follow DEPENDS_ON edges → auto-include I-frames
+
+This is the same pattern as the existing knowledge graph entity relationships, applied to memory-to-memory links.
+
+See full codec spec: `heybeaux/ops/specs/engram-codec-architecture.md`
+
+> *Credit: Kit proposed the codec architecture mapping (HEY-431). Rook proposed the many-to-many reference graph refinement.*
 
 ### 5.1 Predictive Pre-Loading
 
