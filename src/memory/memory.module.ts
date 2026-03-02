@@ -21,6 +21,7 @@ import { ContextualRecallService } from './contextual-recall.service';
 import { MemoryJobQueueService } from './memory-job-queue.service';
 import { MemoryJobProcessorService } from './memory-job-processor.service';
 import { EmbeddingRetryCron } from './embedding-retry.cron';
+import { RecallWeightService } from './recall-weight.service';
 import { MemoryPoolModule } from '../memory-pool/memory-pool.module';
 import { MemoryAccessLogModule } from '../memory-access-log/memory-access-log.module';
 import { AccountModule } from '../account/account.module';
@@ -60,6 +61,7 @@ import { QueueModule } from '../queue/queue.module';
     MemoryJobQueueService,
     MemoryJobProcessorService,
     EmbeddingRetryCron,
+    RecallWeightService,
   ],
   exports: [
     MemoryService,

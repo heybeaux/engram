@@ -1392,17 +1392,17 @@ model DreamCycleRun {
 
 /// HEY-335: Dedicated awareness cycle run history with proper fields
 model AwarenessCycleRun {
-  id                 String    @id @default(cuid())
-  status             String    @default("RUNNING") // RUNNING | COMPLETED | FAILED
-  phase              String    @default("starting") // starting | observing | analyzing | generating | idle | failed
-  instanceId         String    @map("instance_id")
-  startTime          DateTime  @default(now()) @map("start_time")
-  endTime            DateTime? @map("end_time")
-  insightsGenerated  Int       @default(0) @map("insights_generated")
-  observations       Int       @default(0)
-  patterns           Int       @default(0)
-  durationMs         Int       @default(0) @map("duration_ms")
-  error              String?
+  id                String    @id @default(cuid())
+  status            String    @default("RUNNING") // RUNNING | COMPLETED | FAILED
+  phase             String    @default("starting") // starting | observing | analyzing | generating | idle | failed
+  instanceId        String    @map("instance_id")
+  startTime         DateTime  @default(now()) @map("start_time")
+  endTime           DateTime? @map("end_time")
+  insightsGenerated Int       @default(0) @map("insights_generated")
+  observations      Int       @default(0)
+  patterns          Int       @default(0)
+  durationMs        Int       @default(0) @map("duration_ms")
+  error             String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1747,14 +1747,14 @@ model SyncIdMap {
 /// In-memory delegation contract for identity verification (HEY-185/HEY-385)
 /// NOT the same as DelegationContract (which is the formal inter-agent contract).
 model IdentityContract {
-  id              String   @id @default(cuid())
-  taskDescription String   @map("task_description")
-  expectedOutputs String[] @map("expected_outputs")
-  successCriteria String[] @map("success_criteria")
+  id              String    @id @default(cuid())
+  taskDescription String    @map("task_description")
+  expectedOutputs String[]  @map("expected_outputs")
+  successCriteria String[]  @map("success_criteria")
   timeout         Int // seconds
-  constraints     String[] @default([])
-  delegatedTo     String   @map("delegated_to")
-  status          String   @default("pending") // pending, in_progress, completed, failed, timed_out
+  constraints     String[]  @default([])
+  delegatedTo     String    @map("delegated_to")
+  status          String    @default("pending") // pending, in_progress, completed, failed, timed_out
   result          String?
   completedAt     DateTime? @map("completed_at")
   accountId       String?   @map("account_id")
@@ -1808,7 +1808,7 @@ model IdentityChallenge {
   taskDescription String    @map("task_description")
   challengeType   String    @map("challenge_type") // unsafe, underspecified, capability_mismatch, resource_constraint
   reasoning       String
-  resolution      String?   // accepted, overridden, modified, dismissed
+  resolution      String? // accepted, overridden, modified, dismissed
   resolvedBy      String?   @map("resolved_by")
   resolvedAt      DateTime? @map("resolved_at")
   accountId       String?   @map("account_id")
@@ -1963,9 +1963,9 @@ model InboundEmail {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  @@map("inbound_emails")
   @@index([from])
   @@index([to])
   @@index([createdAt])
   @@index([status])
+  @@map("inbound_emails")
 }

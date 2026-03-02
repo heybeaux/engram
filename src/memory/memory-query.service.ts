@@ -21,6 +21,7 @@ import {
   QueryResult,
   ContextResult,
 } from './memory.types';
+import { RecallWeightService } from './recall-weight.service';
 
 @Injectable()
 export class MemoryQueryService {
@@ -29,6 +30,7 @@ export class MemoryQueryService {
     private prisma: PrismaService,
     private embedding: EmbeddingService,
     private temporalParser: TemporalParserService,
+    private recallWeightService: RecallWeightService,
     @Optional() private multiQueryService?: MultiQueryService,
     @Optional() private memoryPoolService?: MemoryPoolService,
     @Optional() private memoryAccessLogService?: MemoryAccessLogService,
@@ -145,7 +147,8 @@ export class MemoryQueryService {
             true,
           );
 
-          return { ...memory, score: blendedScore } as MemoryWithScore;
+          const adjustedScore = blendedScore * this.recallWeightService.recallWeight(memory);
+          return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
         .slice(0, limit);
@@ -186,7 +189,8 @@ export class MemoryQueryService {
             false,
           );
 
-          return { ...memory, score: blendedScore } as MemoryWithScore;
+          const adjustedScore = blendedScore * this.recallWeightService.recallWeight(memory);
+          return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     }
@@ -433,8 +437,9 @@ export class MemoryQueryService {
         const multiQueryScore = scoreMap.get(memory.id) ?? 0;
         const importanceScore = memory.effectiveScore ?? memory.importanceScore;
         const blendedScore = multiQueryScore * 0.8 + importanceScore * 0.2;
+        const adjustedScore = blendedScore * this.recallWeightService.recallWeight(memory);
 
-        return { ...memory, score: blendedScore } as MemoryWithScore;
+        return { ...memory, score: adjustedScore } as MemoryWithScore;
       })
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 

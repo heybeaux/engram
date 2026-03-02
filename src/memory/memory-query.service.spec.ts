@@ -5,6 +5,7 @@ import { TemporalParserService } from './temporal/temporal-parser.service';
 import { MultiQueryService } from '../multi-query/multi-query.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
+import { RecallWeightService } from './recall-weight.service';
 
 describe('MemoryQueryService', () => {
   let service: MemoryQueryService;
@@ -58,10 +59,15 @@ describe('MemoryQueryService', () => {
       logRecalled: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    const recallWeightService = {
+      recallWeight: jest.fn().mockReturnValue(1.0),
+    } as any as RecallWeightService;
+
     service = new MemoryQueryService(
       prisma,
       embedding,
       temporalParser,
+      recallWeightService,
       multiQueryService,
       memoryPoolService,
       memoryAccessLogService,
