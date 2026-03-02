@@ -16,8 +16,10 @@
 | Embedding Coverage | 100/100 ✅ | 20 | Perfect |
 | Dedup Health | 0/100 | 15 | 4,846 pending merge candidates |
 | Consolidation Health | 100/100 ✅ | 20 | Perfect |
-| Memory Vitality | 1.7/100 | 10 | 2,874 archived + 602 low-score (39.3% decay) |
+| Memory Vitality | 1.7/100 | 10 | 2,874 archived + 602 low-score (58.3% of total¹) |
 | Coverage Breadth | 100/100 ✅ | 10 | Perfect |
+
+¹ *Vitality decay percentage: (2,874 + 602) / 5,966 = 58.3%. The implementation code uses `(decayed + lowScore) / (total + decayed)` which can differ when archived memories inflate the denominator — the 58.3% figure uses total memory count as denominator for clarity.*
 
 Three components are dragging the score: **Dedup Health** (0), **Memory Freshness** (23.3), and **Memory Vitality** (1.7). All three are addressable without architectural changes.
 
@@ -44,8 +46,8 @@ Target: **75+ "Clear"** within 2 weeks.
 **Solution:** Dedicated dedup drainage job, separate from the Dream Cycle.
 
 - **Schedule:** Every 4 hours
-- **Batch size:** 100–200 merge candidates per run
-- **Backlog target:** Clear 4,846 within 2 weeks, then maintain near-zero
+- **Batch size:** 500 candidates per run for the first week (aggressive backlog clearance), then 100–200 per run for ongoing maintenance
+- **Backlog target:** Clear 4,846 within ~6 days at aggressive rate, then maintain near-zero
 - **Safeguards:** Log all merges, dry-run mode for first 24 hours, skip candidates where confidence is below threshold (require human review)
 
 **Impact:** Dedup Health 0 → 80+ (+12 weighted points)
@@ -68,6 +70,16 @@ Target: **75+ "Clear"** within 2 weeks.
 4. Track which memories get retrieved — feed into vitality scoring
 
 **Impact:** Freshness 23.3 → 60+ (+9.2 weighted points)
+
+#### Goodhart Mitigation
+
+Rehearsal queries risk inflating the freshness metric (Goodhart's Law — optimizing the metric rather than the underlying goal). To prevent this:
+
+- **Track organic freshness vs rehearsal-boosted freshness as separate metrics.**
+  - *Organic freshness:* memories accessed through real agent sessions and user-initiated queries only
+  - *Rehearsal-boosted freshness:* includes rehearsal-triggered accesses
+- **The fog index must use organic freshness only.** Rehearsal-boosted freshness is a secondary monitoring metric to confirm the rehearsal engine is working, but it must not inflate the fog score.
+- If the gap between organic and rehearsal-boosted freshness grows beyond a threshold (e.g., >15%), it signals the rehearsal engine is warming memories that aren't organically useful — review and adjust query patterns.
 
 ### 3.3 Vitality Formula Fix
 
@@ -110,7 +122,22 @@ Wire `usedCount` into the fog index as a new component: **Recall Precision**.
 - Track not just "was it retrieved" but "was it useful" — the retrieved-to-used ratio
 - Memories with high retrieval count but low usage are noise candidates
 - Flag high-retrieval/low-usage memories for review or re-embedding
-- **New fog index component:** Recall Precision (suggested weight: 5–10, rebalanced from existing components)
+- **New fog index component:** Recall Precision (weight: **8**, borrowed from Memory Freshness)
+
+**Weight Rebalancing:**
+
+| Component | Before | After | Δ |
+|---|---|---|---|
+| Memory Freshness | 25 | 22 | −3 |
+| Embedding Coverage | 20 | 20 | — |
+| Dedup Health | 15 | 15 | — |
+| Consolidation Health | 20 | 20 | — |
+| Memory Vitality | 10 | 10 | — |
+| Coverage Breadth | 10 | 10 | — |
+| **Recall Precision** | **—** | **8** | **+8** |
+| **Total** | **100** | **105** | — |
+
+> **Note:** Total exceeds 100 with the new component. Normalize to 100 at implementation time, or reduce another component by 5. The key decision: Freshness drops from 25 → 22 to fund Recall Precision at 8, reflecting that *quality* of recall matters more than raw access counts.
 
 ### 4.2 Contradiction Detection
 
@@ -121,6 +148,10 @@ When new memories conflict with existing ones on the same entity or topic, surfa
 2. Compare values — if conflicting (e.g., "X uses PostgreSQL" vs "X uses MySQL"), flag
 3. Apply temporal ordering: newer memory wins by default
 4. If confidence scores are within 10% of each other, surface for human review
+
+**Cross-Agent Contradiction Escalation:**
+
+Cross-agent contradictions — where different agents' memories conflict on the same entity — must be flagged with **higher urgency** than single-agent temporal drift. Single-agent contradictions are typically outdated info (temporal drift), but cross-agent contradictions represent a **consensus failure**: multiple agents are operating on conflicting beliefs about the same fact. These should be surfaced immediately for human review, not deferred to the next Dream Cycle.
 
 **Why this matters:** No other memory system handles contradictions well. Most silently accumulate conflicting facts. This is a competitive differentiator for Engram.
 
@@ -141,6 +172,25 @@ Replace the current linear decay model with exponential decay modified by access
 ## 5. Phase 3: Anticipatory Memory (Future)
 
 Target: **90+ "Crystal"** — aspirational.
+
+### 5.0 Video Codec Architecture for Memory (HEY-431)
+
+**Lead:** Kit
+
+Apply video codec concepts (I-frame/P-frame/B-frame) to memory structure. The GOP (Group of Pictures) model maps to memory clusters:
+
+- **I-frames (Anchors):** Self-contained core memories that provide full context on their own — identity facts, key decisions, foundational knowledge
+- **P-frames (Dependents):** Memories that reference and build upon an anchor — deltas, updates, follow-ups
+- **B-frames (Ephemeral Bridges):** Transient memories that bridge between anchors — session context, intermediate reasoning, working memory
+
+**Applications:**
+- **Recall context assembly:** When retrieving a P-frame, automatically include its anchor I-frame for full context
+- **Dream Cycle optimization:** Consolidation can operate on GOP clusters — merge P-frames into updated I-frames, discard stale B-frames
+- **Storage efficiency:** B-frames can be aggressively pruned; I-frames are protected from decay
+
+See full spec: `~/.openclaw/workspace/engram-codec-architecture.md`
+
+> *Credit: Kit proposed this architecture mapping (HEY-431).*
 
 ### 5.1 Predictive Pre-Loading
 
@@ -167,7 +217,7 @@ Memories about volatile subjects should lose confidence over time, independent o
 | Medium volatility | Project status, team structure, tool versions | 90 days |
 | Low volatility | Personal identity, relationships, preferences | 365+ days |
 
-- Tag memories with volatility ratings based on subject matter (auto-classify via entity type)
+- Tag memories with volatility ratings based on subject (auto-classify via entity type)
 - When confidence drops below threshold → trigger re-verification prompt
 - Prevents stale technical facts from being served with false confidence
 
