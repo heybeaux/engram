@@ -2,12 +2,14 @@ import { InboundEmailService } from './inbound-email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MemoryService } from '../memory/memory.service';
 import { ConfigService } from '@nestjs/config';
+import { LinkedInEmailParserService } from './linkedin-email-parser.service';
 
 describe('InboundEmailService', () => {
   let service: InboundEmailService;
   let prisma: jest.Mocked<PrismaService>;
   let memoryService: jest.Mocked<MemoryService>;
   let configService: jest.Mocked<ConfigService>;
+  let linkedInParser: jest.Mocked<LinkedInEmailParserService>;
 
   beforeEach(() => {
     prisma = {
@@ -34,7 +36,12 @@ describe('InboundEmailService', () => {
       get: jest.fn().mockReturnValue(''),
     } as any;
 
-    service = new InboundEmailService(prisma, memoryService, configService);
+    linkedInParser = {
+      isLinkedInNotification: jest.fn().mockReturnValue(false),
+      parseEngagementSignal: jest.fn().mockReturnValue(null),
+    } as any;
+
+    service = new InboundEmailService(prisma, memoryService, configService, linkedInParser);
   });
 
   const sampleData = {
