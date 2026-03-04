@@ -314,7 +314,11 @@ export class InboundEmailService {
         data.from,
       );
 
-      if (linkedIn.isLinkedIn && linkedIn.engagerName && linkedIn.type !== 'unknown') {
+      if (
+        linkedIn.isLinkedIn &&
+        linkedIn.engagerName &&
+        linkedIn.type !== 'unknown'
+      ) {
         // Store structured LinkedIn engagement memory
         const engagementContent = linkedIn.commentPreview
           ? `${linkedIn.engagerName} ${linkedIn.action}: "${linkedIn.commentPreview}"`

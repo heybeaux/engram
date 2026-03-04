@@ -2,7 +2,13 @@ import { Injectable } from '@nestjs/common';
 
 export interface LinkedInEmailParseResult {
   isLinkedIn: boolean;
-  type?: 'reaction' | 'comment' | 'follow' | 'profile_view' | 'connection' | 'unknown';
+  type?:
+    | 'reaction'
+    | 'comment'
+    | 'follow'
+    | 'profile_view'
+    | 'connection'
+    | 'unknown';
   engagerName?: string;
   action?: string;
   commentPreview?: string;
@@ -73,11 +79,7 @@ export class LinkedInEmailParserService {
    * Parse an inbound email and detect if it is a LinkedIn notification.
    * Returns structured engagement data if it is.
    */
-  parse(
-    subject: string,
-    body: string,
-    from: string,
-  ): LinkedInEmailParseResult {
+  parse(subject: string, body: string, from: string): LinkedInEmailParseResult {
     if (!this.isLinkedInEmail(from, subject)) {
       return { isLinkedIn: false };
     }
@@ -140,7 +142,10 @@ export class LinkedInEmailParserService {
 
   private extractCommentPreview(body: string): string | undefined {
     // Strip HTML tags if present
-    const text = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const text = body
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
     // Look for common LinkedIn comment patterns in the body
     const patterns = [
