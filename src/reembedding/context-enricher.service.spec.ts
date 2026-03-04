@@ -85,7 +85,6 @@ describe('ContextEnricherService', () => {
       consolidatedInto: null,
       archivedReason: null,
       clusterId: null,
-      searchable: true,
       embeddingStatus: 'PENDING' as any,
       visibility: 'PRIVATE' as any,
       createdBySession: null,
