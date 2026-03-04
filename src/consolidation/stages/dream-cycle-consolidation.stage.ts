@@ -214,6 +214,7 @@ Write a single consolidated memory that captures all the information above.`;
           userId,
           raw: consolidatedContent,
           layer: 'INSIGHT',
+          source: 'DREAM_CYCLE',
           memoryType: 'FACT',
           tier: 'WARM',
           consolidated: false,

@@ -621,6 +621,7 @@ enum SubjectType {
 
 /// Source of the memory
 enum MemorySource {
+  DREAM_CYCLE
   EXPLICIT_STATEMENT
   AGENT_OBSERVATION
   AGENT_REFLECTION
