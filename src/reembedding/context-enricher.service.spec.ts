@@ -77,6 +77,7 @@ describe('ContextEnricherService', () => {
       lastRetrievedAt: null,
       usedCount: 0,
       lastUsedAt: null,
+      searchable: true,
       consolidated: false,
       consolidatedAt: null,
       supersededById: null,
