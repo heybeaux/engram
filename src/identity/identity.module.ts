@@ -20,6 +20,7 @@ import { DelegationTemplateService } from './delegation-template.service';
 import { TrustProfileService } from './trust-profile.service';
 import { DelegationTaskService } from './delegation-task.service';
 import { DelegationController } from './delegation.controller';
+import { IdentityService } from './identity.service';
 
 @Module({
   imports: [PrismaModule, EmbeddingModule],
@@ -34,6 +35,7 @@ import { DelegationController } from './delegation.controller';
   ],
   providers: [
     IdentityController,
+    IdentityService,
     DelegationContractService,
     ChallengeService,
     FailurePatternService,
@@ -46,6 +48,7 @@ import { DelegationController } from './delegation.controller';
     DelegationTaskService,
   ],
   exports: [
+    IdentityService,
     DelegationContractService,
     ChallengeService,
     FailurePatternService,

@@ -96,6 +96,7 @@ describe('IdentityController', () => {
       trustProfileService,
       delegationContractService,
       challengeService,
+      {} as any, // identityService
     );
   });
 

@@ -23,6 +23,7 @@ import { DelegationTemplateService } from './delegation-template.service';
 import { TrustProfileService } from './trust-profile.service';
 import { DelegationContractService } from './delegation-contract.service';
 import { ChallengeService } from './challenge.service';
+import { IdentityService } from './identity.service';
 import { CreateTeamDto } from './dto/team.dto';
 import { ImportIdentityDto } from './dto/portable-identity.dto';
 import {
@@ -53,7 +54,23 @@ export class IdentityController {
     private readonly trustProfileService: TrustProfileService,
     private readonly delegationContractService: DelegationContractService,
     private readonly challengeService: ChallengeService,
+    private readonly identityService: IdentityService,
   ) {}
+
+  // === Bootstrap Endpoint ===
+
+  @Get('bootstrap')
+  @ApiOperation({
+    summary: 'Bootstrap identity data for agent/user pair',
+  })
+  @ApiQuery({ name: 'agentId', required: false, description: 'Agent ID' })
+  @ApiQuery({ name: 'userId', required: false, description: 'User ID' })
+  async bootstrap(
+    @Query('agentId') agentId?: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.identityService.bootstrap(agentId, userId);
+  }
 
   // === Agents list with capability & trust summaries ===
 
