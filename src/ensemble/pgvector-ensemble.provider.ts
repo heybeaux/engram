@@ -82,13 +82,14 @@ export class PgVectorEnsembleProvider {
    */
   async upsertEmbeddings(records: EnsembleEmbeddingRecord[]): Promise<void> {
     // Use a transaction for atomicity
-    await this.prisma.$transaction(async (tx) => {
-      for (const record of records) {
-        const embeddingStr = `[${record.embedding.join(',')}]`;
-        const now = new Date();
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const record of records) {
+          const embeddingStr = `[${record.embedding.join(',')}]`;
+          const now = new Date();
 
-        await tx.$executeRawUnsafe(
-          `
+          await tx.$executeRawUnsafe(
+            `
           INSERT INTO memory_embeddings (id, memory_id, model_id, dimensions, embedding, created_at, updated_at)
           VALUES (gen_random_uuid()::text, $1, $2, $3, $4::vector, $5, $5)
           ON CONFLICT (memory_id, model_id) 
@@ -97,14 +98,16 @@ export class PgVectorEnsembleProvider {
             dimensions = $3,
             updated_at = $5
           `,
-          record.memoryId,
-          record.modelId,
-          record.dimensions,
-          embeddingStr,
-          now,
-        );
-      }
-    });
+            record.memoryId,
+            record.modelId,
+            record.dimensions,
+            embeddingStr,
+            now,
+          );
+        }
+      },
+      { timeout: 120000 },
+    );
   }
 
   /**
