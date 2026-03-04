@@ -9,17 +9,29 @@ describe('LinkedInEmailParserService', () => {
 
   describe('isLinkedIn detection', () => {
     it('detects LinkedIn sender by domain', () => {
-      const result = service.parse('Some subject', '', 'notifications@linkedin.com');
+      const result = service.parse(
+        'Some subject',
+        '',
+        'notifications@linkedin.com',
+      );
       expect(result.isLinkedIn).toBe(true);
     });
 
     it('detects LinkedIn via e.linkedin.com subdomain', () => {
-      const result = service.parse('Sarah Chen reacted to your post', '', 'noreply@e.linkedin.com');
+      const result = service.parse(
+        'Sarah Chen reacted to your post',
+        '',
+        'noreply@e.linkedin.com',
+      );
       expect(result.isLinkedIn).toBe(true);
     });
 
     it('returns isLinkedIn false for non-LinkedIn email', () => {
-      const result = service.parse('Hello there', 'Some body', 'user@gmail.com');
+      const result = service.parse(
+        'Hello there',
+        'Some body',
+        'user@gmail.com',
+      );
       expect(result.isLinkedIn).toBe(false);
     });
   });
@@ -56,7 +68,9 @@ describe('LinkedInEmailParserService', () => {
         'Mike Torres commented: "This is a great insight about AI agents!"',
         'noreply@linkedin.com',
       );
-      expect(result.commentPreview).toBe('This is a great insight about AI agents!');
+      expect(result.commentPreview).toBe(
+        'This is a great insight about AI agents!',
+      );
     });
   });
 
