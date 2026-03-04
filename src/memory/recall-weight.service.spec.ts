@@ -85,6 +85,17 @@ describe('RecallWeightService', () => {
   });
 
   describe('recallWeight', () => {
+    const FROZEN_NOW = new Date('2026-03-04T12:00:00.000Z').getTime();
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(FROZEN_NOW);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('returns 1.0 for pinned memories', () => {
       const mem = makeMemory({ userPinned: true, lastRetrievedAt: null });
       expect(service.recallWeight(mem)).toBe(1.0);
