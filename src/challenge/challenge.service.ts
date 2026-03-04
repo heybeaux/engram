@@ -79,7 +79,7 @@ export class ChallengeService {
     });
 
     // Mark the original memory as disputed in its metadata
-    const existingMeta = (memory.metadata as Record<string, unknown>) ?? {};
+    const existingMeta = (memory.metadata as any) ?? {};
     await this.prisma.memory.update({
       where: { id: memoryId },
       data: {
@@ -176,7 +176,7 @@ export class ChallengeService {
       throw new NotFoundException(`Challenge ${challengeId} not found`);
     }
 
-    const meta = (memory.metadata as Record<string, unknown>) ?? {};
+    const meta = memory.metadata as any;
     if (
       meta.status !== ChallengeStatus.OPEN &&
       meta.status !== ChallengeStatus.UNDER_REVIEW
@@ -209,7 +209,7 @@ export class ChallengeService {
       });
       if (targetMemory) {
         const targetMeta =
-          (targetMemory.metadata as Record<string, unknown>) ?? {};
+          (targetMemory.metadata as any) ?? {};
         const challengeIds = (targetMeta.challengeIds as string[]) ?? [];
 
         if (resolution.status === ChallengeStatus.UPHELD) {
@@ -243,7 +243,7 @@ export class ChallengeService {
   }
 
   private toChallengeResult(memory: any): ChallengeResult {
-    const meta = (memory.metadata as Record<string, unknown>) ?? {};
+    const meta = memory.metadata as any;
     return {
       id: memory.id,
       challengerId: (meta.challengerId as string) ?? '',
