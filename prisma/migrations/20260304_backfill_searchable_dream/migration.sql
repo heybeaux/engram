@@ -1,3 +1,4 @@
--- Backfill: mark all dream-cycle and consolidation memories as non-searchable
-UPDATE "memories" SET "searchable" = false 
-WHERE "source" IN ('DREAM_CYCLE', 'CONSOLIDATION');
+-- Backfill: mark consolidated (archived) memories as non-searchable.
+-- Memories with consolidated=true have been absorbed into dream-cycle
+-- consolidations and should not surface in search results.
+UPDATE "memories" SET "searchable" = false WHERE "consolidated" = true;
