@@ -6,10 +6,19 @@ import { EmbeddingService } from '../../memory/embedding.service';
 import { LLMService } from '../../llm/llm.service';
 import { TemporalSamplingService } from '../temporal-sampling.service';
 
-const defaultStats = { totalAvailable: 0, sampleSize: 0, tierBreakdown: { recent: 0, midRange: 0, deep: 0, random: 0 } };
+const defaultStats = {
+  totalAvailable: 0,
+  sampleSize: 0,
+  tierBreakdown: { recent: 0, midRange: 0, deep: 0, random: 0 },
+};
 
 function mockSample(memories: any[]) {
-  const sampled = memories.map((m: any) => ({ ...m, tier: 'recent', retrievalCount: 0, layer: m.layer ?? 'GENERAL' }));
+  const sampled = memories.map((m: any) => ({
+    ...m,
+    tier: 'recent',
+    retrievalCount: 0,
+    layer: m.layer ?? 'GENERAL',
+  }));
   mockTemporalSampling.sampleMemories.mockResolvedValue({
     memories: sampled,
     totalAvailable: sampled.length,
@@ -18,7 +27,11 @@ function mockSample(memories: any[]) {
 }
 
 const mockTemporalSampling = {
-  sampleMemories: jest.fn().mockResolvedValue({ memories: [], totalAvailable: 0, tierStats: { recent: 0, midRange: 0, deep: 0, random: 0 } }),
+  sampleMemories: jest.fn().mockResolvedValue({
+    memories: [],
+    totalAvailable: 0,
+    tierStats: { recent: 0, midRange: 0, deep: 0, random: 0 },
+  }),
   getSamplingStats: jest.fn().mockResolvedValue({ totalAvailable: 0 }),
 };
 
@@ -68,13 +81,32 @@ describe('DreamCycleDedupStage', () => {
     mockPrisma.memory.findMany.mockResolvedValue([{ id: '1', raw: 'test' }]);
     mockSample([{ id: '1', raw: 'test' }]);
     const result = await stage.run('user1', false);
-    expect(result).toEqual(expect.objectContaining({ merged: 0, flagged: 0, scanned: 1, llmCalls: 0 }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        merged: 0,
+        flagged: 0,
+        scanned: 1,
+        llmCalls: 0,
+      }),
+    );
   });
 
   it('should skip memories without embeddings', async () => {
     const mems = [
-      { id: '1', raw: 'a', importanceScore: 1, effectiveScore: 1, memoryType: 'FACT' },
-      { id: '2', raw: 'b', importanceScore: 1, effectiveScore: 1, memoryType: 'FACT' },
+      {
+        id: '1',
+        raw: 'a',
+        importanceScore: 1,
+        effectiveScore: 1,
+        memoryType: 'FACT',
+      },
+      {
+        id: '2',
+        raw: 'b',
+        importanceScore: 1,
+        effectiveScore: 1,
+        memoryType: 'FACT',
+      },
     ];
     mockPrisma.memory.findMany.mockResolvedValue(mems);
     mockSample(mems);

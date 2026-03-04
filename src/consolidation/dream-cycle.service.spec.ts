@@ -194,7 +194,10 @@ describe('DreamCycleService', () => {
         { provide: DreamCycleDriftStage, useValue: mockDriftStage },
         { provide: DreamCycleIdentityStage, useValue: mockIdentityStage },
         { provide: DreamCycleTieringStage, useValue: mockTieringStage },
-        { provide: DreamCycleConsolidationStage, useValue: mockConsolidationStage },
+        {
+          provide: DreamCycleConsolidationStage,
+          useValue: mockConsolidationStage,
+        },
       ],
     }).compile();
 

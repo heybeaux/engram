@@ -199,7 +199,9 @@ describe('MemoryQueryService', () => {
 
   describe('shouldUseMultiQuery', () => {
     it('should return false when multiQueryService is not available', () => {
-      const svc = new MemoryQueryService(prisma, embedding, temporalParser, { applyWeights: jest.fn((m) => m) } as any);
+      const svc = new MemoryQueryService(prisma, embedding, temporalParser, {
+        applyWeights: jest.fn((m) => m),
+      } as any);
       expect(svc.shouldUseMultiQuery({} as any)).toBe(false);
     });
 

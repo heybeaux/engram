@@ -313,7 +313,13 @@ export class CloudSyncIngestService {
     localAgentId: string,
     agentName: string,
   ): Promise<string> {
-    return this.resolveCloudAgentTx(this.prisma, accountId, instanceId, localAgentId, agentName);
+    return this.resolveCloudAgentTx(
+      this.prisma,
+      accountId,
+      instanceId,
+      localAgentId,
+      agentName,
+    );
   }
 
   private async resolveCloudUser(
@@ -322,7 +328,13 @@ export class CloudSyncIngestService {
     localUserId: string,
     externalId: string,
   ): Promise<string> {
-    return this.resolveCloudUserTx(this.prisma, instanceId, cloudAgentId, localUserId, externalId);
+    return this.resolveCloudUserTx(
+      this.prisma,
+      instanceId,
+      cloudAgentId,
+      localUserId,
+      externalId,
+    );
   }
 
   // =========================================================================

@@ -69,7 +69,8 @@ export class DreamCycleTieringStage {
         continue;
       }
 
-      const currentOrder = TIER_ORDER[currentTier as keyof typeof TIER_ORDER] ?? 1;
+      const currentOrder =
+        TIER_ORDER[currentTier as keyof typeof TIER_ORDER] ?? 1;
       const newOrder = TIER_ORDER[newTier as keyof typeof TIER_ORDER];
 
       if (newOrder < currentOrder) {
@@ -101,17 +102,14 @@ export class DreamCycleTieringStage {
     now: Date,
   ): string {
     const msPerDay = 86_400_000;
-    const daysSinceCreated = (now.getTime() - memory.createdAt.getTime()) / msPerDay;
+    const daysSinceCreated =
+      (now.getTime() - memory.createdAt.getTime()) / msPerDay;
     const daysSinceAccessed = memory.lastRetrievedAt
       ? (now.getTime() - memory.lastRetrievedAt.getTime()) / msPerDay
       : Infinity;
 
     // HOT: pinned, accessed within 7 days, or created within 48h
-    if (
-      memory.userPinned ||
-      daysSinceAccessed <= 7 ||
-      daysSinceCreated <= 2
-    ) {
+    if (memory.userPinned || daysSinceAccessed <= 7 || daysSinceCreated <= 2) {
       return 'HOT';
     }
 

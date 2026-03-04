@@ -9,10 +9,7 @@ export class RecallWeightService {
   private readonly enabled: boolean;
 
   constructor(private config: ConfigService) {
-    const raw = this.config.get<string>(
-      'RECALL_TIER_WEIGHT_ENABLED',
-      'true',
-    );
+    const raw = this.config.get<string>('RECALL_TIER_WEIGHT_ENABLED', 'true');
     this.enabled = raw !== 'false';
   }
 

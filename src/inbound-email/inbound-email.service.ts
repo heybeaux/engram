@@ -264,11 +264,14 @@ export class InboundEmailService {
     }
 
     try {
-      const response = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
+      const response = await fetch(
+        `https://api.resend.com/emails/receiving/${emailId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          },
         },
-      });
+      );
 
       if (!response.ok) {
         this.logger.warn(

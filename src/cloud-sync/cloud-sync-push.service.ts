@@ -99,7 +99,12 @@ export class CloudSyncPushService {
       }
 
       try {
-        const result = await this.syncBatchToCloud(batch, apiKey, instanceId, db);
+        const result = await this.syncBatchToCloud(
+          batch,
+          apiKey,
+          instanceId,
+          db,
+        );
         syncedCount += result.synced;
         newCount += result.newCount;
         updatedCount += result.updatedCount;
