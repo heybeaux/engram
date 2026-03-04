@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { rlsContext } from '../prisma/rls-context';
 import { EmbeddingService } from './embedding.service';
 import { Memory, MemorySource } from '@prisma/client';
 
@@ -62,42 +63,70 @@ export class MemoryDedupService {
     text: string,
     threshold: number = DEDUP_SIMILARITY_THRESHOLD,
   ): Promise<DedupResult> {
+    // Use a PostgreSQL SAVEPOINT so that any DB-level failure inside the dedup
+    // check does not abort the caller's RLS transaction (HEY-433).
+    // Without this, a failed query here leaves the shared Prisma tx in a
+    // PostgreSQL-aborted state (25P02), causing memory.create() to fail too.
+    const txClient = rlsContext.getStore();
+    const savepointName = `dedup_${Date.now()}`;
+    if (txClient) {
+      try {
+        await (txClient as any).$executeRawUnsafe(
+          `SAVEPOINT ${savepointName}`,
+        );
+      } catch {
+        // If SAVEPOINT fails (e.g. already aborted), skip dedup safely
+        return { action: 'create' };
+      }
+    }
+
     try {
       const embedding = await this.embedding.generate(text);
       const similar = await this.embedding.search(userId, embedding, 5);
 
       const bestMatch = similar.length > 0 ? similar[0] : null;
-      if (!bestMatch) return { action: 'create' };
+      if (!bestMatch) {
+        if (txClient) {
+          await (txClient as any).$executeRawUnsafe(
+            `RELEASE SAVEPOINT ${savepointName}`,
+          );
+        }
+        return { action: 'create' };
+      }
 
       const existingMemory = await this.prisma.memory.findUnique({
         where: { id: bestMatch.id },
       });
-      if (!existingMemory || existingMemory.deletedAt)
+      if (!existingMemory || existingMemory.deletedAt) {
+        if (txClient) {
+          await (txClient as any).$executeRawUnsafe(
+            `RELEASE SAVEPOINT ${savepointName}`,
+          );
+        }
         return { action: 'create' };
+      }
+
+      let result: DedupResult;
 
       if (bestMatch.score >= threshold) {
         this.logger.log(
           `[Dedup] Auto-merge: score=${bestMatch.score.toFixed(3)} memory=${bestMatch.id}`,
         );
-        return {
+        result = {
           action: 'merged',
           existingMemory,
           similarityScore: bestMatch.score,
         };
-      }
-
-      if (bestMatch.score >= DEDUP_REINFORCE_THRESHOLD) {
+      } else if (bestMatch.score >= DEDUP_REINFORCE_THRESHOLD) {
         this.logger.log(
           `[Dedup] Reinforce: score=${bestMatch.score.toFixed(3)} memory=${bestMatch.id}`,
         );
-        return {
+        result = {
           action: 'reinforced',
           existingMemory,
           similarityScore: bestMatch.score,
         };
-      }
-
-      if (bestMatch.score >= DEDUP_REVIEW_THRESHOLD) {
+      } else if (bestMatch.score >= DEDUP_REVIEW_THRESHOLD) {
         this.logger.log(
           `[Dedup] Queue for review: score=${bestMatch.score.toFixed(3)} memory=${bestMatch.id}`,
         );
@@ -115,12 +144,37 @@ export class MemoryDedupService {
         } catch (err) {
           this.logger.error('[Dedup] Failed to create MergeCandidate:', err);
         }
-        return { action: 'create' };
+        result = { action: 'create' };
+      } else {
+        result = { action: 'create' };
       }
 
-      return { action: 'create' };
+      // Release savepoint — transaction is still healthy
+      if (txClient) {
+        try {
+          await (txClient as any).$executeRawUnsafe(
+            `RELEASE SAVEPOINT ${savepointName}`,
+          );
+        } catch {
+          // Savepoint may have already been released; not fatal
+        }
+      }
+      return result;
     } catch (error) {
       this.logger.error('Duplicate check failed:', error);
+      // Roll back to savepoint to restore transaction health (HEY-433).
+      // Without this, a PostgreSQL-level error in the dedup check leaves
+      // the shared transaction in an aborted state (25P02), causing
+      // memory.create() to fail even though the dedup error was caught.
+      if (txClient) {
+        try {
+          await (txClient as any).$executeRawUnsafe(
+            `ROLLBACK TO SAVEPOINT ${savepointName}`,
+          );
+        } catch {
+          // Best-effort; if rollback also fails the tx is truly broken
+        }
+      }
       return { action: 'create' };
     }
   }
