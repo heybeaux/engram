@@ -71,7 +71,10 @@ export class CloudLinkService {
         },
       );
       if (syncKeyResponse.ok) {
-        const syncKeyData = (await syncKeyResponse.json()) as { syncKey?: string; key?: string };
+        const syncKeyData = (await syncKeyResponse.json()) as {
+          syncKey?: string;
+          key?: string;
+        };
         const rawSyncKey = syncKeyData.syncKey || syncKeyData.key;
         if (rawSyncKey) {
           encryptedSyncKey = encrypt(rawSyncKey);
