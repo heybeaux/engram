@@ -198,6 +198,7 @@ model Memory {
   // Dream Cycle additions
   archivedReason   String?   @map("archived_reason")
   lastDreamCycleAt DateTime? @map("last_dream_cycle_at")
+  searchable       Boolean   @default(true) @map("searchable")
   lastDreamedAt    DateTime? @map("last_dreamed_at")
   tier             String?   @map("tier")
   patternSourceIds String[]  @default([]) @map("pattern_source_ids")
