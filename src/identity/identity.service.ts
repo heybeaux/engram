@@ -15,6 +15,8 @@ import {
   PreferenceDto,
   TrustSignalsSummaryDto,
   BehavioralPatternDto,
+  ActiveProjectsResponseDto,
+  ActiveProjectDto,
 } from './dto/identity.dto';
 
 // Patterns that indicate preferences (HEY-171)
