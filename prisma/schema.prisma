@@ -164,6 +164,8 @@ model Memory {
   embeddingId      String?                @unique @map("embedding_id")
   embeddingModel   String?                @map("embedding_model")
   embeddingStatus  EmbeddingStatus        @default(PENDING) @map("embedding_status")
+  isDuplicateOf    String?                @map("is_duplicate_of")
+  ingestedAt       DateTime               @default(now()) @map("ingested_at")
   retrievalCount   Int                    @default(0) @map("retrieval_count")
   lastRetrievedAt  DateTime?              @map("last_retrieved_at")
   usedCount        Int                    @default(0) @map("used_count")
@@ -1052,6 +1054,7 @@ enum EmbeddingStatus {
   PENDING
   COMPLETE
   FAILED
+  DUPLICATE
 }
 
 enum EnsembleJobStatus {

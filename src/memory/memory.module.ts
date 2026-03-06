@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { MemoryService } from './memory.service';
 import { MemoryController } from './memory.controller';
 import { MemoryDedupService } from './memory-dedup.service';
@@ -28,6 +29,10 @@ import { AccountModule } from '../account/account.module';
 import { AnticipatoryModule } from '../anticipatory/anticipatory.module';
 import { GraphModule } from '../graph/graph.module';
 import { QueueModule } from '../queue/queue.module';
+import { ServicePrismaModule } from '../prisma/service-prisma.module';
+import { EmbeddingQueueProducer } from './embedding-queue.producer';
+import { EmbeddingQueueProcessor } from './embedding-queue.processor';
+import { EMBEDDING_QUEUE } from './embedding.queue';
 
 @Module({
   imports: [
@@ -39,6 +44,8 @@ import { QueueModule } from '../queue/queue.module';
     AnticipatoryModule,
     GraphModule,
     QueueModule,
+    ServicePrismaModule,
+    BullModule.registerQueue({ name: EMBEDDING_QUEUE }),
   ],
   controllers: [MemoryController],
   providers: [
@@ -62,6 +69,8 @@ import { QueueModule } from '../queue/queue.module';
     MemoryJobProcessorService,
     EmbeddingRetryCron,
     RecallWeightService,
+    EmbeddingQueueProducer,
+    EmbeddingQueueProcessor,
   ],
   exports: [
     MemoryService,
@@ -71,6 +80,7 @@ import { QueueModule } from '../queue/queue.module';
     TemporalParserService,
     MultiQueryService,
     ContextualRecallService,
+    EmbeddingQueueProducer,
   ],
 })
 export class MemoryModule {}

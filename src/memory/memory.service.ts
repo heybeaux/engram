@@ -37,13 +37,10 @@ import { generateContentHash } from '../common/content-hash.util';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
 
 // Extracted services
-import {
-  MemoryDedupService,
-  SOURCE_CONFIDENCE,
-  INSIGHT_DEDUP_THRESHOLD,
-} from './memory-dedup.service';
+import { MemoryDedupService, SOURCE_CONFIDENCE } from './memory-dedup.service';
 import { MemoryQueryService } from './memory-query.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
+import { EmbeddingQueueProducer } from './embedding-queue.producer';
 import { rlsContext } from '../prisma/rls-context';
 import { MemoryGraphService } from './memory-graph.service';
 import { MemoryExportService } from './memory-export.service';
@@ -80,6 +77,7 @@ export class MemoryService {
     @Optional() private memoryPoolService?: MemoryPoolService,
     @Optional() private memoryAccessLogService?: MemoryAccessLogService,
     @Optional() private eventEmitter?: EventEmitter2,
+    @Optional() private readonly embeddingQueue?: EmbeddingQueueProducer,
   ) {}
 
   /**
@@ -140,33 +138,7 @@ export class MemoryService {
     // 2. Determine source type
     const source = dto.source ?? MemorySource.EXPLICIT_STATEMENT;
 
-    // 3. Check for duplicates (three-tier dedup v2)
-    // Insights use a lower threshold (0.92) because LLM-generated content
-    // has more wording variation for semantically identical ideas (HEY-152)
-    const dedupThreshold =
-      dto.layer === MemoryLayer.INSIGHT ? INSIGHT_DEDUP_THRESHOLD : undefined;
-    const dedupResult = await this.dedupService.findDuplicateV2(
-      userId,
-      rawContent,
-      dedupThreshold,
-    );
-    if (dedupResult.action !== 'create' && dedupResult.existingMemory) {
-      if (dedupResult.action === 'merged') {
-        await this.dedupService.autoMergeMemory(
-          dedupResult.existingMemory.id,
-          rawContent,
-          source as any,
-        );
-      } else if (dedupResult.action === 'reinforced') {
-        await this.dedupService.reinforceMemory(
-          dedupResult.existingMemory.id,
-          dto.context?.sessionId,
-        );
-      }
-      return this.getById(
-        dedupResult.existingMemory.id,
-      ) as Promise<MemoryWithExtraction>;
-    }
+    // 3. [HEY-462] Dedup now runs async in EmbeddingQueueProcessor — skipped on hot path
 
     // 4. Calculate initial importance score
     const importanceScore = this.importance.calculate({
@@ -258,14 +230,23 @@ export class MemoryService {
     };
 
     // 9. Extract structure asynchronously (with fresh RLS context)
-    this.runWithRls(accountId, () =>
-      this.pipelineService.extractAndEmbed(
-        memory.id,
-        rawContent,
+    if (this.embeddingQueue) {
+      await this.embeddingQueue.enqueueEmbedding({
+        memoryId: memory.id,
         userId,
-        extractionContext,
-      ),
-    );
+        raw: rawContent,
+        runDedup: true,
+      });
+    } else {
+      this.runWithRls(accountId, () =>
+        this.pipelineService.extractAndEmbed(
+          memory.id,
+          rawContent,
+          userId,
+          extractionContext,
+        ),
+      );
+    }
 
     // 10a. Increment account memoriesUsed
     this.runWithRls(accountId, () => this.incrementMemoriesUsed(userId, 1));
