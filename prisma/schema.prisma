@@ -241,6 +241,10 @@ model Memory {
   @@index([visibility])
   @@index([embeddingStatus])
   @@map("memories")
+
+  // Automated dedup pipeline relations
+  dedupCandidates1 DedupCandidate[] @relation("DedupCandidate1")
+  dedupCandidates2 DedupCandidate[] @relation("DedupCandidate2")
 }
 
 /// UX feedback from dashboard users (in-app widget + NPS)
@@ -2002,4 +2006,35 @@ model SystemMetric {
   computedAt  DateTime @default(now()) @map("computed_at")
 
   @@map("system_metrics")
+}
+
+/// Automated dedup pipeline — candidate pairs detected by vector/text similarity
+model DedupCandidate {
+  id              String    @id @default(cuid())
+  memoryId1       String    @map("memory_id_1")
+  memoryId2       String    @map("memory_id_2")
+  similarityScore Float     @map("similarity_score")
+  /// VECTOR | TEXT
+  detectionMethod String    @map("detection_method")
+
+  /// DUPLICATE | SUPPORTING | OVERLAPPING | CONFLICTING | RELATED
+  classification  String?
+  confidence      Float?
+  mergedContent   String?   @map("merged_content")
+  reasoning       String?
+
+  /// PENDING | CLASSIFIED | RESOLVED
+  status          String    @default("PENDING")
+  classifiedAt    DateTime? @map("classified_at")
+  resolvedAt      DateTime? @map("resolved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  memory1 Memory @relation("DedupCandidate1", fields: [memoryId1], references: [id])
+  memory2 Memory @relation("DedupCandidate2", fields: [memoryId2], references: [id])
+
+  @@unique([memoryId1, memoryId2])
+  @@index([status])
+  @@index([classification])
+  @@index([createdAt])
+  @@map("dedup_candidates")
 }
