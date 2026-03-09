@@ -35,7 +35,7 @@ export class DashboardController {
   @Get('stats')
   @UseGuards(ApiKeyOrJwtGuard)
   async getStats(@Agent() agent: any): Promise<StatsResponse> {
-    return this.dashboardService.getStats(agent.id);
+    return this.dashboardService.getStats(agent.id, agent.accountId);
   }
 
   /**

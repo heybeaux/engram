@@ -34,20 +34,6 @@ import { EmbeddingQueueProducer } from './embedding-queue.producer';
 import { EmbeddingQueueProcessor } from './embedding-queue.processor';
 import { EMBEDDING_QUEUE } from './embedding.queue';
 
-const hasRedis = !!(
-  process.env.REDIS_URL ||
-  process.env.REDIS_HOST ||
-  process.env.BULL_REDIS_URL
-);
-
-const bullImports = hasRedis
-  ? [BullModule.registerQueue({ name: EMBEDDING_QUEUE })]
-  : [];
-
-const bullProviders = hasRedis
-  ? [EmbeddingQueueProducer, EmbeddingQueueProcessor]
-  : [];
-
 @Module({
   imports: [
     AccountModule,
@@ -59,7 +45,7 @@ const bullProviders = hasRedis
     GraphModule,
     QueueModule,
     ServicePrismaModule,
-    ...bullImports,
+    BullModule.registerQueue({ name: EMBEDDING_QUEUE }),
   ],
   controllers: [MemoryController],
   providers: [
@@ -83,7 +69,8 @@ const bullProviders = hasRedis
     MemoryJobProcessorService,
     EmbeddingRetryCron,
     RecallWeightService,
-    ...bullProviders,
+    EmbeddingQueueProducer,
+    EmbeddingQueueProcessor,
   ],
   exports: [
     MemoryService,
@@ -93,6 +80,7 @@ const bullProviders = hasRedis
     TemporalParserService,
     MultiQueryService,
     ContextualRecallService,
+    EmbeddingQueueProducer,
   ],
 })
 export class MemoryModule {}

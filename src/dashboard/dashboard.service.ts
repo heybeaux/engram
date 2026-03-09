@@ -48,13 +48,21 @@ export class DashboardService {
   /**
    * Get dashboard overview statistics
    */
-  async getStats(agentId: string): Promise<StatsResponse> {
+  async getStats(agentId: string, accountId: string): Promise<StatsResponse> {
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-    // Aggregate across ALL agents (not just the requesting one)
-    const activeMemoryFilter = { deletedAt: null };
+    // Scope all queries to the requesting account
+    const accountUsers = await this.prisma.user.findMany({
+      where: { agent: { accountId }, deletedAt: null },
+      select: { id: true },
+    });
+    const accountUserIds = accountUsers.map((u) => u.id);
+    const activeMemoryFilter = {
+      deletedAt: null,
+      userId: { in: accountUserIds },
+    } as const;
 
     // Total memories
     const totalMemories = await this.prisma.memory.count({
@@ -84,14 +92,15 @@ export class DashboardService {
               100,
           );
 
-    // Total users (all agents)
+    // Total users (scoped to account)
     const totalUsers = await this.prisma.user.count({
-      where: { deletedAt: null },
+      where: { agent: { accountId }, deletedAt: null },
     });
 
-    // Users from last week vs previous week (all agents)
+    // Users from last week vs previous week (scoped to account)
     const usersLastWeek = await this.prisma.user.count({
       where: {
+        agent: { accountId },
         deletedAt: null,
         createdAt: { gte: oneWeekAgo },
       },
@@ -99,6 +108,7 @@ export class DashboardService {
 
     const usersPreviousWeek = await this.prisma.user.count({
       where: {
+        agent: { accountId },
         deletedAt: null,
         createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
       },
@@ -111,7 +121,7 @@ export class DashboardService {
             ((usersLastWeek - usersPreviousWeek) / usersPreviousWeek) * 100,
           );
 
-    // Health score: % of memories that have extractions (all agents)
+    // Health score: % of memories that have extractions (scoped to account)
     const memoriesWithExtraction = await this.prisma.memoryExtraction.count({
       where: {
         memory: activeMemoryFilter,
@@ -122,7 +132,7 @@ export class DashboardService {
         ? 100
         : Math.round((memoriesWithExtraction / totalMemories) * 100);
 
-    // Memory by layer (all agents)
+    // Memory by layer (scoped to account)
     const layerCounts = await this.prisma.memory.groupBy({
       by: ['layer'],
       where: activeMemoryFilter,
@@ -143,7 +153,7 @@ export class DashboardService {
     // API requests - placeholder data (we don't track API requests yet)
     const apiRequests = this.generatePlaceholderApiRequests();
 
-    // Recent activity - get recent memories (all agents)
+    // Recent activity - get recent memories (scoped to account)
     const recentMemories = await this.prisma.memory.findMany({
       where: activeMemoryFilter,
       orderBy: { createdAt: 'desc' },

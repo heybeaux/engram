@@ -29,23 +29,6 @@ import { ServicePrismaModule } from '../prisma/service-prisma.module';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
 import { HealthMetricsService } from '../health/health-metrics.service';
 
-const hasRedis = !!(
-  process.env.REDIS_URL ||
-  process.env.REDIS_HOST ||
-  process.env.BULL_REDIS_URL
-);
-
-const bullImports = hasRedis
-  ? [
-      BullModule.registerQueue({ name: DREAM_CYCLE_QUEUE }),
-      BullModule.registerFlowProducer({ name: DREAM_CYCLE_QUEUE }),
-    ]
-  : [];
-
-const bullProviders = hasRedis
-  ? [DreamCycleQueueProducer, DreamCycleQueueProcessor]
-  : [];
-
 @Module({
   imports: [
     AccountModule,
@@ -55,13 +38,15 @@ const bullProviders = hasRedis
     FogIndexModule,
     IdentityModule,
     ServicePrismaModule,
-    ...bullImports,
+    BullModule.registerQueue({ name: DREAM_CYCLE_QUEUE }),
+    BullModule.registerFlowProducer({ name: DREAM_CYCLE_QUEUE }),
   ],
   controllers: [ConsolidationController],
   providers: [
     DreamCycleService,
     DreamCycleSchedulerService,
-    ...bullProviders,
+    DreamCycleQueueProducer,
+    DreamCycleQueueProcessor,
     DreamCycleDedupStage,
     DreamCycleStalenessStage,
     DreamCyclePendingStage,
@@ -76,6 +61,6 @@ const bullProviders = hasRedis
     DreamCycleRunTrackerService,
     HealthMetricsService,
   ],
-  exports: [DreamCycleService, GenerateContextService],
+  exports: [DreamCycleService, GenerateContextService, DreamCycleQueueProducer],
 })
 export class ConsolidationModule {}
