@@ -54,6 +54,7 @@ import { DelegationModule } from './delegation/delegation.module';
 import { SessionIndexingModule } from './session-indexing/session-indexing.module';
 import { InboundEmailModule } from './inbound-email/inbound-email.module';
 import { BillingModule } from './billing/billing.module';
+import { ImportModule } from './import/import.module';
 import { UsageLimitMiddleware } from './common/middleware/usage-limit.middleware';
 import { AuthModule } from './common/auth.module';
 import { PersistenceModule } from './common/persistence/persistence.module';
@@ -178,6 +179,7 @@ const coreModules = [
   SessionIndexingModule,
   InboundEmailModule,
   BillingModule,
+  ImportModule,
 ];
 
 const cloudModules = [
