@@ -181,6 +181,7 @@ const coreModules = [
   InboundEmailModule,
   BillingModule,
   ImportModule,
+  ImportV2Module,
 ];
 
 const cloudModules = [
