@@ -83,6 +83,7 @@ model User {
   graphRelationships GraphRelationship[]
   graphMentions      GraphEntityMention[]
   syncUserMaps       SyncUserMap[]
+  entityProfiles     EntityProfile[]
 
   @@unique([agentId, externalId])
   @@map("users")
@@ -227,6 +228,9 @@ model Memory {
   // Multi-model ensemble embeddings
   ensembleEmbeddings MemoryEmbedding[]
 
+  // Entity Profiles
+  entityProfiles EntityProfileMemory[]
+
   @@index([clusterId])
   @@index([userId, layer])
   @@index([userId, createdAt])
@@ -302,6 +306,7 @@ model Entity {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   memories       MemoryEntity[]
+  profile        EntityProfile?
 
   @@unique([userId, normalizedName, type])
   @@map("entities")
@@ -500,8 +505,9 @@ model MemoryPool {
   updatedAt   DateTime       @updatedAt @map("updated_at")
   archivedAt  DateTime?      @map("archived_at")
 
-  memberships MemoryPoolMembership[]
-  grants      PoolGrant[]
+  memberships      MemoryPoolMembership[]
+  grants           PoolGrant[]
+  entityProfiles   EntityProfile[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -2002,4 +2008,121 @@ model SystemMetric {
   computedAt  DateTime @default(now()) @map("computed_at")
 
   @@map("system_metrics")
+}
+
+// ─── Entity Profiles (ENG-10) ───────────────────────────────────────────────
+
+enum EntityType {
+  PERSON
+  ORGANIZATION
+  PROJECT
+  BRAND
+  PRODUCT
+  LOCATION
+  CONCEPT
+  CUSTOM
+}
+
+enum AttributeType {
+  STRING
+  DATE
+  NUMBER
+  URL
+  EMAIL
+  PHONE
+  ADDRESS
+  JSON
+  MARKDOWN
+}
+
+enum ProfileSource {
+  MANUAL
+  IMPORT
+  API
+  AGENT_CREATED
+}
+
+enum AttachMethod {
+  AUTO_SEMANTIC
+  AUTO_MENTION
+  MANUAL
+  IMPORT
+}
+
+model EntityProfile {
+  id             String              @id @default(uuid())
+  userId         String              @map("user_id")
+  user           User                @relation(fields: [userId], references: [id])
+
+  name           String
+  type           EntityType
+  normalizedName String              @map("normalized_name")
+  aliases        String[]            @default([])
+  avatar         String?
+  description    String?
+
+  attributes     EntityAttribute[]
+
+  entityId       String?             @unique @map("entity_id")
+  entity         Entity?             @relation(fields: [entityId], references: [id])
+
+  memories       EntityProfileMemory[]
+  tags           String[]            @default([])
+
+  source         ProfileSource       @default(MANUAL)
+  verified       Boolean             @default(true)
+
+  embedding      Unsupported("vector(1536)")?
+
+  poolId         String?             @map("pool_id")
+  pool           MemoryPool?         @relation(fields: [poolId], references: [id])
+
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  deletedAt      DateTime?           @map("deleted_at")
+
+  @@index([userId])
+  @@index([normalizedName])
+  @@index([type])
+  @@map("entity_profiles")
+}
+
+model EntityAttribute {
+  id         String        @id @default(uuid())
+  profileId  String        @map("profile_id")
+  profile    EntityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  key        String
+  value      String
+  valueType  AttributeType @default(STRING) @map("value_type")
+  category   String?
+
+  source     String?
+  confidence Float         @default(1.0)
+  verified   Boolean       @default(false)
+
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  @@unique([profileId, key, source])
+  @@index([profileId])
+  @@map("entity_attributes")
+}
+
+model EntityProfileMemory {
+  id             String        @id @default(uuid())
+  profileId      String        @map("profile_id")
+  profile        EntityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  memoryId       String        @map("memory_id")
+  memory         Memory        @relation(fields: [memoryId], references: [id])
+
+  relevanceScore Float         @map("relevance_score")
+  attachMethod   AttachMethod  @map("attach_method")
+
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@unique([profileId, memoryId])
+  @@index([profileId])
+  @@index([memoryId])
+  @@map("entity_profile_memories")
 }
