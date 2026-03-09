@@ -417,6 +417,108 @@ describe('ReviewService', () => {
     });
   });
 
+  describe('processBacklog', () => {
+    it('should auto-approve high-confidence candidates older than 24h', async () => {
+      const oldCandidate = {
+        id: 'cand_old',
+        userId: 'user_123',
+        memoryIds: ['mem_1', 'mem_2'],
+        similarity: 0.95,
+        suggestedStrategy: MergeStrategy.KEEP_DETAILED,
+        suggestedSurvivorId: 'mem_1',
+        safetyFlags: '[]',
+        status: CandidateStatus.PENDING,
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+      };
+
+      mockPrisma.mergeCandidate.findMany.mockResolvedValue([oldCandidate]);
+      mockSafety.checkMultipleSafety.mockResolvedValue([
+        { isProtected: false, canAutoMerge: true, requiresReview: false, reasons: [] },
+        { isProtected: false, canAutoMerge: true, requiresReview: false, reasons: [] },
+      ]);
+      mockPrisma.mergeCandidate.findUnique.mockResolvedValue(oldCandidate);
+      mockMerge.merge.mockResolvedValue({
+        survivorId: 'mem_1',
+        absorbedIds: ['mem_2'],
+        mergedContent: 'merged',
+        strategy: MergeStrategy.KEEP_DETAILED,
+        contentChanged: true,
+      });
+      mockLineage.recordMerge.mockResolvedValue({ id: 'event-1' });
+      mockPrisma.mergeCandidate.update.mockResolvedValue({});
+
+      const result = await service.processBacklog(0.93, 24);
+
+      expect(result.approved).toBe(1);
+      expect(result.skippedSafety).toBe(0);
+      expect(result.errors).toBe(0);
+    });
+
+    it('should skip safety-critical memories in backlog', async () => {
+      const candidate = {
+        id: 'cand_protected',
+        userId: 'user_123',
+        memoryIds: ['mem_1', 'mem_2'],
+        similarity: 0.96,
+        suggestedStrategy: MergeStrategy.KEEP_DETAILED,
+        suggestedSurvivorId: 'mem_1',
+        safetyFlags: '[]',
+        status: CandidateStatus.PENDING,
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+      };
+
+      mockPrisma.mergeCandidate.findMany.mockResolvedValue([candidate]);
+      mockSafety.checkMultipleSafety.mockResolvedValue([
+        { isProtected: true, canAutoMerge: false, requiresReview: true, reasons: [{ type: 'PROTECTED_TYPE' }] },
+        { isProtected: false, canAutoMerge: true, requiresReview: false, reasons: [] },
+      ]);
+
+      const result = await service.processBacklog();
+
+      expect(result.approved).toBe(0);
+      expect(result.skippedSafety).toBe(1);
+      expect(mockMerge.merge).not.toHaveBeenCalled();
+    });
+
+    it('should handle merge failures gracefully', async () => {
+      const candidate = {
+        id: 'cand_fail',
+        userId: 'user_123',
+        memoryIds: ['mem_1', 'mem_2'],
+        similarity: 0.95,
+        suggestedStrategy: MergeStrategy.KEEP_DETAILED,
+        suggestedSurvivorId: 'mem_1',
+        safetyFlags: '[]',
+        status: CandidateStatus.PENDING,
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+      };
+
+      mockPrisma.mergeCandidate.findMany.mockResolvedValue([candidate]);
+      mockSafety.checkMultipleSafety.mockResolvedValue([
+        { isProtected: false, canAutoMerge: true, requiresReview: false, reasons: [] },
+        { isProtected: false, canAutoMerge: true, requiresReview: false, reasons: [] },
+      ]);
+      // approve throws (e.g., memory deleted)
+      mockPrisma.mergeCandidate.findUnique.mockResolvedValue(candidate);
+      mockMerge.merge.mockRejectedValue(new Error('Memory not found'));
+      // Fallback update succeeds
+      mockPrisma.mergeCandidate.update.mockResolvedValue({});
+
+      const result = await service.processBacklog();
+
+      expect(result.approved).toBe(1);
+      expect(result.errors).toBe(0);
+    });
+
+    it('should return empty stats when no candidates match', async () => {
+      mockPrisma.mergeCandidate.findMany.mockResolvedValue([]);
+
+      const result = await service.processBacklog();
+
+      expect(result).toEqual({ approved: 0, skippedSafety: 0, errors: 0 });
+    });
+  });
+
   describe('queueClusterForReview', () => {
     it('should create candidate for cluster', async () => {
       const cluster = {
