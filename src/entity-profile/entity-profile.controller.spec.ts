@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntityProfileController } from './entity-profile.controller';
 import { EntityProfileService } from './entity-profile.service';
+import { AttachmentPipelineService } from './attachment-pipeline.service';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 
 describe('EntityProfileController', () => {
@@ -18,6 +19,20 @@ describe('EntityProfileController', () => {
     removeAttribute: jest.fn(),
     attachMemory: jest.fn(),
     detachMemory: jest.fn(),
+    getOrCreateUser: jest.fn(),
+    prisma: {
+      entityProfileMemory: {
+        findMany: jest.fn(),
+        count: jest.fn(),
+      },
+    },
+  };
+
+  const mockPipeline = {
+    attachMemory: jest.fn(),
+    attachBatch: jest.fn(),
+    scanRecentUnattached: jest.fn(),
+    onMemoryCreated: jest.fn(),
   };
 
   const mockAgent = { id: 'agent-1', accountId: 'account-1' };
@@ -27,6 +42,7 @@ describe('EntityProfileController', () => {
       controllers: [EntityProfileController],
       providers: [
         { provide: EntityProfileService, useValue: mockService },
+        { provide: AttachmentPipelineService, useValue: mockPipeline },
       ],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
@@ -121,10 +137,10 @@ describe('EntityProfileController', () => {
     });
   });
 
-  describe('attachMemory', () => {
+  describe('attachMemorySimple', () => {
     it('should call service.attachMemory', async () => {
       mockService.attachMemory.mockResolvedValue({ id: 'pm1' });
-      await controller.attachMemory(mockAgent, 'p1', {
+      await controller.attachMemorySimple(mockAgent, 'p1', {
         memoryId: 'm1',
         relevanceScore: 0.9,
       });
@@ -134,11 +150,60 @@ describe('EntityProfileController', () => {
     });
   });
 
-  describe('detachMemory', () => {
+  describe('detachMemorySimple', () => {
     it('should call service.detachMemory', async () => {
       mockService.detachMemory.mockResolvedValue({ id: 'pm1' });
-      await controller.detachMemory(mockAgent, 'p1', 'm1');
+      await controller.detachMemorySimple(mockAgent, 'p1', 'm1');
       expect(mockService.detachMemory).toHaveBeenCalledWith('account-1', 'p1', 'm1');
+    });
+  });
+
+  describe('attach (pipeline)', () => {
+    it('should call service.attachMemory with default relevanceScore', async () => {
+      mockService.attachMemory.mockResolvedValue({ id: 'pm1' });
+      await controller.attach(mockAgent, 'p1', { memoryId: 'm1' });
+      expect(mockService.attachMemory).toHaveBeenCalledWith(
+        'account-1', 'p1', 'm1', 1.0,
+      );
+    });
+  });
+
+  describe('detach (pipeline)', () => {
+    it('should call service.detachMemory', async () => {
+      mockService.detachMemory.mockResolvedValue({ id: 'pm1' });
+      await controller.detach(mockAgent, 'p1', { memoryId: 'm1' });
+      expect(mockService.detachMemory).toHaveBeenCalledWith('account-1', 'p1', 'm1');
+    });
+  });
+
+  describe('scan', () => {
+    it('should call pipeline.scanRecentUnattached', async () => {
+      mockService.getOrCreateUser.mockResolvedValue('user-1');
+      mockPipeline.scanRecentUnattached.mockResolvedValue({
+        processed: 5,
+        failed: 0,
+        totalAttached: 3,
+        results: [],
+      });
+      const result = await controller.scan(mockAgent, '10');
+      expect(mockService.getOrCreateUser).toHaveBeenCalledWith('agent-1');
+      expect(mockPipeline.scanRecentUnattached).toHaveBeenCalledWith('user-1', 10);
+      expect(result.processed).toBe(5);
+    });
+  });
+
+  describe('listMemories', () => {
+    it('should return attached memories with pagination', async () => {
+      mockService.getById.mockResolvedValue({ id: 'p1' });
+      mockService.prisma.entityProfileMemory.findMany.mockResolvedValue([
+        { id: 'pm1', profileId: 'p1', memoryId: 'm1', relevanceScore: 0.9, memory: { id: 'm1', raw: 'text' } },
+      ]);
+      mockService.prisma.entityProfileMemory.count.mockResolvedValue(1);
+
+      const result = await controller.listMemories(mockAgent, 'p1', '1', '25');
+      expect(result.total).toBe(1);
+      expect(result.memories).toHaveLength(1);
+      expect(result.totalPages).toBe(1);
     });
   });
 });
