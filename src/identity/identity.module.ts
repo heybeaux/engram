@@ -40,6 +40,10 @@ import { WorkStyleService } from './work-style.service';
   providers: [
     IdentityController,
     IdentityService,
+    TaskOutcomeService,
+    SelfAssessmentService,
+    CapabilityProfileService,
+    WorkStyleService,
     DelegationContractService,
     ChallengeService,
     FailurePatternService,
