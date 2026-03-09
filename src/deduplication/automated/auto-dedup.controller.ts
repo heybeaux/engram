@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { ApiKeyOrJwtGuard } from '../../common/guards/api-key-or-jwt.guard';
+import { DedupPipelineService } from './dedup-pipeline.service';
 
 class ResolveDto {
   action: 'merge' | 'reject' | 'keep-both';
@@ -36,7 +37,10 @@ class ResolveDto {
 @UseGuards(ApiKeyOrJwtGuard)
 @Controller('v1/dedup')
 export class AutoDedupController {
-  constructor(private readonly prisma: ServicePrismaService) {}
+  constructor(
+    private readonly prisma: ServicePrismaService,
+    private readonly pipeline: DedupPipelineService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // GET /v1/dedup/review
@@ -92,13 +96,45 @@ export class AutoDedupController {
   }
 
   // ---------------------------------------------------------------------------
-  // GET /v1/dedup/auto-stats
+  // GET /v1/dedup/pipeline/stats
+  // ---------------------------------------------------------------------------
+
+  @Get('pipeline/stats')
+  @ApiOperation({ summary: 'Automated dedup pipeline statistics' })
+  @ApiResponse({ status: 200, description: 'Pipeline stats' })
+  async getPipelineStats() {
+    return this.buildPipelineStats();
+  }
+
+  // ---------------------------------------------------------------------------
+  // POST /v1/dedup/pipeline/run
+  // ---------------------------------------------------------------------------
+
+  @Post('pipeline/run')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Manually trigger a full dedup pipeline run' })
+  @ApiResponse({ status: 200, description: 'Pipeline run result' })
+  async triggerPipelineRun() {
+    const result = await this.pipeline.runPipeline();
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // GET /v1/dedup/auto-stats  (legacy alias — kept for backwards compatibility)
   // ---------------------------------------------------------------------------
 
   @Get('auto-stats')
-  @ApiOperation({ summary: 'Automated dedup pipeline statistics' })
+  @ApiOperation({ summary: 'Automated dedup pipeline statistics (legacy alias)' })
   @ApiResponse({ status: 200, description: 'Pipeline stats' })
   async getAutoStats() {
+    return this.buildPipelineStats();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  private async buildPipelineStats() {
     const [pending, classified, resolved, total] = await Promise.all([
       this.prisma.dedupCandidate.count({ where: { status: 'PENDING' } }),
       this.prisma.dedupCandidate.count({ where: { status: 'CLASSIFIED' } }),
@@ -119,9 +155,12 @@ export class AutoDedupController {
       },
     });
 
+    const mergeRate = total > 0 ? ((resolved / total) * 100).toFixed(1) : '0.0';
+
     return {
       pipeline: { pending, classified, resolved, total },
       reviewQueueDepth,
+      mergeRate: `${mergeRate}%`,
       classifications: byClassification.map((g) => ({
         type: g.classification,
         count: g._count.id,

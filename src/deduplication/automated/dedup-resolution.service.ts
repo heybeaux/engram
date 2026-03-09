@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ServicePrismaService } from '../../prisma/service-prisma.service';
+import { SafetyService } from '../safety.service';
 import {
   AUTO_MERGE_CONFIDENCE,
   AUTO_CONSOLIDATE_CONFIDENCE_HIGH,
@@ -19,7 +20,10 @@ type MemorySlim = {
   id: string;
   raw: string;
   importanceScore: number;
+  userId: string;
   createdAt: Date;
+  safetyCritical: boolean;
+  memoryType: string | null;
 };
 
 /**
@@ -36,15 +40,23 @@ type MemorySlim = {
  *     confidence 0.7-0.9 → queue
  *     confidence <  0.7  → queue
  *
- *   CONFLICTING          → always queue
+ *   CONFLICTING          → always queue — never auto-resolve conflicts
  *   RELATED              → no action (resolve immediately)
+ *
+ * Safety rules:
+ *   - CONSTRAINT-type memories are never auto-merged
+ *   - Memories with safetyCritical = true are never auto-merged
+ *   - All merges create a MemoryMergeEvent with canRollback: true
  */
 @Injectable()
 export class DedupResolutionService {
   private readonly logger = new Logger(DedupResolutionService.name);
   private readonly BATCH_SIZE = 20;
 
-  constructor(private readonly prisma: ServicePrismaService) {}
+  constructor(
+    private readonly prisma: ServicePrismaService,
+    private readonly safety: SafetyService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // Public API
@@ -54,8 +66,28 @@ export class DedupResolutionService {
     const candidates = await this.prisma.dedupCandidate.findMany({
       where: { status: 'CLASSIFIED', classification: { not: null } },
       include: {
-        memory1: { select: { id: true, raw: true, importanceScore: true, createdAt: true } },
-        memory2: { select: { id: true, raw: true, importanceScore: true, createdAt: true } },
+        memory1: {
+          select: {
+            id: true,
+            raw: true,
+            importanceScore: true,
+            userId: true,
+            createdAt: true,
+            safetyCritical: true,
+            memoryType: true,
+          },
+        },
+        memory2: {
+          select: {
+            id: true,
+            raw: true,
+            importanceScore: true,
+            userId: true,
+            createdAt: true,
+            safetyCritical: true,
+            memoryType: true,
+          },
+        },
       },
       take: this.BATCH_SIZE,
       orderBy: { classifiedAt: 'asc' },
@@ -79,24 +111,52 @@ export class DedupResolutionService {
         const { classification, memory1, memory2, mergedContent } = candidate;
         const confidence = candidate.confidence ?? 0;
 
+        // Safety gate: never auto-merge safety-critical or CONSTRAINT memories
+        if (
+          classification !== 'RELATED' &&
+          (this.isSafetyCritical(memory1) || this.isSafetyCritical(memory2))
+        ) {
+          this.logger.log(
+            `[DedupResolution] Skipping safety-critical pair: ${candidate.id}`,
+          );
+          stats.queued++;
+          stats.processed++;
+          continue;
+        }
+
         switch (classification) {
           case 'DUPLICATE':
           case 'SUPPORTING':
             if (confidence >= AUTO_MERGE_CONFIDENCE) {
-              await this.autoMerge(candidate.id, memory1, memory2, mergedContent);
+              await this.autoMerge(
+                candidate.id,
+                memory1,
+                memory2,
+                mergedContent,
+                candidate.similarityScore,
+              );
               stats.autoMerged++;
             } else {
-              // Leave as CLASSIFIED so the review queue picks it up
+              // Leave as CLASSIFIED — review queue picks it up
               stats.queued++;
             }
             break;
 
           case 'OVERLAPPING':
             if (confidence >= AUTO_CONSOLIDATE_CONFIDENCE_HIGH) {
-              await this.autoConsolidate(candidate.id, memory1, memory2, mergedContent);
+              await this.autoConsolidate(
+                candidate.id,
+                memory1,
+                memory2,
+                mergedContent,
+                candidate.similarityScore,
+              );
               stats.autoConsolidated++;
+            } else if (confidence >= AUTO_CONSOLIDATE_CONFIDENCE_LOW) {
+              // 0.7–0.9: queue for review
+              stats.queued++;
             } else {
-              // confidence 0.7–0.9 or below 0.7 → queue
+              // < 0.7: skip
               stats.queued++;
             }
             break;
@@ -141,28 +201,48 @@ export class DedupResolutionService {
 
   /**
    * Auto-merge: keep higher-importance memory, append unique content from loser,
-   * soft-delete the loser.
+   * soft-delete the loser, create MemoryMergeEvent with canRollback: true.
    */
   private async autoMerge(
     candidateId: string,
     memory1: MemorySlim,
     memory2: MemorySlim,
     mergedContent: string | null,
+    similarityScore: number,
   ): Promise<void> {
     const [winner, loser] = this.pickWinnerLoser(memory1, memory2);
-
     const finalContent =
       mergedContent ?? this.appendUniqueContent(winner.raw, loser.raw);
 
     await this.prisma.$transaction([
+      // Update winner with merged content
       this.prisma.memory.update({
         where: { id: winner.id },
         data: { raw: finalContent },
       }),
+      // Soft-delete loser
       this.prisma.memory.update({
         where: { id: loser.id },
         data: { deletedAt: new Date() },
       }),
+      // Create rollback-capable merge event
+      this.prisma.memoryMergeEvent.create({
+        data: {
+          userId: winner.userId,
+          survivorMemoryId: winner.id,
+          absorbedMemoryIds: [loser.id],
+          strategy: 'KEEP_IMPORTANCE',
+          similarity: similarityScore,
+          triggeredBy: 'auto',
+          originalContents: JSON.stringify([
+            { memoryId: loser.id, content: loser.raw, createdAt: loser.createdAt },
+          ]),
+          mergedContent: finalContent,
+          contentChanged: finalContent !== winner.raw,
+          canRollback: true,
+        },
+      }),
+      // Mark candidate resolved
       this.prisma.dedupCandidate.update({
         where: { id: candidateId },
         data: {
@@ -179,16 +259,16 @@ export class DedupResolutionService {
   }
 
   /**
-   * Auto-consolidate: similar to merge but labels the absorbed content.
+   * Auto-consolidate: combine overlapping memories into a richer single memory.
    */
   private async autoConsolidate(
     candidateId: string,
     memory1: MemorySlim,
     memory2: MemorySlim,
     mergedContent: string | null,
+    similarityScore: number,
   ): Promise<void> {
     const [winner, loser] = this.pickWinnerLoser(memory1, memory2);
-
     const consolidated =
       mergedContent ??
       `${winner.raw}\n\n[Consolidated from: ${loser.raw}]`;
@@ -201,6 +281,23 @@ export class DedupResolutionService {
       this.prisma.memory.update({
         where: { id: loser.id },
         data: { deletedAt: new Date() },
+      }),
+      // Create rollback-capable merge event
+      this.prisma.memoryMergeEvent.create({
+        data: {
+          userId: winner.userId,
+          survivorMemoryId: winner.id,
+          absorbedMemoryIds: [loser.id],
+          strategy: 'COMBINE_METADATA',
+          similarity: similarityScore,
+          triggeredBy: 'auto',
+          originalContents: JSON.stringify([
+            { memoryId: loser.id, content: loser.raw, createdAt: loser.createdAt },
+          ]),
+          mergedContent: consolidated,
+          contentChanged: consolidated !== winner.raw,
+          canRollback: true,
+        },
       }),
       this.prisma.dedupCandidate.update({
         where: { id: candidateId },
@@ -225,7 +322,21 @@ export class DedupResolutionService {
   }
 
   // ---------------------------------------------------------------------------
-  // Utilities
+  // Safety utilities
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns true if this memory must never be auto-merged.
+   * CONSTRAINT-type and safetyCritical memories are always protected.
+   */
+  private isSafetyCritical(memory: MemorySlim): boolean {
+    if (memory.safetyCritical) return true;
+    if (memory.memoryType === 'CONSTRAINT') return true;
+    return false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Merge utilities
   // ---------------------------------------------------------------------------
 
   /**
@@ -237,13 +348,11 @@ export class DedupResolutionService {
   ): [winner: MemorySlim, loser: MemorySlim] {
     if (a.importanceScore > b.importanceScore) return [a, b];
     if (b.importanceScore > a.importanceScore) return [b, a];
-    // Equal scores — keep the newer one
     return a.createdAt >= b.createdAt ? [a, b] : [b, a];
   }
 
   /**
-   * Append content from `loser` that doesn't already appear in `winner`.
-   * Uses a simple whole-string containment check; good enough for dedup purposes.
+   * Append content from loser that doesn't already appear in winner.
    */
   private appendUniqueContent(winnerRaw: string, loserRaw: string): string {
     if (winnerRaw.includes(loserRaw.trim())) return winnerRaw;

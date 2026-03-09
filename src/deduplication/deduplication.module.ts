@@ -15,14 +15,7 @@ import { MemoryModule } from '../memory/memory.module';
 import { AccountModule } from '../account/account.module';
 import { ServicePrismaModule } from '../prisma/service-prisma.module';
 // Automated dedup pipeline (Wave 5)
-import { CandidateDetectionService } from './automated/candidate-detection.service';
-import {
-  CandidateDetectionProcessor,
-  DEDUP_AUTO_DETECTION_QUEUE,
-} from './automated/candidate-detection.processor';
-import { DedupClassificationService } from './automated/dedup-classification.service';
-import { DedupResolutionService } from './automated/dedup-resolution.service';
-import { AutoDedupController } from './automated/auto-dedup.controller';
+import { AutomatedDedupModule } from './automated/automated-dedup.module';
 
 const hasRedis = !!(
   process.env.REDIS_URL ||
@@ -31,14 +24,11 @@ const hasRedis = !!(
 );
 
 const bullImports = hasRedis
-  ? [
-      BullModule.registerQueue({ name: DEDUP_QUEUE }),
-      BullModule.registerQueue({ name: DEDUP_AUTO_DETECTION_QUEUE }),
-    ]
+  ? [BullModule.registerQueue({ name: DEDUP_QUEUE })]
   : [];
 
 const bullProviders = hasRedis
-  ? [DedupQueueProducer, DedupQueueProcessor, DedupSchedulerService, CandidateDetectionProcessor]
+  ? [DedupQueueProducer, DedupQueueProcessor, DedupSchedulerService]
   : [];
 
 /**
@@ -76,11 +66,19 @@ const bullProviders = hasRedis
  * --- Automated pipeline (Wave 5) ---
  * - GET    /v1/dedup/review             - Human-review queue (CLASSIFIED candidates)
  * - POST   /v1/dedup/review/:id/resolve - Resolve a candidate
- * - GET    /v1/dedup/auto-stats         - Automated pipeline stats
+ * - GET    /v1/dedup/pipeline/stats     - Pipeline stats
+ * - POST   /v1/dedup/pipeline/run       - Manually trigger full pipeline run
+ * - GET    /v1/dedup/auto-stats         - Automated pipeline stats (legacy alias)
  */
 @Module({
-  imports: [AccountModule, MemoryModule, ServicePrismaModule, ...bullImports],
-  controllers: [DeduplicationController, AutoDedupController],
+  imports: [
+    AccountModule,
+    MemoryModule,
+    ServicePrismaModule,
+    AutomatedDedupModule,
+    ...bullImports,
+  ],
+  controllers: [DeduplicationController],
   providers: [
     DeduplicationService,
     SimilarityService,
@@ -88,10 +86,6 @@ const bullProviders = hasRedis
     MergeService,
     LineageService,
     ReviewService,
-    // Automated pipeline services (always registered; processors are conditional)
-    CandidateDetectionService,
-    DedupClassificationService,
-    DedupResolutionService,
     ...bullProviders,
   ],
   exports: [
@@ -101,9 +95,6 @@ const bullProviders = hasRedis
     MergeService,
     LineageService,
     ReviewService,
-    CandidateDetectionService,
-    DedupClassificationService,
-    DedupResolutionService,
   ],
 })
 export class DeduplicationModule {}
