@@ -44,6 +44,7 @@ import { CloudSyncModule } from './cloud-sync/cloud-sync.module';
 import { AwarenessModule } from './awareness/awareness.module';
 import { AnticipatoryModule } from './anticipatory/anticipatory.module';
 import { IdentityModule } from './identity/identity.module';
+import { EntityProfileModule } from './entity-profile/entity-profile.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { UsageTrackingInterceptor } from './common/interceptors/usage-tracking.interceptor';
 import { ChallengeModule } from './challenge/challenge.module';
@@ -167,6 +168,7 @@ const coreModules = [
   AwarenessModule,
   AnticipatoryModule,
   IdentityModule,
+  EntityProfileModule,
   ChallengeModule,
   TeamsModule,
   DelegationModule,
