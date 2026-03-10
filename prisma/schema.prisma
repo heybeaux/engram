@@ -180,6 +180,7 @@ model Memory {
   updatedAt        DateTime               @updatedAt @map("updated_at")
   deletedAt        DateTime?              @map("deleted_at")
   embedding        Unsupported("vector")?
+  searchVector     Unsupported("tsvector")?  @map("search_vector")
   feedback         Feedback[]
   project          Project?               @relation(fields: [projectId], references: [id])
   session          Session?               @relation(fields: [sessionId], references: [id])

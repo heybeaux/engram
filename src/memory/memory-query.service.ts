@@ -127,6 +127,7 @@ export class MemoryQueryService {
         dto.layers as any,
         undefined,
         poolIds,
+        searchQuery,
       );
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
 
@@ -154,7 +155,7 @@ export class MemoryQueryService {
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
         .slice(0, limit);
     } else {
-      // STANDARD PATH
+      // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
       const vectorResults = await this.embedding.search(
         userId,
         queryEmbedding,
@@ -162,6 +163,7 @@ export class MemoryQueryService {
         dto.layers as any,
         undefined,
         poolIds,
+        searchQuery,
       );
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
@@ -195,6 +197,19 @@ export class MemoryQueryService {
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    }
+
+    // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
+    // Apply usage signal (retrievalCount + usedCount + recency + feedback)
+    // to boost memories that are frequently used and recently accessed.
+    try {
+      const usageWeighted =
+        await this.recallWeightService.applyUsageWeighting(scoredMemories);
+      scoredMemories = usageWeighted as MemoryWithScore[];
+    } catch (error) {
+      this.logger.warn(
+        `[Recall] Usage weighting failed, proceeding without: ${(error as Error)?.message}`,
+      );
     }
 
     // ── Active Insight Surfacing ──────────────────────────────────────

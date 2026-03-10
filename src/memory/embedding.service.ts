@@ -113,6 +113,7 @@ export class EmbeddingService {
     layers?: MemoryLayer[],
     projectId?: string,
     poolIds?: string[],
+    queryText?: string,
   ): Promise<VectorSearchResult[]> {
     return this.vector.search(queryEmbedding, {
       userId,
@@ -122,6 +123,7 @@ export class EmbeddingService {
         projectId,
         poolIds,
       },
+      _queryText: queryText,
     });
   }
 

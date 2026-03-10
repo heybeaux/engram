@@ -26,6 +26,8 @@ export interface VectorSearchOptions {
     projectId?: string;
     poolIds?: string[];
   };
+  /** ENG-26: Original query text for hybrid search (BM25 fusion) */
+  _queryText?: string;
 }
 
 /**
