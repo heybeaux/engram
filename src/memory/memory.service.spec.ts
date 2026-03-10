@@ -6,10 +6,8 @@ import { EmbeddingService } from './embedding.service';
 import { ImportanceService } from './importance.service';
 import { TemporalParserService } from './temporal/temporal-parser.service';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
-import {
-  MemoryDedupService,
-  INSIGHT_DEDUP_THRESHOLD,
-} from './memory-dedup.service';
+import { MemoryDedupService } from './memory-dedup.service';
+import { EmbeddingQueueProducer } from './embedding-queue.producer';
 import { MemoryQueryService } from './memory-query.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { MemoryGraphService } from './memory-graph.service';
@@ -189,6 +187,10 @@ describe('MemoryService', () => {
         .mockResolvedValue({ nodes: [], edges: [], entities: [] }),
     };
 
+    const mockEmbeddingQueue = {
+      enqueueEmbedding: jest.fn().mockResolvedValue(undefined),
+    };
+
     module = await Test.createTestingModule({
       providers: [
         MemoryService,
@@ -202,6 +204,7 @@ describe('MemoryService', () => {
         { provide: MemoryQueryService, useValue: mockQueryService },
         { provide: MemoryPipelineService, useValue: mockPipelineService },
         { provide: MemoryGraphService, useValue: mockGraphService },
+        { provide: EmbeddingQueueProducer, useValue: mockEmbeddingQueue },
         {
           provide: MemoryExportService,
           useValue: {
@@ -304,29 +307,26 @@ describe('MemoryService', () => {
       });
     });
 
-    it('should trigger async extraction via pipeline service', async () => {
+    it('should enqueue embedding via EmbeddingQueueProducer (HEY-462: async dedup)', async () => {
       mockImportance.calculate.mockReturnValue(0.5);
       mockPrisma.memory.create.mockResolvedValue(mockMemory);
 
       const result = await service.remember('user-456', { raw: 'Test' });
 
-      // Result should be returned immediately
+      // Result should be returned immediately without waiting for dedup
       expect(result).toEqual(mockMemory);
 
-      // Wait for async call to fire
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Pipeline service should have been called for extraction
-      const pipelineService = module.get(MemoryPipelineService);
-      expect(pipelineService.extractAndEmbed).toHaveBeenCalledWith(
-        mockMemory.id,
-        'Test',
-        'user-456',
-        expect.any(Object),
-      );
+      // Embedding should be enqueued (dedup runs in the worker, not here)
+      const embeddingQueue = module.get(EmbeddingQueueProducer);
+      expect(embeddingQueue.enqueueEmbedding).toHaveBeenCalledWith({
+        memoryId: mockMemory.id,
+        userId: 'user-456',
+        raw: 'Test',
+        runDedup: true,
+      });
     });
 
-    it('should use lower dedup threshold (0.92) for INSIGHT layer memories', async () => {
+    it('should NOT call findDuplicateV2 synchronously (dedup moved to worker)', async () => {
       mockImportance.calculate.mockReturnValue(0.7);
       mockPrisma.memory.create.mockResolvedValue(mockMemory);
 
@@ -338,26 +338,18 @@ describe('MemoryService', () => {
         source: MemorySource.PATTERN_DETECTED,
       });
 
-      expect(dedupService.findDuplicateV2).toHaveBeenCalledWith(
-        'user-456',
-        'Pattern detected: topic drift in sessions',
-        INSIGHT_DEDUP_THRESHOLD,
-      );
+      // Dedup must NOT run synchronously on the HTTP path (HEY-462)
+      expect(dedupService.findDuplicateV2).not.toHaveBeenCalled();
     });
 
-    it('should use default dedup threshold for non-INSIGHT layers', async () => {
+    it('should always create a new memory record regardless of duplicates', async () => {
       mockImportance.calculate.mockReturnValue(0.5);
       mockPrisma.memory.create.mockResolvedValue(mockMemory);
 
-      const dedupService = module.get(MemoryDedupService);
-
       await service.remember('user-456', { raw: 'Regular memory' });
 
-      expect(dedupService.findDuplicateV2).toHaveBeenCalledWith(
-        'user-456',
-        'Regular memory',
-        undefined,
-      );
+      // Memory is always created — dedup happens async in the worker
+      expect(mockPrisma.memory.create).toHaveBeenCalledTimes(1);
     });
   });
 

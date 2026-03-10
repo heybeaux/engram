@@ -2,7 +2,7 @@ name: CI (Cloud Edition)
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
 
 concurrency:
   group: ci-cloud-${{ github.ref }}

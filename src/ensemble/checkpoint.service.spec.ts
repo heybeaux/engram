@@ -88,7 +88,9 @@ describe('CheckpointService', () => {
 
   describe('delete', () => {
     it('should delete by jobId', async () => {
-      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({
+        count: 1,
+      });
 
       await service.delete('test-job-1');
 
@@ -158,7 +160,9 @@ describe('CheckpointService', () => {
 
   describe('cleanupStale', () => {
     it('should delete stale checkpoints and return count', async () => {
-      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({ count: 3 });
+      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({
+        count: 3,
+      });
 
       const result = await service.cleanupStale();
 
@@ -169,7 +173,9 @@ describe('CheckpointService', () => {
     });
 
     it('should return 0 when no stale checkpoints', async () => {
-      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({
+        count: 0,
+      });
 
       const result = await service.cleanupStale();
 

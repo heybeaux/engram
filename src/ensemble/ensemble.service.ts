@@ -43,6 +43,7 @@ import {
   CoverageStats,
   MemoryEmbeddingStatus,
   ABTestResult,
+  DEFAULT_ACTIVE_MODELS,
 } from './ensemble.types';
 
 @Injectable()
@@ -63,7 +64,7 @@ export class EnsembleService implements OnModuleInit {
     // Models can be configured via ENSEMBLE_MODELS env var (comma-separated)
     const modelsEnv = this.configService.get<string>(
       'ENSEMBLE_MODELS',
-      'bge-base,minilm,nomic',
+      DEFAULT_ACTIVE_MODELS.join(','),
     );
     const models = modelsEnv.split(',').map((m) => m.trim()) as ModelId[];
 

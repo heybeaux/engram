@@ -2,9 +2,9 @@ name: CI (Local Edition)
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
   pull_request:
-    branches: [main]
+    branches: [staging]
 
 concurrency:
   group: ci-local-${{ github.ref }}

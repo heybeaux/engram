@@ -1,0 +1,1969 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Account represents a paying customer (SaaS layer)
+model Account {
+  id                  String            @id @default(cuid())
+  email               String            @unique
+  passwordHash        String            @map("password_hash")
+  name                String?
+  stripeCustomerId    String?           @unique @map("stripe_customer_id")
+  isAdmin             Boolean           @default(false) @map("is_admin")
+  plan                Plan              @default(FREE)
+  planExpiresAt       DateTime?         @map("plan_expires_at")
+  memoriesUsed        Int               @default(0) @map("memories_used")
+  apiCallsToday       Int               @default(0) @map("api_calls_today")
+  apiCallsResetAt     DateTime?         @map("api_calls_reset_at")
+  resetToken          String?           @map("reset_token")
+  resetTokenExpiresAt DateTime?         @map("reset_token_expires_at")
+  accessCode          String?           @map("access_code")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  agents              Agent[]
+  uxFeedback          UxFeedback[]
+  cloudLink           CloudLink?
+  instanceSyncKeys    InstanceSyncKey[]
+  instanceApiKeys     InstanceApiKey[]
+  awarenessStates     AwarenessState[]
+
+  @@map("accounts")
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  SCALE
+}
+
+/// Agent represents an API consumer (the AI agent application)
+model Agent {
+  id             String         @id @default(cuid())
+  name           String
+  apiKeyHash     String         @unique @map("api_key_hash")
+  apiKeyHint     String         @map("api_key_hint")
+  memoriesLimit  Int?           @map("memories_limit")
+  requestsPerDay Int?           @map("requests_per_day")
+  accountId      String?        @map("account_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  deletedAt      DateTime?      @map("deleted_at")
+  users          User[]
+  webhooks       Webhook[]
+  account        Account?       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  syncAgentMaps  SyncAgentMap[]
+
+  @@map("agents")
+}
+
+/// User represents an end-user whose memories are being stored
+model User {
+  id          String     @id @default(cuid())
+  externalId  String     @map("external_id")
+  displayName String?    @map("display_name")
+  agentId     String     @map("agent_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+  feedback    Feedback[]
+  memories    Memory[]
+  projects    Project[]
+  sessions    Session[]
+  agent       Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Semantic Memory Graph relations
+  graphEntities      GraphEntity[]
+  graphRelationships GraphRelationship[]
+  graphMentions      GraphEntityMention[]
+  syncUserMaps       SyncUserMap[]
+
+  @@unique([agentId, externalId])
+  @@map("users")
+}
+
+/// Project represents a workstream or context bucket
+model Project {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  externalId  String?   @map("external_id")
+  name        String
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  memories    Memory[]
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions    Session[]
+
+  @@unique([userId, externalId])
+  @@map("projects")
+}
+
+/// Session represents a conversation or work session
+model Session {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  projectId       String?   @map("project_id")
+  externalId      String?   @map("external_id")
+  startedAt       DateTime  @default(now()) @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  consolidated    Boolean   @default(false)
+  consolidatedAt  DateTime? @map("consolidated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  agentSessionKey String?   @map("agent_session_key")
+  memories        Memory[]
+  project         Project?  @relation(fields: [projectId], references: [id])
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+/// Core memory entity
+model Memory {
+  id        String      @id @default(cuid())
+  userId    String      @map("user_id")
+  projectId String?     @map("project_id")
+  sessionId String?     @map("session_id")
+  raw       String
+  layer     MemoryLayer
+
+  // Memory Intelligence: Type-based classification
+  memoryType     MemoryType? @map("memory_type")
+  typeConfidence Float?      @map("type_confidence") // 0.0-1.0 from LLM
+  priority       Int         @default(3) // 1=CONSTRAINT, 2=PREF/TASK, 3=FACT, 4=EVENT
+
+  promotedFrom String? @map("promoted_from") // Source memory ID when promoted (e.g., LESSON → CONSTRAINT)
+
+  // User controls for manual override
+  userPinned Boolean @default(false) @map("user_pinned")
+  userHidden Boolean @default(false) @map("user_hidden")
+
+  // Importance scoring (Memory Intelligence v2)
+  effectiveScore  Float     @default(0.5) @map("effective_score")
+  scoreComputedAt DateTime? @map("score_computed_at")
+  safetyCritical  Boolean   @default(false) @map("safety_critical")
+
+  // Subject fields: who/what is this memory ABOUT?
+  subjectType      SubjectType            @default(USER) @map("subject_type")
+  subjectId        String?                @map("subject_id") // userId, agentId, or entityId
+  agentId          String?                @map("agent_id") // For agent self-memories
+  source           MemorySource           @default(EXPLICIT_STATEMENT)
+  importanceHint   ImportanceHint?        @map("importance_hint")
+  importanceScore  Float                  @default(0.5) @map("importance_score")
+  confidence       Float                  @default(1.0)
+  sessionPosition  Int?                   @map("session_position")
+  embeddingId      String?                @unique @map("embedding_id")
+  embeddingModel   String?                @map("embedding_model")
+  embeddingStatus  EmbeddingStatus        @default(PENDING) @map("embedding_status")
+  retrievalCount   Int                    @default(0) @map("retrieval_count")
+  lastRetrievedAt  DateTime?              @map("last_retrieved_at")
+  usedCount        Int                    @default(0) @map("used_count")
+  lastUsedAt       DateTime?              @map("last_used_at")
+  consolidated     Boolean                @default(false)
+  consolidatedAt   DateTime?              @map("consolidated_at")
+  supersededById   String?                @map("superseded_by_id")
+  supersededAt     DateTime?              @map("superseded_at")
+  consolidatedInto String?                @map("consolidated_into")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  deletedAt        DateTime?              @map("deleted_at")
+  embedding        Unsupported("vector")?
+  feedback         Feedback[]
+  project          Project?               @relation(fields: [projectId], references: [id])
+  session          Session?               @relation(fields: [sessionId], references: [id])
+  supersededBy     Memory?                @relation("MemorySupersedes", fields: [supersededById], references: [id])
+  supersedes       Memory[]               @relation("MemorySupersedes")
+  consolidatedTo   Memory?                @relation("MemoryConsolidates", fields: [consolidatedInto], references: [id])
+  consolidates     Memory[]               @relation("MemoryConsolidates")
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chainSources     MemoryChainLink[]      @relation("ChainSource")
+  chainTargets     MemoryChainLink[]      @relation("ChainTarget")
+  entities         MemoryEntity[]
+  extraction       MemoryExtraction?
+  hierarchyUnits   HierarchyUnit[]
+
+  // Multi-agent attribution
+  createdBySession String?                @map("created_by_session")
+  poolMemberships  MemoryPoolMembership[]
+
+  // Dream Cycle additions
+  archivedReason   String?   @map("archived_reason")
+  lastDreamCycleAt DateTime? @map("last_dream_cycle_at")
+  patternSourceIds String[]  @default([]) @map("pattern_source_ids")
+
+  // HEY-174: Scoped memory visibility for cross-agent sharing
+  visibility MemoryVisibility @default(PRIVATE)
+
+  // Extensible metadata (used by Awareness/Waking Cycle for insight metadata,
+  // e.g. insightType, signalSource, actionable, expiresAt, acknowledged)
+  metadata Json? @map("metadata")
+
+  // Semantic Memory Graph relations
+  graphMentions        GraphEntityMention[]
+  graphEntityFirstSeen GraphEntity[]        @relation("GraphEntityFirstSeen")
+
+  // Clustering
+  clusterId String?        @map("cluster_id")
+  cluster   MemoryCluster? @relation(fields: [clusterId], references: [id])
+
+  // Cloud backup sync tracking
+  cloudSyncedAt DateTime? @map("cloud_synced_at")
+  contentHash   String?   @map("content_hash")
+
+  // Multi-model ensemble embeddings
+  ensembleEmbeddings MemoryEmbedding[]
+
+  @@index([clusterId])
+  @@index([userId, layer])
+  @@index([userId, createdAt])
+  @@index([projectId])
+  @@index([sessionId])
+  @@index([deletedAt])
+  @@index([subjectType, agentId])
+  @@index([userId, layer, priority, createdAt(sort: Desc)]) // Memory Intelligence: priority retrieval
+  @@index([userId, memoryType, userHidden]) // Memory Intelligence: type filtering
+  @@index([userId, effectiveScore(sort: Desc)]) // Memory Intelligence v2: score-based retrieval
+  @@index([contentHash])
+  @@index([visibility])
+  @@index([embeddingStatus])
+  @@map("memories")
+}
+
+/// UX feedback from dashboard users (in-app widget + NPS)
+model UxFeedback {
+  id        String   @id @default(cuid())
+  accountId String   @map("account_id")
+  rating    Int // 1-5 for widget, 0-10 for NPS
+  text      String?
+  category  String // bug, feature, general, nps
+  page      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("ux_feedback")
+}
+
+/// Extracted structure from memory (5W1H + Classification)
+model MemoryExtraction {
+  id       String    @id @default(cuid())
+  memoryId String    @unique @map("memory_id")
+  who      String?
+  what     String?
+  when     DateTime?
+  whereCtx String?   @map("where_ctx")
+  why      String?
+  how      String?
+  topics   String[]
+
+  // Memory Intelligence: LLM classification
+  memoryType     MemoryType? @map("memory_type")
+  typeConfidence Float?      @map("type_confidence") // 0.0-1.0
+
+  // Field-level confidence scores (0.0-1.0)
+  // 1.0 = explicitly stated, 0.7-0.9 = strongly implied, 0.4-0.6 = inferred, 0.1-0.3 = guessed
+  whoConfidence   Float? @map("who_confidence")
+  whatConfidence  Float? @map("what_confidence")
+  whenConfidence  Float? @map("when_confidence")
+  whereConfidence Float? @map("where_confidence")
+  whyConfidence   Float? @map("why_confidence")
+  howConfidence   Float? @map("how_confidence")
+
+  rawJson     Json?    @map("raw_json")
+  extractedAt DateTime @default(now()) @map("extracted_at")
+  model       String?
+  memory      Memory   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@map("memory_extractions")
+}
+
+/// Named entities extracted from memories
+model Entity {
+  id             String         @id @default(cuid())
+  userId         String         @map("user_id")
+  name           String
+  type           String
+  normalizedName String         @map("normalized_name")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  memories       MemoryEntity[]
+
+  @@unique([userId, normalizedName, type])
+  @@map("entities")
+}
+
+/// Junction table for Memory <-> Entity
+model MemoryEntity {
+  id       String @id @default(cuid())
+  memoryId String @map("memory_id")
+  entityId String @map("entity_id")
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  memory   Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, entityId])
+  @@map("memory_entities")
+}
+
+/// Links between memories forming reasoning chains
+model MemoryChainLink {
+  id         String        @id @default(cuid())
+  sourceId   String        @map("source_id")
+  targetId   String        @map("target_id")
+  linkType   ChainLinkType @map("link_type")
+  confidence Float         @default(1.0)
+  createdBy  String        @map("created_by")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  source     Memory        @relation("ChainSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target     Memory        @relation("ChainTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, linkType])
+  @@map("memory_chain_links")
+}
+
+/// Feedback on memory retrieval/usage
+model Feedback {
+  id           String   @id @default(cuid())
+  memoryId     String   @map("memory_id")
+  userId       String   @map("user_id")
+  wasUsed      Boolean  @default(false) @map("was_used")
+  wasHelpful   Boolean? @map("was_helpful")
+  correction   String?
+  queryContext String?  @map("query_context")
+  createdAt    DateTime @default(now()) @map("created_at")
+  memory       Memory   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("feedback")
+}
+
+/// Track consolidation runs
+model ConsolidationJob {
+  id                String              @id @default(cuid())
+  userId            String              @map("user_id")
+  type              ConsolidationType
+  status            ConsolidationStatus @default(PENDING)
+  sessionId         String?             @map("session_id")
+  startDate         DateTime?           @map("start_date")
+  endDate           DateTime?           @map("end_date")
+  memoriesProcessed Int?                @map("memories_processed")
+  patternsDetected  Int?                @map("patterns_detected")
+  linksCreated      Int?                @map("links_created")
+  memoriesMerged    Int?                @map("memories_merged")
+  startedAt         DateTime?           @map("started_at")
+  completedAt       DateTime?           @map("completed_at")
+  error             String?
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  @@index([userId, type, status])
+  @@map("consolidation_jobs")
+}
+
+/// Webhook configuration
+model Webhook {
+  id           String         @id @default(cuid())
+  agentId      String         @map("agent_id")
+  url          String
+  events       WebhookEvent[]
+  secret       String
+  isActive     Boolean        @default(true) @map("is_active")
+  lastSuccess  DateTime?      @map("last_success")
+  lastFailure  DateTime?      @map("last_failure")
+  failureCount Int            @default(0) @map("failure_count")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  agent        Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("webhooks")
+}
+
+/// Webhook delivery log
+model WebhookDelivery {
+  id         String       @id @default(cuid())
+  webhookId  String       @map("webhook_id")
+  event      WebhookEvent
+  payload    Json
+  statusCode Int?         @map("status_code")
+  responseMs Int?         @map("response_ms")
+  error      String?
+  attempt    Int          @default(1)
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@index([webhookId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+/// Webhook subscription (v2 — event bus driven)
+model WebhookSubscription {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  url                 String
+  events              String[] // array of event type strings
+  secret              String? // HMAC signing key
+  active              Boolean  @default(true)
+  maxRetries          Int      @default(3) @map("max_retries")
+  backoffMs           Int      @default(1000) @map("backoff_ms")
+  filterLayers        String[] @default([]) @map("filter_layers")
+  filterTags          String[] @default([]) @map("filter_tags")
+  filterMinImportance Float?   @map("filter_min_importance")
+  failureCount        Int      @default(0) @map("failure_count")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("webhook_subscriptions")
+}
+
+/// Webhook delivery log (v2)
+model WebhookDeliveryLog {
+  id             String   @id @default(uuid())
+  subscriptionId String   @map("subscription_id")
+  eventType      String   @map("event_type")
+  payload        Json
+  statusCode     Int?     @map("status_code")
+  error          String?
+  attempt        Int      @default(1)
+  deliveredAt    DateTime @default(now()) @map("delivered_at")
+
+  @@index([subscriptionId, deliveredAt])
+  @@map("webhook_delivery_logs")
+}
+
+/// Audit log for compliance
+model AuditLog {
+  id         String   @id @default(cuid())
+  agentId    String   @map("agent_id")
+  userId     String?  @map("user_id")
+  action     String
+  resource   String
+  resourceId String?  @map("resource_id")
+  details    Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([agentId, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// MULTI-AGENT MEMORY (v0.7)
+// ============================================================================
+
+/// Tracks agent identities that interact with memory
+model AgentSession {
+  id                 String             @id @default(cuid())
+  sessionKey         String             @unique @map("session_key")
+  parentKey          String?            @map("parent_key")
+  label              String?
+  taskDescription    String?            @map("task_description")
+  status             AgentSessionStatus @default(ACTIVE)
+  contextTokenBudget Int?               @map("context_token_budget")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  endedAt            DateTime?          @map("ended_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  memoryAccess MemoryAccessLog[]
+  poolGrants   PoolGrant[]
+
+  @@index([parentKey])
+  @@index([status])
+  @@index([createdAt])
+  @@map("agent_sessions")
+}
+
+/// Named memory pool for sharing between agent sessions
+model MemoryPool {
+  id          String         @id @default(cuid())
+  name        String
+  userId      String         @map("user_id")
+  visibility  PoolVisibility @default(GLOBAL)
+  description String?
+  createdBy   String         @map("created_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  archivedAt  DateTime?      @map("archived_at")
+
+  memberships MemoryPoolMembership[]
+  grants      PoolGrant[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("memory_pools")
+}
+
+/// Links a memory to a pool
+model MemoryPoolMembership {
+  id       String   @id @default(cuid())
+  memoryId String   @map("memory_id")
+  poolId   String   @map("pool_id")
+  addedBy  String   @map("added_by")
+  addedAt  DateTime @default(now()) @map("added_at")
+
+  memory Memory     @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  pool   MemoryPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, poolId])
+  @@index([poolId])
+  @@index([memoryId])
+  @@map("memory_pool_memberships")
+}
+
+/// Grants an agent session access to a shared pool
+model PoolGrant {
+  id             String         @id @default(cuid())
+  poolId         String         @map("pool_id")
+  agentSessionId String         @map("agent_session_id")
+  permission     PoolPermission @default(READ)
+  grantedBy      String         @map("granted_by")
+  grantedAt      DateTime       @default(now()) @map("granted_at")
+  expiresAt      DateTime?      @map("expires_at")
+
+  pool         MemoryPool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  agentSession AgentSession @relation(fields: [agentSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([poolId, agentSessionId])
+  @@map("pool_grants")
+}
+
+/// Audit trail for memory access by agent sessions
+model MemoryAccessLog {
+  id             String           @id @default(cuid())
+  memoryId       String           @map("memory_id")
+  agentSessionId String           @map("agent_session_id")
+  accessType     MemoryAccessType
+  context        String?
+  tokensCost     Int?             @map("tokens_cost")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  agentSession AgentSession @relation(fields: [agentSessionId], references: [id], onDelete: Cascade)
+
+  @@index([memoryId, createdAt])
+  @@index([agentSessionId, createdAt])
+  @@index([createdAt])
+  @@map("memory_access_logs")
+}
+
+enum AgentSessionStatus {
+  ACTIVE
+  COMPLETED
+  TERMINATED
+}
+
+enum PoolVisibility {
+  GLOBAL
+  SHARED
+  PRIVATE
+}
+
+enum PoolPermission {
+  READ
+  WRITE
+  ADMIN
+}
+
+enum MemoryAccessType {
+  CREATED
+  READ
+  RECALLED
+  INJECTED
+  UPDATED
+  SUPERSEDED
+}
+
+/// Visibility scope for cross-agent memory sharing (HEY-174)
+enum MemoryVisibility {
+  PRIVATE // Only the owning agent can see (default)
+  TEAM // Agents in the same account can see
+  PUBLIC // Any agent can see
+}
+
+/// Memory layer enum
+enum MemoryLayer {
+  IDENTITY
+  PROJECT
+  SESSION
+  TASK
+  INSIGHT
+}
+
+/// Memory type for classification (priority-based)
+enum MemoryType {
+  CONSTRAINT // Priority 1: Safety-critical (allergies, medications, hard rules)
+  PREFERENCE // Priority 2: User preferences (coffee order, dark mode)
+  FACT // Priority 3: Stable information (location, job, relationships)
+  TASK // Priority 2: Actionable items (reminders, todos)
+  EVENT // Priority 4: Conversational moments (recent events)
+  LESSON // Priority 1: Mistakes, corrections, and learnings
+  TASK_OUTCOME // Priority 3: Structured task completion records
+  SELF_ASSESSMENT // Priority 3: Agent self-evaluation records
+}
+
+/// Subject type - who/what is this memory about?
+enum SubjectType {
+  USER // Memory about a user
+  AGENT // Memory about an agent (self-memory)
+  ENTITY // Memory about a thing/project
+}
+
+/// Source of the memory
+enum MemorySource {
+  EXPLICIT_STATEMENT
+  AGENT_OBSERVATION
+  AGENT_REFLECTION
+  CORRECTION
+  PATTERN_DETECTED
+  SYSTEM
+  GIT_HISTORY
+}
+
+/// Importance hint from API caller
+enum ImportanceHint {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+/// Link type for memory chains
+enum ChainLinkType {
+  LED_TO
+  SUPPORTS
+  CONTRADICTS
+  UPDATES
+  RELATED
+}
+
+/// Consolidation job type
+enum ConsolidationType {
+  POST_SESSION
+  NIGHTLY
+  PERIODIC
+  MANUAL
+}
+
+/// Consolidation job status
+enum ConsolidationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// Webhook event types
+enum WebhookEvent {
+  PROACTIVE_SURFACE
+  CONTRADICTION_DETECTED
+  PATTERN_DETECTED
+  CONSOLIDATION_COMPLETE
+}
+
+// ============================================================================
+// SEMANTIC MEMORY GRAPHS (Phase 0/1 MVP)
+// ============================================================================
+
+/// GraphEntity represents a semantic node in the knowledge graph
+/// Examples: people, places, organizations, concepts
+model GraphEntity {
+  id                String          @id @default(cuid())
+  userId            String          @map("user_id")
+  name              String
+  type              GraphEntityType
+  aliases           String[]        @default([])
+  description       String?
+  metadata          Json            @default("{}")
+  mentionCount      Int             @default(1) @map("mention_count")
+  firstSeenMemoryId String?         @map("first_seen_memory_id")
+  embeddingId       String?         @unique @map("embedding_id") // Pinecone vector ID
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstSeenMemory       Memory?              @relation("GraphEntityFirstSeen", fields: [firstSeenMemoryId], references: [id], onDelete: SetNull)
+  outgoingRelationships GraphRelationship[]  @relation("GraphRelationshipSource")
+  incomingRelationships GraphRelationship[]  @relation("GraphRelationshipTarget")
+  mentions              GraphEntityMention[]
+
+  @@unique([userId, name, type])
+  @@index([userId])
+  @@index([type])
+  @@index([name])
+  @@index([userId, mentionCount(sort: Desc)])
+  @@map("graph_entities")
+}
+
+/// GraphRelationship represents a directed edge between two entities
+model GraphRelationship {
+  id              String                @id @default(cuid())
+  userId          String                @map("user_id")
+  sourceEntityId  String                @map("source_entity_id")
+  targetEntityId  String                @map("target_entity_id")
+  type            GraphRelationshipType
+  label           String? // For CUSTOM type
+  weight          Float                 @default(1.0)
+  properties      Json                  @default("{}")
+  sourceMemoryIds String[]              @default([]) @map("source_memory_ids")
+  isInferred      Boolean               @default(false) @map("is_inferred")
+  lastConfirmedAt DateTime              @default(now()) @map("last_confirmed_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  // Relations
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceEntity GraphEntity @relation("GraphRelationshipSource", fields: [sourceEntityId], references: [id], onDelete: Cascade)
+  targetEntity GraphEntity @relation("GraphRelationshipTarget", fields: [targetEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceEntityId, targetEntityId, type])
+  @@index([userId])
+  @@index([sourceEntityId])
+  @@index([targetEntityId])
+  @@index([type])
+  @@map("graph_relationships")
+}
+
+/// GraphEntityMention links entities to the memories that mention them
+model GraphEntityMention {
+  id        String           @id @default(cuid())
+  entityId  String           @map("entity_id")
+  memoryId  String           @map("memory_id")
+  userId    String           @map("user_id")
+  span      Json? // { start: number, end: number }
+  role      GraphMentionRole
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  entity GraphEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  memory Memory      @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, memoryId])
+  @@index([memoryId])
+  @@index([entityId])
+  @@index([userId])
+  @@map("graph_entity_mentions")
+}
+
+/// Entity type classification
+enum GraphEntityType {
+  PERSON
+  PLACE
+  ORGANIZATION
+  CONCEPT
+  EVENT
+  OBJECT
+  TIME
+  UNKNOWN
+}
+
+/// Semantic relationship types
+enum GraphRelationshipType {
+  // Personal Relationships
+  SPOUSE_OF
+  PARENT_OF
+  CHILD_OF
+  SIBLING_OF
+  FRIEND_OF
+  COLLEAGUE_OF
+
+  // Location
+  LIVES_IN
+  WORKS_AT
+  LOCATED_IN
+  BORN_IN
+
+  // Ownership/Association
+  OWNS
+  MEMBER_OF
+  PART_OF
+  INSTANCE_OF
+
+  // Temporal
+  HAPPENED_BEFORE
+  HAPPENED_AFTER
+  HAPPENED_DURING
+
+  // Attributes
+  HAS_ATTRIBUTE
+
+  // Causal
+  CAUSED_BY
+  RESULTS_IN
+
+  // Generic
+  RELATED_TO
+  CUSTOM
+}
+
+/// How an entity appears in a memory
+enum GraphMentionRole {
+  SUBJECT // Entity is the main subject
+  OBJECT // Entity is acted upon
+  REFERENCE // Entity is mentioned incidentally
+  LOCATION // Entity provides location context
+}
+
+// =============================================================================
+// HIERARCHICAL EMBEDDINGS (Phase 1 MVP)
+// =============================================================================
+
+/// Hierarchy level for multi-granularity embeddings
+enum HierarchyLevel {
+  L0 // Sentence level - fine-grained facts
+  L1 // Paragraph level - contextual chunks
+  L2 // Session level - conversation summary (Phase 2)
+  L3 // Theme level - cross-session patterns (Phase 2)
+}
+
+/// Hierarchical embedding units for multi-granularity search
+model HierarchyUnit {
+  id    String         @id @default(cuid())
+  level HierarchyLevel
+
+  /// The actual text content of this unit
+  text    String
+  /// LLM-generated summary (used for L1+ embeddings)
+  summary String?
+
+  /// Link to source memory (for L0, L1)
+  sourceMemoryId String? @map("source_memory_id")
+  sourceMemory   Memory? @relation(fields: [sourceMemoryId], references: [id], onDelete: Cascade)
+
+  /// Link to parent unit in hierarchy (L0 -> L1, etc.)
+  parentUnitId String?         @map("parent_unit_id")
+  parentUnit   HierarchyUnit?  @relation("UnitHierarchy", fields: [parentUnitId], references: [id], onDelete: SetNull)
+  childUnits   HierarchyUnit[] @relation("UnitHierarchy")
+
+  /// Position within source memory
+  position  Int?
+  charStart Int? @map("char_start")
+  charEnd   Int? @map("char_end")
+
+  /// Pinecone reference
+  pineconeId        String @unique @map("pinecone_id")
+  pineconeNamespace String @map("pinecone_namespace")
+
+  /// Owner reference (for queries)
+  userId String @map("user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([level])
+  @@index([sourceMemoryId])
+  @@index([userId, level])
+  @@index([parentUnitId])
+  @@map("hierarchy_units")
+}
+
+// ============================================================================
+// MULTI-MODEL ENSEMBLE (Section 10: Nightly Batch Re-embedding)
+// ============================================================================
+
+/// Track nightly/manual re-embedding jobs
+model EnsembleReembedJob {
+  id          String              @id @default(cuid())
+  jobId       String              @unique @map("job_id")
+  startedAt   DateTime            @default(now()) @map("started_at")
+  completedAt DateTime?           @map("completed_at")
+  status      EnsembleJobStatus   @default(PENDING)
+  mode        EnsembleReembedMode
+  models      String[]
+
+  // Progress tracking
+  totalMemories     Int @default(0) @map("total_memories")
+  processedMemories Int @default(0) @map("processed_memories")
+  failedMemories    Int @default(0) @map("failed_memories")
+  skippedMemories   Int @default(0) @map("skipped_memories")
+
+  // Metrics (JSON)
+  metrics Json?
+
+  // Drift detection results
+  avgDrift   Float? @map("avg_drift")
+  maxDrift   Float? @map("max_drift")
+  driftFlags Int    @default(0) @map("drift_flags")
+
+  // Error info
+  error String?
+
+  // Triggering info
+  triggeredBy     String  @default("cron") @map("triggered_by") // cron, manual, event
+  triggeredReason String? @map("triggered_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([startedAt])
+  @@index([triggeredBy])
+  @@map("ensemble_reembed_jobs")
+}
+
+/// Checkpoint for resumable re-embedding
+model EnsembleReembedCheckpoint {
+  id              String   @id @default(cuid())
+  jobId           String   @unique @map("job_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  lastProcessedId String   @map("last_processed_id")
+  progress        Json // ReembedProgress JSON
+  completedModels String[] @map("completed_models")
+  metrics         Json?
+
+  @@index([jobId])
+  @@map("ensemble_reembed_checkpoints")
+}
+
+/// Event-triggered re-embedding queue
+model EnsembleReembedEvent {
+  id          String    @id @default(cuid())
+  eventId     String    @unique @map("event_id")
+  type        String // lesson_created, user_correction, etc.
+  priority    String    @default("normal")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  processedAt DateTime? @map("processed_at")
+  status      String    @default("pending")
+
+  // Scope
+  scope Json
+
+  // Metadata
+  triggeredBy String  @map("triggered_by")
+  reason      String
+  error       String?
+
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("ensemble_reembed_events")
+}
+
+/// Track embedding versions for rollback capability
+model EnsembleEmbeddingVersion {
+  id               String                @id @default(cuid())
+  versionId        String                @unique @map("version_id")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  createdBy        String                @map("created_by") // nightly, manual, model-upgrade
+  status           EnsembleVersionStatus @default(CREATING)
+  memoriesEmbedded Int                   @default(0) @map("memories_embedded")
+  previousVersion  String?               @map("previous_version")
+  modelVersions    Json // Array of { modelId, modelVersion, checksum }
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("ensemble_embedding_versions")
+}
+
+/// Model configuration in the ensemble registry
+model EnsembleModelConfig {
+  id           String              @id @default(cuid())
+  modelId      String              @unique @map("model_id")
+  status       EnsembleModelStatus @default(SHADOW)
+  addedAt      DateTime            @default(now()) @map("added_at")
+  promotedAt   DateTime?           @map("promoted_at")
+  deprecatedAt DateTime?           @map("deprecated_at")
+
+  // Weights
+  weight           Float @default(1.0)
+  queryTypeWeights Json? @map("query_type_weights")
+
+  // Quality metrics
+  qualityMetrics Json? @map("quality_metrics")
+
+  // Promotion thresholds
+  promotionThresholds Json? @map("promotion_thresholds")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("ensemble_model_configs")
+}
+
+/// A/B test results for model comparison
+model EnsembleABTestResult {
+  id        String   @id @default(cuid())
+  testId    String   @map("test_id")
+  config    String // control, treatment
+  queryId   String   @map("query_id")
+  metrics   Json
+  timestamp DateTime @default(now())
+
+  @@index([testId])
+  @@index([timestamp])
+  @@map("ensemble_ab_test_results")
+}
+
+/// Multi-model memory embeddings for ensemble retrieval
+/// Stores embeddings from different models (bge-base, nomic, minilm) per memory
+model MemoryEmbedding {
+  id         String   @id @default(cuid())
+  memoryId   String   @map("memory_id")
+  modelId    String   @map("model_id") // "bge-base", "minilm", "nomic", "gte-base"
+  dimensions Int      @default(768)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Store embedding as raw vector - pgvector handles variable dimensions
+  // Using Unsupported because Prisma doesn't natively support vector type
+  // We use raw SQL for queries
+  embedding Unsupported("vector")?
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, modelId])
+  @@index([modelId])
+  @@index([memoryId])
+  @@map("memory_embeddings")
+}
+
+/// Drift snapshot for tracking embedding drift over time
+model DriftSnapshot {
+  id          String   @id @default(cuid())
+  modelId     String   @map("model_id")
+  avgDrift    Float    @map("avg_drift")
+  maxDrift    Float    @map("max_drift")
+  sampleCount Int      @map("sample_count")
+  alertLevel  String   @map("alert_level") // 'normal' | 'warning' | 'critical'
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([modelId, createdAt])
+  @@index([alertLevel])
+  @@map("drift_snapshots")
+}
+
+/// Re-embed job status
+enum EmbeddingStatus {
+  PENDING
+  COMPLETE
+  FAILED
+}
+
+enum EnsembleJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+/// Re-embed mode
+enum EnsembleReembedMode {
+  INCREMENTAL
+  FULL
+}
+
+/// Embedding version status
+enum EnsembleVersionStatus {
+  CREATING
+  ACTIVE
+  DEPRECATED
+  DELETED
+}
+
+/// Model status in ensemble
+enum EnsembleModelStatus {
+  ACTIVE
+  SHADOW
+  DEPRECATED
+  DISABLED
+}
+
+// ============================================================================
+// DEDUPLICATION SYSTEM
+// ============================================================================
+
+/// Tracks merge events for lineage and rollback
+model MemoryMergeEvent {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  survivorMemoryId  String   @map("survivor_memory_id")
+  absorbedMemoryIds String[] @map("absorbed_memory_ids")
+  strategy          String
+  similarity        Float
+
+  triggeredBy String  @map("triggered_by") // auto, batch, manual
+  approvedBy  String? @map("approved_by")
+
+  originalContents String  @map("original_contents") // JSON array
+  mergedContent    String  @map("merged_content")
+  contentChanged   Boolean @default(false) @map("content_changed")
+
+  canRollback  Boolean   @default(true) @map("can_rollback")
+  rolledBackAt DateTime? @map("rolled_back_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([survivorMemoryId])
+  @@index([createdAt])
+  @@map("memory_merge_events")
+}
+
+/// Pending merge candidates for review
+model MergeCandidate {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  memoryIds           String[] @map("memory_ids")
+  similarity          Float
+  suggestedStrategy   String   @map("suggested_strategy")
+  suggestedSurvivorId String   @map("suggested_survivor_id")
+
+  safetyFlags String @default("[]") @map("safety_flags") // JSON array
+
+  status      String    @default("PENDING")
+  reviewedBy  String?   @map("reviewed_by")
+  reviewedAt  DateTime? @map("reviewed_at")
+  reviewNotes String?   @map("review_notes")
+
+  skipUntil DateTime? @map("skip_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, status])
+  @@index([createdAt])
+  @@map("merge_candidates")
+}
+
+/// User-specific deduplication configuration
+model DedupConfig {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
+  autoMergeThreshold     Float @default(0.95) @map("auto_merge_threshold")
+  reviewSuggestThreshold Float @default(0.85) @map("review_suggest_threshold")
+
+  defaultStrategy String @default("KEEP_DETAILED") @map("default_strategy")
+  strategyByType  String @default("{}") @map("strategy_by_type") // JSON
+
+  preserveSourceContent Boolean @default(true) @map("preserve_source_content")
+  regenerateEmbedding   Boolean @default(true) @map("regenerate_embedding")
+
+  protectedTypes               String[] @default(["CONSTRAINT"]) @map("protected_types")
+  protectedKeywords            String[] @default([]) @map("protected_keywords")
+  protectedImportanceThreshold Float    @default(0.9) @map("protected_importance_threshold")
+
+  batchSchedule        String  @default("0 3 * * *") @map("batch_schedule")
+  maxMemoriesPerBatch  Int     @default(5000) @map("max_memories_per_batch")
+  autoResolveThreshold Float   @default(0.92) @map("auto_resolve_threshold")
+  batchEnabled         Boolean @default(true) @map("batch_enabled")
+
+  lastBatchRunAt DateTime? @map("last_batch_run_at")
+  lastBatchStats String?   @map("last_batch_stats") // JSON
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dedup_configs")
+}
+
+/// Batch deduplication run history
+model DedupBatchRun {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  status      String
+  startedAt   DateTime  @map("started_at")
+  completedAt DateTime? @map("completed_at")
+
+  memoriesProcessed Int      @default(0) @map("memories_processed")
+  clustersFound     Int      @default(0) @map("clusters_found")
+  autoMerged        Int      @default(0) @map("auto_merged")
+  queuedForReview   Int      @default(0) @map("queued_for_review")
+  skipped           Int      @default(0)
+  errors            String[] @default([])
+
+  configSnapshot String @map("config_snapshot") // JSON
+
+  @@index([userId])
+  @@index([startedAt])
+  @@map("dedup_batch_runs")
+}
+
+/// Memory clusters for grouping related memories
+model MemoryCluster {
+  id                String                 @id
+  label             String
+  description       String?
+  memberCount       Int                    @default(0) @map("member_count")
+  centroidEmbedding Unsupported("vector")? @map("centroid_embedding")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  memories          Memory[]
+
+  @@map("memory_clusters")
+}
+
+// ============================================================================
+// AWARENESS / WAKING CYCLE
+// ============================================================================
+
+// ============================================================================
+// ANTICIPATORY RECALL ENGINE (ARE)
+// ============================================================================
+
+/// Tracks anticipatory recall events and their outcomes for feedback learning
+model AnticipatoryEvent {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  recallId  String   @map("recall_id")
+  strategy  String
+  memoryId  String?  @map("memory_id")
+  salience  Float
+  wasUseful Boolean? @map("was_useful")
+  latencyMs Int      @map("latency_ms")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([strategy, wasUseful])
+  @@index([recallId])
+  @@map("anticipatory_events")
+}
+
+/// Learned per-user per-strategy weights for anticipatory recall
+model AnticipatoryWeight {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  strategy   String
+  weight     Float    @default(1.0)
+  successful Int      @default(0)
+  total      Int      @default(0)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, strategy])
+  @@map("anticipatory_weights")
+}
+
+// ============================================================================
+// IDENTITY PROFILES (HEY-177, HEY-179, HEY-180, HEY-181)
+// ============================================================================
+
+/// Persistent capability profile for an agent — a living document updated with each task outcome
+model AgentCapabilityProfile {
+  id      String @id @default(cuid())
+  agentId String @map("agent_id")
+  userId  String @map("user_id")
+
+  /// Capability name (e.g., "code_review", "data_analysis", "writing")
+  capability    String
+  /// Confidence level 0.0-1.0 based on aggregated evidence
+  confidence    Float     @default(0.5)
+  /// Number of task outcomes that contributed evidence
+  evidenceCount Int       @default(0) @map("evidence_count")
+  /// Success rate for tasks using this capability (0.0-1.0)
+  successRate   Float     @default(0.0) @map("success_rate")
+  /// Average duration for tasks using this capability (ms)
+  avgDurationMs Float?    @map("avg_duration_ms")
+  /// Last observed usage
+  lastUsedAt    DateTime? @map("last_used_at")
+  /// Freeform notes aggregated from lessons learned
+  notes         String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([agentId, userId, capability])
+  @@index([agentId, userId])
+  @@map("agent_capability_profiles")
+}
+
+/// Tracks agent work style patterns extracted from behavioral data
+model AgentWorkStyle {
+  id      String @id @default(cuid())
+  agentId String @map("agent_id")
+  userId  String @map("user_id")
+
+  /// Style dimension (e.g., "response_time", "verbosity", "tool_usage", "collaboration_style")
+  dimension   String
+  /// Current observed value (JSON-encoded for flexibility)
+  value       Json
+  /// Number of observations
+  sampleCount Int     @default(0) @map("sample_count")
+  /// Trend direction: improving, stable, declining
+  trend       String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([agentId, userId, dimension])
+  @@index([agentId, userId])
+  @@map("agent_work_styles")
+}
+
+/// Tracks observation state for each signal source in the Waking Cycle
+model AwarenessState {
+  id            String   @id @default(cuid())
+  accountId     String   @map("account_id")
+  signalSource  String   @map("signal_source") // "memory", "github", "linear"
+  lastCheckedAt DateTime @map("last_checked_at")
+  checkpoint    Json? // source-specific cursor/state (e.g., last memory ID processed)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, signalSource])
+  @@map("awareness_states")
+}
+
+/// Dream Cycle consolidation reports
+model DreamCycleReport {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  startedAt   DateTime  @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  durationMs  Int?      @map("duration_ms")
+  dryRun      Boolean   @default(false) @map("dry_run")
+
+  // Stage results
+  scoresRefreshed  Int @default(0) @map("scores_refreshed")
+  duplicatesMerged Int @default(0) @map("duplicates_merged")
+  patternsCreated  Int @default(0) @map("patterns_created")
+  memoriesArchived Int @default(0) @map("memories_archived")
+
+  // Health metrics
+  totalActive       Int   @default(0) @map("total_active")
+  avgEffectiveScore Float @default(0) @map("avg_effective_score")
+
+  // Details
+  stageDetails Json     @default("{}") @map("stage_details")
+  errors       String[] @default([])
+  status       String   @default("RUNNING")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("dream_cycle_reports")
+}
+
+/// HEY-176: Identity snapshots produced by Dream Cycle identity consolidation
+model IdentitySnapshot {
+  id      String  @id @default(cuid())
+  userId  String  @map("user_id")
+  agentId String? @map("agent_id")
+
+  /// Structured identity data
+  capabilities     Json @default("[]") // Array of { name, confidence, lastSeen }
+  preferences      Json @default("{}") // Key-value preference summary
+  trustScores      Json @default("{}") // { source: score } trends
+  behavioralTraits Json @default("[]") @map("behavioral_traits") // Array of { trait, strength, evidence }
+
+  /// Source tracking
+  sourceMemoryIds String[] @default([]) @map("source_memory_ids")
+  dreamReportId   String?  @map("dream_report_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([agentId, createdAt])
+  @@map("identity_snapshots")
+}
+
+/// Tracks Dream Cycle execution runs for mutex / concurrency control
+model DreamCycleRun {
+  id         String    @id @default(cuid())
+  status     String    @default("RUNNING") // RUNNING | COMPLETED | FAILED
+  instanceId String    @map("instance_id") // hostname or unique instance identifier
+  startedAt  DateTime  @default(now()) @map("started_at")
+  endedAt    DateTime? @map("ended_at")
+  error      String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("dream_cycle_runs")
+}
+
+/// HEY-335: Dedicated awareness cycle run history with proper fields
+model AwarenessCycleRun {
+  id                 String    @id @default(cuid())
+  status             String    @default("RUNNING") // RUNNING | COMPLETED | FAILED
+  phase              String    @default("starting") // starting | observing | analyzing | generating | idle | failed
+  instanceId         String    @map("instance_id")
+  startTime          DateTime  @default(now()) @map("start_time")
+  endTime            DateTime? @map("end_time")
+  insightsGenerated  Int       @default(0) @map("insights_generated")
+  observations       Int       @default(0)
+  patterns           Int       @default(0)
+  durationMs         Int       @default(0) @map("duration_ms")
+  error              String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([startTime(sort: Desc)])
+  @@map("awareness_cycle_runs")
+}
+
+/// Eval run results for longitudinal tracking
+model EvalRun {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  recallScore  Float    @map("recall_score")
+  recallTotal  Int      @map("recall_total")
+  recallPassed Int      @map("recall_passed")
+  latencyP50Ms Int      @map("latency_p50_ms")
+  latencyP95Ms Int?     @map("latency_p95_ms")
+  contextGrade String?  @map("context_grade")
+  details      Json?
+  triggeredBy  String?  @map("triggered_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("eval_runs")
+}
+
+/// Fog index snapshots for tracking clarity score over time
+model FogIndexSnapshot {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  score      Float
+  tier       String
+  components Json?    @db.JsonB
+  computedAt DateTime @default(now()) @map("computed_at")
+
+  @@index([computedAt])
+  @@map("fog_index_snapshots")
+}
+
+/// Monitoring metric snapshots for tracking system health over time
+model MonitoringSnapshot {
+  id         String   @id @default(cuid())
+  metrics    Json     @default("{}")
+  alerts     Json     @default("[]")
+  snapshotAt DateTime @default(now()) @map("snapshot_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([snapshotAt])
+  @@map("monitoring_snapshots")
+}
+
+/// Cloud link for self-hosted instances connecting to OpenEngram Cloud
+model CloudLink {
+  id             String    @id @default(cuid())
+  accountId      String    @unique @map("account_id")
+  instanceId     String?   @map("instance_id") // UUID identifying this self-hosted instance for dedup
+  cloudApiKey    String    @map("cloud_api_key") // encrypted instance API key for auth
+  cloudSyncKey   String?   @map("cloud_sync_key") // encrypted esync_ key for sync push
+  cloudAccountId String?   @map("cloud_account_id")
+  cloudEmail     String?   @map("cloud_email")
+  cloudPlan      String?   @map("cloud_plan")
+  lastVerifiedAt DateTime? @map("last_verified_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  autoSync     Boolean   @default(false) @map("auto_sync")
+  lastPulledAt DateTime? @map("last_pulled_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("cloud_links")
+}
+
+// ============================================================================
+// CLOUD SYNC v2
+// ============================================================================
+
+/// Instance Sync Key — authenticates a local instance for cloud sync.
+/// Account-level (not agent-level). Does NOT create agent identity.
+model InstanceSyncKey {
+  id           String    @id @default(cuid())
+  accountId    String    @map("account_id")
+  keyHash      String    @unique @map("key_hash")
+  keyHint      String    @map("key_hint")
+  instanceName String    @map("instance_name")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+  revokedAt    DateTime? @map("revoked_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("instance_sync_keys")
+}
+
+/// Maps local agentId to cloud agentId per sync instance
+model SyncAgentMap {
+  id           String   @id @default(cuid())
+  instanceId   String   @map("instance_id")
+  localAgentId String   @map("local_agent_id")
+  cloudAgentId String   @map("cloud_agent_id")
+  agentName    String   @map("agent_name")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  cloudAgent Agent @relation(fields: [cloudAgentId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, localAgentId])
+  @@unique([instanceId, agentName])
+  @@index([cloudAgentId])
+  @@map("sync_agent_map")
+}
+
+/// Maps local userId to cloud userId per sync instance
+model SyncUserMap {
+  id          String   @id @default(cuid())
+  instanceId  String   @map("instance_id")
+  localUserId String   @map("local_user_id")
+  cloudUserId String   @map("cloud_user_id")
+  externalId  String   @map("external_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  cloudUser User @relation(fields: [cloudUserId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, localUserId])
+  @@unique([instanceId, cloudUserId])
+  @@index([cloudUserId])
+  @@map("sync_user_map")
+}
+
+/// Instance API Key — account-level keys for cloud sync, admin, and account actions.
+/// Separate from agent-level API keys. Prefix: eng_inst_
+model InstanceApiKey {
+  id         String    @id @default(cuid())
+  accountId  String    @map("account_id")
+  name       String
+  keyHash    String    @unique @map("key_hash")
+  keyHint    String    @map("key_hint")
+  scopes     String[]  @default(["sync", "read"])
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("instance_api_keys")
+}
+
+/// Tracks connected local instances on the cloud side
+model CloudInstance {
+  id            String    @id @default(cuid())
+  accountId     String    @map("account_id")
+  instanceId    String    @map("instance_id") // The InstanceSyncKey ID or X-Instance-Id header
+  instanceName  String?   @map("instance_name")
+  lastSyncAt    DateTime? @map("last_sync_at")
+  memoryCount   Int       @default(0) @map("memory_count")
+  lastPushCount Int       @default(0) @map("last_push_count")
+  status        String    @default("active") // active, stale, disconnected
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@unique([accountId, instanceId])
+  @@index([accountId])
+  @@map("cloud_instances")
+}
+
+// ============================================================================
+// IDENTITY SIGNALS (HEY-170, HEY-172, HEY-173)
+// ============================================================================
+
+/// Trust signals extracted from agent behavior (HEY-170)
+model TrustSignal {
+  id             String          @id @default(cuid())
+  userId         String          @map("user_id")
+  agentId        String?         @map("agent_id")
+  signalType     TrustSignalType @map("signal_type")
+  context        String // Description of what happened
+  category       String? // Task category (e.g., "deploy", "code-review")
+  weight         Float           @default(1.0) // Signal strength 0.0-2.0
+  sourceMemoryId String?         @map("source_memory_id")
+  metadata       Json?           @map("metadata")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([userId, category])
+  @@index([userId, signalType])
+  @@index([agentId, createdAt])
+  @@map("trust_signals")
+}
+
+enum TrustSignalType {
+  SUCCESS
+  FAILURE
+  CORRECTION
+}
+
+/// Trust score snapshots computed from accumulated signals (HEY-170)
+model TrustScore {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  agentId         String?  @map("agent_id")
+  category        String? // null = overall score
+  score           Float // 0.0-1.0
+  signalCount     Int      @default(0) @map("signal_count")
+  successCount    Int      @default(0) @map("success_count")
+  failureCount    Int      @default(0) @map("failure_count")
+  correctionCount Int      @default(0) @map("correction_count")
+  computedAt      DateTime @default(now()) @map("computed_at")
+
+  @@index([userId, category])
+  @@index([userId, computedAt])
+  @@index([agentId, category])
+  @@map("trust_scores")
+}
+
+/// Capability checkpoints for tracking agent growth (HEY-172)
+model CapabilityCheckpoint {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  agentId      String?  @map("agent_id")
+  capabilities Json // Array of { name, evidenceCount, firstSeen, lastSeen }
+  checkpointAt DateTime @default(now()) @map("checkpoint_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId, checkpointAt])
+  @@index([agentId, checkpointAt])
+  @@map("capability_checkpoints")
+}
+
+/// Experience weight per task category for recall boosting (HEY-173)
+model ExperienceWeight {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  agentId      String?  @map("agent_id")
+  category     String // Task category (e.g., "deploy", "code-review")
+  successCount Int      @default(0) @map("success_count")
+  totalCount   Int      @default(0) @map("total_count")
+  weight       Float    @default(1.0) // Computed multiplier for recall
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, agentId, category])
+  @@index([userId, weight(sort: Desc)])
+  @@map("experience_weights")
+}
+
+// ============================================================================
+// MULTI-AGENT TEAMS (HEY-188)
+// ============================================================================
+
+/// Team of agents with shared context and collaboration history
+model AgentTeam {
+  id                 String    @id @default(cuid())
+  name               String
+  description        String?
+  userId             String    @map("user_id")
+  sharedCapabilities String[]  @default([]) @map("shared_capabilities")
+  trustScore         Float     @default(0) @map("trust_score")
+  collaborationCount Int       @default(0) @map("collaboration_count")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  members        AgentTeamMember[]
+  collaborations AgentTeamCollaboration[]
+
+  @@index([userId])
+  @@map("agent_teams")
+}
+
+/// Membership of an agent in a team
+model AgentTeamMember {
+  id       String   @id @default(cuid())
+  teamId   String   @map("team_id")
+  agentId  String   @map("agent_id")
+  role     String?
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  team AgentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, agentId])
+  @@index([agentId])
+  @@map("agent_team_members")
+}
+
+/// Record of agents collaborating on a task within a team
+model AgentTeamCollaboration {
+  id                  String   @id @default(cuid())
+  teamId              String   @map("team_id")
+  taskDescription     String   @map("task_description")
+  participantAgentIds String[] @map("participant_agent_ids")
+  outcome             String?
+  score               Float?
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  team AgentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, createdAt])
+  @@map("agent_team_collaborations")
+}
+
+/// Tracks sync events for history display
+model SyncEvent {
+  id           String   @id @default(cuid())
+  accountId    String   @map("account_id")
+  direction    String   @default("push") // push, pull
+  status       String   @default("completed") // completed, failed, cancelled
+  totalCount   Int      @default(0) @map("total_count")
+  newCount     Int      @default(0) @map("new_count")
+  updatedCount Int      @default(0) @map("updated_count")
+  skippedCount Int      @default(0) @map("skipped_count")
+  failedCount  Int      @default(0) @map("failed_count")
+  error        String?
+  durationMs   Int?     @map("duration_ms")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([accountId, createdAt])
+  @@map("sync_events")
+}
+
+/// Maps local memory IDs to cloud memory IDs for sync tracking
+model SyncIdMap {
+  id            String   @id @default(cuid())
+  localMemoryId String   @map("local_memory_id")
+  cloudMemoryId String   @map("cloud_memory_id")
+  instanceId    String   @map("instance_id")
+  contentHash   String?  @map("content_hash")
+  syncedAt      DateTime @default(now()) @map("synced_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([instanceId, localMemoryId])
+  @@unique([instanceId, cloudMemoryId])
+  @@index([contentHash])
+  @@map("sync_id_map")
+}
+
+// ============================================================================
+// IDENTITY MODULE PERSISTENCE (HEY-385)
+// Replaces FileStoreService JSON persistence with proper Prisma models.
+// ============================================================================
+
+/// In-memory delegation contract for identity verification (HEY-185/HEY-385)
+/// NOT the same as DelegationContract (which is the formal inter-agent contract).
+model IdentityContract {
+  id              String   @id @default(cuid())
+  taskDescription String   @map("task_description")
+  expectedOutputs String[] @map("expected_outputs")
+  successCriteria String[] @map("success_criteria")
+  timeout         Int // seconds
+  constraints     String[] @default([])
+  delegatedTo     String   @map("delegated_to")
+  status          String   @default("pending") // pending, in_progress, completed, failed, timed_out
+  result          String?
+  completedAt     DateTime? @map("completed_at")
+  accountId       String?   @map("account_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([delegatedTo])
+  @@index([status])
+  @@map("identity_contracts")
+}
+
+/// Task log entry for delegation tracking (HEY-385)
+/// NOT the same as TaskCompletion (which tracks formal task completions with embeddings).
+model IdentityTask {
+  id               String   @id @default(cuid())
+  sessionKey       String   @map("session_key")
+  parentSessionKey String?  @map("parent_session_key")
+  agentId          String?  @map("agent_id")
+  task             String
+  status           String // success, failure, timeout
+  durationMs       Int      @map("duration_ms")
+  error            String?
+  metadata         Json?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("identity_tasks")
+}
+
+/// Team profile for multi-agent collaboration (HEY-385)
+/// Stores the in-memory team data previously in FileStoreService.
+model IdentityTeamProfile {
+  id                 String   @id @default(cuid())
+  name               String
+  description        String?
+  agentIds           String[] @map("agent_ids")
+  capabilities       Json     @default("[]") // TeamCapability[]
+  collaborationScore Float    @default(0) @map("collaboration_score")
+  lastActive         DateTime @default(now()) @map("last_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("identity_team_profiles")
+}
+
+/// Challenge raised against a delegation contract (HEY-186/HEY-385)
+model IdentityChallenge {
+  id              String    @id @default(cuid())
+  contractId      String?   @map("contract_id")
+  taskDescription String    @map("task_description")
+  challengeType   String    @map("challenge_type") // unsafe, underspecified, capability_mismatch, resource_constraint
+  reasoning       String
+  resolution      String?   // accepted, overridden, modified, dismissed
+  resolvedBy      String?   @map("resolved_by")
+  resolvedAt      DateTime? @map("resolved_at")
+  accountId       String?   @map("account_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([contractId])
+  @@map("identity_challenges")
+}
+
+/// Agent capability profile for auto-challenge checks (HEY-386/HEY-385)
+model IdentityAgentProfile {
+  id                 String   @id @default(cuid())
+  agentId            String   @unique @map("agent_id")
+  domains            String[] @default([])
+  confidenceByDomain Json     @default("{}") @map("confidence_by_domain") // Record<string, number>
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("identity_agent_profiles")
+}
+
+/// Task completion records for identity framework delegation tracking
+model TaskCompletion {
+  id              String                 @id @default(cuid())
+  taskId          String                 @map("task_id")
+  delegatedTo     String                 @map("delegated_to")
+  delegatedBy     String                 @map("delegated_by")
+  taskDescription String                 @map("task_description")
+  domain          String?
+  outcome         String // success, failure, partial
+  durationMs      Int                    @map("duration_ms")
+  qualitySignals  Json                   @default("{}") @map("quality_signals")
+  metadata        Json                   @default("{}")
+  embeddingText   String?                @map("embedding_text")
+  embedding       Unsupported("vector")?
+  createdAt       DateTime               @default(now()) @map("created_at")
+
+  @@index([delegatedTo])
+  @@index([delegatedBy])
+  @@index([taskId])
+  @@index([domain])
+  @@index([createdAt])
+  @@map("task_completions")
+}
+
+// ============================================================================
+// DELEGATION (HEY-182, HEY-183, HEY-185)
+// ============================================================================
+
+/// Task status lifecycle for delegation tracking (HEY-182)
+enum TaskStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+/// Delegated task tracked through its lifecycle (HEY-182)
+model DelegatedTask {
+  id              String     @id @default(cuid())
+  userId          String     @map("user_id")
+  assignedTo      String     @map("assigned_to")
+  assignedBy      String     @map("assigned_by")
+  taskDescription String     @map("task_description")
+  status          TaskStatus @default(ASSIGNED)
+  deadline        DateTime?
+  completedAt     DateTime?  @map("completed_at")
+  result          String?
+  metadata        Json?
+  memoryId        String?    @map("memory_id") // Link to memory storing this task
+  templateId      String?    @map("template_id")
+  contractId      String?    @map("contract_id")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  template DelegationTemplate? @relation(fields: [templateId], references: [id])
+  contract DelegationContract? @relation(fields: [contractId], references: [id])
+
+  @@index([userId, status])
+  @@index([assignedTo, status])
+  @@index([assignedBy])
+  @@index([contractId])
+  @@map("delegated_tasks")
+}
+
+/// Reusable delegation template (HEY-183)
+model DelegationTemplate {
+  id                   String   @id @default(cuid())
+  userId               String   @map("user_id")
+  name                 String
+  taskType             String   @map("task_type")
+  requiredCapabilities String[] @default([]) @map("required_capabilities")
+  defaultInstructions  String?  @map("default_instructions")
+  expectedOutputs      String?  @map("expected_outputs")
+  typicalDurationMs    Int?     @map("typical_duration_ms")
+  metadata             Json?
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  tasks DelegatedTask[]
+
+  @@unique([userId, name])
+  @@index([userId, taskType])
+  @@map("delegation_templates")
+}
+
+/// Contract status lifecycle (HEY-185)
+enum ContractStatus {
+  PROPOSED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  VERIFIED
+  REJECTED
+}
+
+/// Formal delegation contract between agents (HEY-185)
+model DelegationContract {
+  id              String         @id @default(cuid())
+  userId          String         @map("user_id")
+  delegator       String
+  delegate        String
+  taskDescription String         @map("task_description")
+  status          ContractStatus @default(PROPOSED)
+  terms           Json // { deadline, qualityCriteria, escalationRules }
+  result          String?
+  verifiedAt      DateTime?      @map("verified_at")
+  completedAt     DateTime?      @map("completed_at")
+  metadata        Json?
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  tasks DelegatedTask[]
+
+  @@index([userId, status])
+  @@index([delegator])
+  @@index([delegate])
+  @@map("delegation_contracts")
+}
+
+model InboundEmail {
+  id            String    @id @default(uuid())
+  from          String
+  to            String
+  subject       String?
+  textBody      String?   @map("text_body")
+  htmlBody      String?   @map("html_body")
+  rawHeaders    Json?     @map("raw_headers")
+  resendEventId String?   @unique @map("resend_event_id")
+  status        String    @default("received")
+  processedAt   DateTime? @map("processed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("inbound_emails")
+  @@index([from])
+  @@index([to])
+  @@index([createdAt])
+  @@index([status])
+}

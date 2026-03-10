@@ -1,7 +1,7 @@
 import { Injectable, Optional, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DreamStartedEvent, DreamCompletedEvent } from '../events/event-types';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { TrustProfileService } from '../identity/trust-profile.service';
 import { GenerateContextService } from './generate-context.service';
@@ -13,8 +13,14 @@ import {
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
+  DreamCyclePendingStage,
+  DreamCycleTieringStage,
+  DreamCycleConsolidationStage,
 } from './stages';
 import * as os from 'os';
+import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
+import { assertSanityGate } from './dream-cycle-sanity-gate';
+import { HealthMetricsService } from '../health/health-metrics.service';
 
 // Advisory lock key for Dream Cycle (arbitrary unique int)
 const DREAM_CYCLE_LOCK_KEY = 294967;
@@ -22,6 +28,8 @@ const DREAM_CYCLE_LOCK_KEY = 294967;
 export type DreamCycleStage =
   | 'dedup'
   | 'staleness'
+  | 'pending'
+  | 'tiering'
   | 'patterns'
   | 'clustering'
   | 'drift'
@@ -43,6 +51,7 @@ export interface DreamCycleResult {
   duplicatesMerged: number;
   patternsCreated: number;
   memoriesArchived: number;
+  pendingResolved?: number;
   totalActive: number;
   avgEffectiveScore: number;
   stageDetails: Record<string, any>;
@@ -54,6 +63,8 @@ export interface DreamCycleResult {
 const ALL_STAGES: DreamCycleStage[] = [
   'dedup',
   'staleness',
+  'pending',
+  'tiering',
   'patterns',
   'clustering',
   'drift',
@@ -67,18 +78,23 @@ export class DreamCycleService {
   private readonly maxLlmCalls: number;
 
   constructor(
-    private prisma: PrismaService,
+    private prisma: ServicePrismaService,
     private config: ConfigService,
     private dedupStage: DreamCycleDedupStage,
     private stalenessStage: DreamCycleStalenessStage,
+    private pendingStage: DreamCyclePendingStage,
+    private tieringStage: DreamCycleTieringStage,
+    private consolidationStage: DreamCycleConsolidationStage,
     private patternsStage: DreamCyclePatternsStage,
     private driftStage: DreamCycleDriftStage,
     private identityStage: DreamCycleIdentityStage,
+    private tracker: DreamCycleRunTrackerService,
     @Optional() private generateContextService?: GenerateContextService,
     @Optional() private clusteringService?: ClusteringService,
     @Optional() private fogIndexService?: FogIndexService,
     @Optional() private trustProfileService?: TrustProfileService,
     @Optional() private eventEmitter?: EventEmitter2,
+    @Optional() private readonly healthMetrics?: HealthMetricsService,
   ) {
     this.maxLlmCalls = parseInt(
       this.config.get('DREAM_MAX_LLM_CALLS') ?? '50',
@@ -115,6 +131,7 @@ export class DreamCycleService {
         duplicatesMerged: 0,
         patternsCreated: 0,
         memoriesArchived: 0,
+        pendingResolved: 0,
         totalActive: 0,
         avgEffectiveScore: 0,
         stageDetails: {},
@@ -179,6 +196,10 @@ export class DreamCycleService {
           (s, r) => s + (r.memoriesArchived ?? 0),
           0,
         ),
+        pendingResolved: allResults.reduce(
+          (s, r) => s + (r.pendingResolved ?? 0),
+          0,
+        ),
         llmCallsUsed: allResults.reduce((s, r) => s + (r.llmCallsUsed ?? 0), 0),
         errors: allResults.flatMap((r) => r.errors ?? []),
         usersProcessed: allResults.length,
@@ -190,6 +211,8 @@ export class DreamCycleService {
 
     const userId =
       options.userId || this.config.get<string>('DEFAULT_USER_ID') || 'default';
+    const runId = `dc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const totalMemories = await this.tracker.getTotalMemoryCount();
     const startTime = Date.now();
     const stageDetails: Record<string, any> = {};
     const errors: string[] = [];
@@ -197,6 +220,7 @@ export class DreamCycleService {
     let duplicatesMerged = 0;
     let patternsCreated = 0;
     let memoriesArchived = 0;
+    let pendingResolved = 0;
     let llmCallsUsed = 0;
 
     const report = await this.prisma.dreamCycleReport.create({
@@ -230,17 +254,44 @@ export class DreamCycleService {
       // Stage 1: Semantic dedup
       if (stages.includes('dedup')) {
         this.log('Stage 1: Semantic dedup scan');
+        const dedupStart = new Date();
+        const dedupRecord = await this.tracker.startStage(
+          runId,
+          'dedup',
+          totalMemories,
+        );
         try {
           const dedupResult = await this.dedupStage.run(
             userId,
             dryRun,
             maxMemories,
           );
+          assertSanityGate('dedup', dedupResult.scanned, totalMemories);
+          await this.tracker.completeStage(
+            dedupRecord.id,
+            dedupResult.scanned,
+            dedupStart,
+          );
           duplicatesMerged = dedupResult.merged;
           llmCallsUsed += dedupResult.llmCalls;
           stageDetails.dedup = dedupResult;
           this.log('Stage 1 complete', dedupResult);
         } catch (err) {
+          if ((err as Error).message?.includes('sanity gate FAILED')) {
+            await this.tracker.abortStage(
+              dedupRecord.id,
+              0,
+              totalMemories,
+              (err as Error).message,
+              dedupStart,
+            );
+          } else {
+            await this.tracker.errorStage(
+              dedupRecord.id,
+              err as Error,
+              dedupStart,
+            );
+          }
           const msg = `Dedup stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
@@ -250,14 +301,144 @@ export class DreamCycleService {
       // Stage 2: Staleness pruning
       if (stages.includes('staleness')) {
         this.log('Stage 2: Staleness pruning');
+        const stalenessStart = new Date();
+        const stalenessRecord = await this.tracker.startStage(
+          runId,
+          'staleness',
+          totalMemories,
+        );
         try {
           const pruneResult = await this.stalenessStage.run(userId, dryRun);
+          assertSanityGate(
+            'staleness',
+            pruneResult.scoresRefreshed,
+            totalMemories,
+          );
+          await this.tracker.completeStage(
+            stalenessRecord.id,
+            pruneResult.scoresRefreshed,
+            stalenessStart,
+          );
           memoriesArchived = pruneResult.archived;
           scoresRefreshed = pruneResult.scoresRefreshed;
           stageDetails.staleness = pruneResult;
           this.log('Stage 2 complete', pruneResult);
         } catch (err) {
+          if ((err as Error).message?.includes('sanity gate FAILED')) {
+            await this.tracker.abortStage(
+              stalenessRecord.id,
+              0,
+              totalMemories,
+              (err as Error).message,
+              stalenessStart,
+            );
+          } else {
+            await this.tracker.errorStage(
+              stalenessRecord.id,
+              err as Error,
+              stalenessStart,
+            );
+          }
           const msg = `Staleness stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
+      // Stage 2.5: PENDING merge resolution
+      if (stages.includes('pending') && llmCallsUsed < this.maxLlmCalls) {
+        this.log('Stage 2.5: PENDING merge resolution');
+        const pendingStart = new Date();
+        const pendingRecord = await this.tracker.startStage(
+          runId,
+          'pending',
+          totalMemories,
+        );
+        try {
+          const pendingResult = await this.pendingStage.run(
+            userId,
+            dryRun,
+            this.maxLlmCalls - llmCallsUsed,
+          );
+          await this.tracker.completeStage(
+            pendingRecord.id,
+            pendingResult.processed,
+            pendingStart,
+          );
+          pendingResolved = pendingResult.processed;
+          duplicatesMerged +=
+            pendingResult.autoMerged + pendingResult.llmMerged;
+          llmCallsUsed += pendingResult.llmCalls;
+          stageDetails.pending = pendingResult;
+          this.log('Stage 2.5 complete', pendingResult);
+        } catch (err) {
+          await this.tracker.errorStage(
+            pendingRecord.id,
+            err as Error,
+            pendingStart,
+          );
+          const msg = `Pending stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
+      // Stage 2.6: Memory tiering
+      if (stages.includes('tiering')) {
+        this.log('Stage 2.6: Memory tiering');
+        const tieringStart = new Date();
+        const tieringRecord = await this.tracker.startStage(
+          runId,
+          'tiering',
+          totalMemories,
+        );
+        try {
+          const tieringResult = await this.tieringStage.run(userId, dryRun);
+          await this.tracker.completeStage(tieringRecord.id, 0, tieringStart);
+          stageDetails.tiering = tieringResult;
+          this.log('Stage 2.6 complete', tieringResult);
+        } catch (err) {
+          await this.tracker.errorStage(
+            tieringRecord.id,
+            err as Error,
+            tieringStart,
+          );
+          const msg = `Tiering stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
+      // Stage 2.7: Cold memory consolidation (Dream v2)
+      if (stages.includes('tiering')) {
+        this.log('Stage 2.7: Cold memory consolidation');
+        const consolidationStart = new Date();
+        const consolidationRecord = await this.tracker.startStage(
+          runId,
+          'consolidation',
+          totalMemories,
+        );
+        try {
+          const consolidationResult = await this.consolidationStage.run(
+            userId,
+            dryRun,
+          );
+          await this.tracker.completeStage(
+            consolidationRecord.id,
+            consolidationResult.archived,
+            consolidationStart,
+          );
+          llmCallsUsed += consolidationResult.llmCalls;
+          memoriesArchived += consolidationResult.archived;
+          stageDetails.consolidation = consolidationResult;
+          this.log('Stage 2.7 complete', consolidationResult);
+        } catch (err) {
+          await this.tracker.errorStage(
+            consolidationRecord.id,
+            err as Error,
+            consolidationStart,
+          );
+          const msg = `Consolidation stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
         }
@@ -266,17 +447,33 @@ export class DreamCycleService {
       // Stage 3: Pattern extraction
       if (stages.includes('patterns') && llmCallsUsed < this.maxLlmCalls) {
         this.log('Stage 3: Pattern extraction');
+        const patternsStart = new Date();
+        const patternsRecord = await this.tracker.startStage(
+          runId,
+          'patterns',
+          totalMemories,
+        );
         try {
           const patternResult = await this.patternsStage.run(
             userId,
             dryRun,
             this.maxLlmCalls - llmCallsUsed,
           );
+          await this.tracker.completeStage(
+            patternsRecord.id,
+            patternResult.patternsCreated,
+            patternsStart,
+          );
           patternsCreated = patternResult.patternsCreated;
           llmCallsUsed += patternResult.llmCalls;
           stageDetails.patterns = patternResult;
           this.log('Stage 3 complete', patternResult);
         } catch (err) {
+          await this.tracker.errorStage(
+            patternsRecord.id,
+            err as Error,
+            patternsStart,
+          );
           const msg = `Pattern stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
@@ -286,14 +483,30 @@ export class DreamCycleService {
       // Stage 3.5: Memory clustering
       if (stages.includes('clustering') && this.clusteringService) {
         this.log('Stage 3.5: Memory clustering');
+        const clusteringStart = new Date();
+        const clusteringRecord = await this.tracker.startStage(
+          runId,
+          'clustering',
+          totalMemories,
+        );
         try {
           const clusterResult = await this.clusteringService.run({
             userId,
             dryRun,
           });
+          await this.tracker.completeStage(
+            clusteringRecord.id,
+            0,
+            clusteringStart,
+          );
           stageDetails.clustering = clusterResult;
           this.log('Stage 3.5 (clustering) complete', clusterResult);
         } catch (err) {
+          await this.tracker.errorStage(
+            clusteringRecord.id,
+            err as Error,
+            clusteringStart,
+          );
           const msg = `Clustering stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
@@ -303,11 +516,23 @@ export class DreamCycleService {
       // Stage 3.6: Drift analysis
       if (stages.includes('drift')) {
         this.log('Stage 3.6: Embedding drift analysis');
+        const driftStart = new Date();
+        const driftRecord = await this.tracker.startStage(
+          runId,
+          'drift',
+          totalMemories,
+        );
         try {
           const driftResult = await this.driftStage.run(userId, dryRun);
+          await this.tracker.completeStage(driftRecord.id, 0, driftStart);
           stageDetails.drift = driftResult;
           this.log('Stage 3.6 complete', driftResult);
         } catch (err) {
+          await this.tracker.errorStage(
+            driftRecord.id,
+            err as Error,
+            driftStart,
+          );
           const msg = `Drift stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
@@ -317,12 +542,24 @@ export class DreamCycleService {
       // Stage 3.7: Trust profile recalculation
       if (this.trustProfileService) {
         this.log('Stage 3.7: Trust profile recalculation');
+        const trustStart = new Date();
+        const trustRecord = await this.tracker.startStage(
+          runId,
+          'trust',
+          totalMemories,
+        );
         try {
           const trustResult =
             await this.trustProfileService.recalculateAllProfiles();
+          await this.tracker.completeStage(trustRecord.id, 0, trustStart);
           stageDetails.trustUpdate = trustResult;
           this.log('Stage 3.7 complete', trustResult);
         } catch (err) {
+          await this.tracker.errorStage(
+            trustRecord.id,
+            err as Error,
+            trustStart,
+          );
           const msg = `Trust update stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
@@ -447,7 +684,10 @@ export class DreamCycleService {
           status: 'COMPLETED',
           completedAt: new Date(),
           memoriesProcessed:
-            scoresRefreshed + duplicatesMerged + memoriesArchived,
+            scoresRefreshed +
+            duplicatesMerged +
+            memoriesArchived +
+            pendingResolved,
           patternsDetected: patternsCreated,
           memoriesMerged: duplicatesMerged,
         },
@@ -459,6 +699,7 @@ export class DreamCycleService {
         duplicatesMerged,
         patternsCreated,
         memoriesArchived,
+        pendingResolved,
         errors: errors.length,
       });
 
@@ -472,6 +713,17 @@ export class DreamCycleService {
         ),
       );
 
+      if (this.healthMetrics && status === 'COMPLETED') {
+        try {
+          await this.healthMetrics.computeAndPersist();
+          this.logger.log('Health metrics refreshed after Dream Cycle');
+        } catch (err) {
+          this.logger.warn(
+            `Health metrics refresh failed: ${(err as Error).message}`,
+          );
+        }
+      }
+
       return {
         id: report.id,
         status,
@@ -480,6 +732,7 @@ export class DreamCycleService {
         duplicatesMerged,
         patternsCreated,
         memoriesArchived,
+        pendingResolved,
         totalActive,
         avgEffectiveScore,
         stageDetails,

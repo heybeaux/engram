@@ -17,6 +17,14 @@ export class CloudSyncPullService {
     deletedCount: number;
     durationMs: number;
   }> {
+    if (!accountId) {
+      this.logger.warn(
+        'triggerPull called without accountId — auth guard may not have resolved account context for this request',
+      );
+      throw new BadRequestException(
+        'Missing accountId — cannot pull without account context',
+      );
+    }
     const link = await this.getCloudLink(accountId);
     const syncKey = link.cloudSyncKey
       ? this.decryptApiKey(link.cloudSyncKey)

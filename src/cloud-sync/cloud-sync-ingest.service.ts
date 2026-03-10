@@ -30,146 +30,155 @@ export class CloudSyncIngestService {
 
     for (const memPayload of dto.memories) {
       try {
-        // 1. Resolve cloud agent via SyncAgentMap
-        const cloudAgentId = await this.resolveCloudAgent(
-          accountId,
-          instanceId,
-          memPayload.localAgentId || 'default',
-          memPayload.agentName || 'Default Agent',
-        );
+        // Each memory is processed in its own transaction to prevent
+        // PostgreSQL 25P02 cascade — one failure must not kill the batch.
+        const result = await this.prisma.$transaction(async (tx) => {
+          // 1. Resolve cloud agent via SyncAgentMap
+          const cloudAgentId = await this.resolveCloudAgentTx(
+            tx,
+            accountId,
+            instanceId,
+            memPayload.localAgentId || 'default',
+            memPayload.agentName || 'Default Agent',
+          );
 
-        // 2. Resolve cloud user via SyncUserMap
-        const cloudUserId = await this.resolveCloudUser(
-          instanceId,
-          cloudAgentId,
-          memPayload.localUserId || 'default',
-          memPayload.userExternalId || 'default',
-        );
+          // 2. Resolve cloud user via SyncUserMap
+          const cloudUserId = await this.resolveCloudUserTx(
+            tx,
+            instanceId,
+            cloudAgentId,
+            memPayload.localUserId || 'default',
+            memPayload.userExternalId || 'default',
+          );
 
-        // 3. Check contentHash dedup — skip if already exists
-        if (memPayload.contentHash) {
-          const existing = await this.prisma.memory.findFirst({
+          // 3. Check contentHash dedup — skip if already exists
+          if (memPayload.contentHash) {
+            const existing = await tx.memory.findFirst({
+              where: {
+                userId: cloudUserId,
+                contentHash: memPayload.contentHash,
+                deletedAt: null,
+              },
+              select: { id: true },
+            });
+
+            if (existing) {
+              await this.upsertSyncIdMapTx(
+                tx,
+                instanceId,
+                memPayload.localId,
+                existing.id,
+                memPayload.contentHash,
+              );
+              return {
+                sourceMemoryId: memPayload.localId,
+                cloudMemoryId: existing.id,
+                status: 'skipped' as const,
+              };
+            }
+          }
+
+          // 4. Check SyncIdMap — already synced this localId?
+          const existingMap = await tx.syncIdMap.findUnique({
             where: {
-              userId: cloudUserId,
-              contentHash: memPayload.contentHash,
-              deletedAt: null,
+              instanceId_localMemoryId: {
+                instanceId,
+                localMemoryId: memPayload.localId,
+              },
             },
-            select: { id: true },
           });
 
-          if (existing) {
-            await this.upsertSyncIdMap(
-              instanceId,
-              memPayload.localId,
-              existing.id,
-              memPayload.contentHash,
-            );
-            results.push({
-              sourceMemoryId: memPayload.localId,
-              cloudMemoryId: existing.id,
-              status: 'skipped',
-            });
-            continue;
+          if (existingMap) {
+            if (
+              memPayload.contentHash &&
+              existingMap.contentHash !== memPayload.contentHash
+            ) {
+              await tx.memory
+                .update({
+                  where: { id: existingMap.cloudMemoryId },
+                  data: {
+                    raw: memPayload.raw,
+                    contentHash: memPayload.contentHash,
+                    memoryType: (memPayload.memoryType as any) || undefined,
+                    effectiveScore: memPayload.effectiveScore ?? undefined,
+                    priority: memPayload.priority ?? undefined,
+                  },
+                })
+                .catch(() => {});
+              await this.upsertSyncIdMapTx(
+                tx,
+                instanceId,
+                memPayload.localId,
+                existingMap.cloudMemoryId,
+                memPayload.contentHash,
+              );
+              return {
+                sourceMemoryId: memPayload.localId,
+                cloudMemoryId: existingMap.cloudMemoryId,
+                status: 'updated' as const,
+              };
+            } else {
+              return {
+                sourceMemoryId: memPayload.localId,
+                cloudMemoryId: existingMap.cloudMemoryId,
+                status: 'skipped' as const,
+              };
+            }
           }
-        }
 
-        // 4. Check SyncIdMap — already synced this localId? If so, update metadata
-        const existingMap = await this.prisma.syncIdMap.findUnique({
-          where: {
-            instanceId_localMemoryId: {
-              instanceId,
-              localMemoryId: memPayload.localId,
-            },
-          },
-        });
-
-        if (existingMap) {
-          if (
-            memPayload.contentHash &&
-            existingMap.contentHash !== memPayload.contentHash
-          ) {
-            await this.prisma.memory
-              .update({
-                where: { id: existingMap.cloudMemoryId },
-                data: {
-                  raw: memPayload.raw,
-                  contentHash: memPayload.contentHash,
-                  memoryType: (memPayload.memoryType as any) || undefined,
-                  effectiveScore: memPayload.effectiveScore ?? undefined,
-                  priority: memPayload.priority ?? undefined,
-                },
-              })
-              .catch(() => {});
-            await this.upsertSyncIdMap(
-              instanceId,
-              memPayload.localId,
-              existingMap.cloudMemoryId,
-              memPayload.contentHash,
-            );
-            results.push({
-              sourceMemoryId: memPayload.localId,
-              cloudMemoryId: existingMap.cloudMemoryId,
-              status: 'updated',
-            });
-          } else {
-            results.push({
-              sourceMemoryId: memPayload.localId,
-              cloudMemoryId: existingMap.cloudMemoryId,
-              status: 'skipped',
-            });
-          }
-          continue;
-        }
-
-        // 5. Create the memory with correct cloud agentId/userId
-        const memory = await this.prisma.memory.create({
-          data: {
-            userId: cloudUserId,
-            raw: memPayload.raw,
-            layer: memPayload.layer as any,
-            source: (memPayload.source as any) || 'EXPLICIT_STATEMENT',
-            memoryType: (memPayload.memoryType as any) || undefined,
-            importanceHint: (memPayload.importanceHint as any) || undefined,
-            importanceScore: memPayload.importanceScore ?? 0.5,
-            effectiveScore: memPayload.effectiveScore ?? 0.5,
-            priority: memPayload.priority ?? 3,
-            contentHash: memPayload.contentHash,
-            createdAt: memPayload.createdAt
-              ? new Date(memPayload.createdAt)
-              : undefined,
-          },
-        });
-
-        // 6. Create extraction if provided
-        if (memPayload.extraction) {
-          const ext = memPayload.extraction;
-          await this.prisma.memoryExtraction.create({
+          // 5. Create the memory with correct cloud agentId/userId
+          const memory = await tx.memory.create({
             data: {
-              memoryId: memory.id,
-              who: ext.who,
-              what: ext.what,
-              when: ext.when ? new Date(ext.when) : undefined,
-              whereCtx: ext.whereCtx,
-              why: ext.why,
-              how: ext.how,
-              topics: ext.topics ?? [],
+              userId: cloudUserId,
+              raw: memPayload.raw,
+              layer: memPayload.layer as any,
+              source: (memPayload.source as any) || 'EXPLICIT_STATEMENT',
+              memoryType: (memPayload.memoryType as any) || undefined,
+              importanceHint: (memPayload.importanceHint as any) || undefined,
+              importanceScore: memPayload.importanceScore ?? 0.5,
+              effectiveScore: memPayload.effectiveScore ?? 0.5,
+              priority: memPayload.priority ?? 3,
+              contentHash: memPayload.contentHash,
+              createdAt: memPayload.createdAt
+                ? new Date(memPayload.createdAt)
+                : undefined,
             },
           });
-        }
 
-        // 7. Create SyncIdMap entry
-        await this.upsertSyncIdMap(
-          instanceId,
-          memPayload.localId,
-          memory.id,
-          memPayload.contentHash,
-        );
+          // 6. Create extraction if provided
+          if (memPayload.extraction) {
+            const ext = memPayload.extraction;
+            await tx.memoryExtraction.create({
+              data: {
+                memoryId: memory.id,
+                who: ext.who,
+                what: ext.what,
+                when: ext.when ? new Date(ext.when) : undefined,
+                whereCtx: ext.whereCtx,
+                why: ext.why,
+                how: ext.how,
+                topics: ext.topics ?? [],
+              },
+            });
+          }
 
-        results.push({
-          sourceMemoryId: memPayload.localId,
-          cloudMemoryId: memory.id,
-          status: 'created',
+          // 7. Create SyncIdMap entry
+          await this.upsertSyncIdMapTx(
+            tx,
+            instanceId,
+            memPayload.localId,
+            memory.id,
+            memPayload.contentHash,
+          );
+
+          return {
+            sourceMemoryId: memPayload.localId,
+            cloudMemoryId: memory.id,
+            status: 'created' as const,
+          };
         });
+
+        results.push(result);
       } catch (error: any) {
         this.logger.warn(
           `Failed to ingest synced memory ${memPayload.localId}: ${error.message}`,
@@ -200,26 +209,28 @@ export class CloudSyncIngestService {
   // Agent/User mapping for sync attribution preservation
   // =========================================================================
 
-  private async resolveCloudAgent(
+  // Transaction-aware versions for use inside $transaction blocks
+  private async resolveCloudAgentTx(
+    tx: any,
     accountId: string,
     instanceId: string,
     localAgentId: string,
     agentName: string,
   ): Promise<string> {
-    const existing = await this.prisma.syncAgentMap.findUnique({
+    const existing = await tx.syncAgentMap.findUnique({
       where: {
         instanceId_localAgentId: { instanceId, localAgentId },
       },
     });
     if (existing) return existing.cloudAgentId;
 
-    const byName = await this.prisma.syncAgentMap.findUnique({
+    const byName = await tx.syncAgentMap.findUnique({
       where: {
         instanceId_agentName: { instanceId, agentName },
       },
     });
     if (byName) {
-      await this.prisma.syncAgentMap
+      await tx.syncAgentMap
         .create({
           data: {
             instanceId,
@@ -236,7 +247,7 @@ export class CloudSyncIngestService {
     const apiKeyHash = createHash('sha256').update(rawKey).digest('hex');
     const apiKeyHint = `sync_${agentName.slice(0, 12)}`;
 
-    const agent = await this.prisma.agent.create({
+    const agent = await tx.agent.create({
       data: {
         name: agentName,
         apiKeyHash,
@@ -245,7 +256,7 @@ export class CloudSyncIngestService {
       },
     });
 
-    await this.prisma.syncAgentMap.create({
+    await tx.syncAgentMap.create({
       data: {
         instanceId,
         localAgentId,
@@ -257,32 +268,33 @@ export class CloudSyncIngestService {
     return agent.id;
   }
 
-  private async resolveCloudUser(
+  private async resolveCloudUserTx(
+    tx: any,
     instanceId: string,
     cloudAgentId: string,
     localUserId: string,
     externalId: string,
   ): Promise<string> {
-    const existing = await this.prisma.syncUserMap.findUnique({
+    const existing = await tx.syncUserMap.findUnique({
       where: {
         instanceId_localUserId: { instanceId, localUserId },
       },
     });
     if (existing) return existing.cloudUserId;
 
-    let user = await this.prisma.user.findUnique({
+    let user = await tx.user.findUnique({
       where: {
         agentId_externalId: { agentId: cloudAgentId, externalId },
       },
     });
 
     if (!user) {
-      user = await this.prisma.user.create({
+      user = await tx.user.create({
         data: { agentId: cloudAgentId, externalId },
       });
     }
 
-    await this.prisma.syncUserMap.create({
+    await tx.syncUserMap.create({
       data: {
         instanceId,
         localUserId,
@@ -294,9 +306,85 @@ export class CloudSyncIngestService {
     return user.id;
   }
 
+  // Legacy non-tx versions (kept for any non-batch callers)
+  private async resolveCloudAgent(
+    accountId: string,
+    instanceId: string,
+    localAgentId: string,
+    agentName: string,
+  ): Promise<string> {
+    return this.resolveCloudAgentTx(
+      this.prisma,
+      accountId,
+      instanceId,
+      localAgentId,
+      agentName,
+    );
+  }
+
+  private async resolveCloudUser(
+    instanceId: string,
+    cloudAgentId: string,
+    localUserId: string,
+    externalId: string,
+  ): Promise<string> {
+    return this.resolveCloudUserTx(
+      this.prisma,
+      instanceId,
+      cloudAgentId,
+      localUserId,
+      externalId,
+    );
+  }
+
   // =========================================================================
   // Sync ID mapping
   // =========================================================================
+
+  private async upsertSyncIdMapTx(
+    tx: any,
+    instanceId: string,
+    localMemoryId: string,
+    cloudMemoryId: string,
+    contentHash?: string,
+  ): Promise<void> {
+    try {
+      await tx.syncIdMap.upsert({
+        where: {
+          instanceId_localMemoryId: { instanceId, localMemoryId },
+        },
+        create: {
+          instanceId,
+          localMemoryId,
+          cloudMemoryId,
+          contentHash: contentHash ?? null,
+        },
+        update: {
+          cloudMemoryId,
+          contentHash: contentHash ?? undefined,
+          syncedAt: new Date(),
+        },
+      });
+    } catch (e: any) {
+      if (e.code === 'P2002') {
+        this.logger.debug(
+          `SyncIdMap constraint conflict for local=${localMemoryId} cloud=${cloudMemoryId}, updating existing entry`,
+        );
+        await tx.syncIdMap
+          .updateMany({
+            where: { instanceId, cloudMemoryId },
+            data: {
+              localMemoryId,
+              contentHash: contentHash ?? undefined,
+              syncedAt: new Date(),
+            },
+          })
+          .catch(() => {});
+      } else {
+        throw e;
+      }
+    }
+  }
 
   async upsertSyncIdMap(
     instanceId: string,

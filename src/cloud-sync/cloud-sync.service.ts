@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudLinkService } from '../cloud-link/cloud-link.service';
 import { MemoryCreatedEvent } from '../events/event-types';
@@ -64,6 +65,15 @@ export class CloudSyncService {
   }
 
   async triggerSync(accountId: string): Promise<{ message: string }> {
+    if (!accountId) {
+      this.logger.warn(
+        'triggerSync called without accountId — this usually means the auth guard did not resolve account context. ' +
+          'Check that TRUST_LOCAL_NETWORK=true is set and the api-key guard resolves the default account for local requests.',
+      );
+      throw new BadRequestException(
+        'Missing accountId — cannot trigger sync without account context',
+      );
+    }
     const link = await this.getCloudLink(accountId);
     const syncKey = link.cloudSyncKey
       ? this.decryptApiKey(link.cloudSyncKey)
@@ -86,18 +96,25 @@ export class CloudSyncService {
 
     const startTime = Date.now();
 
+    // IMPORTANT: Use a fresh PrismaClient for background sync, NOT this.prisma.
+    // PrismaService uses a Proxy that delegates to the RLS transaction from the
+    // HTTP request's interceptor. By the time setImmediate fires, that transaction
+    // is already committed, causing "Transaction already closed" errors.
+    // Creating a standalone client bypasses the RLS proxy entirely.
+    const backgroundDb = new PrismaClient();
+
     setImmediate(
       () =>
         void (async () => {
           try {
             const result = await this.pushService.performSyncWithClient(
-              this.prisma,
+              backgroundDb,
               syncKey,
               instanceId,
               this.syncAbortController!.signal,
               this.syncProgress,
             );
-            await this.prisma.syncEvent.create({
+            await backgroundDb.syncEvent.create({
               data: {
                 accountId,
                 direction: 'push',
@@ -116,7 +133,7 @@ export class CloudSyncService {
           } catch (error: any) {
             this.logger.error(`Sync failed: ${error.message}`);
             const durationMs = Date.now() - startTime;
-            await this.prisma.syncEvent
+            await backgroundDb.syncEvent
               .create({
                 data: {
                   accountId,
@@ -139,6 +156,7 @@ export class CloudSyncService {
                 `Failed to release advisory lock: ${err.message}`,
               ),
             );
+            await backgroundDb.$disconnect().catch(() => {});
           }
         })(),
     );
@@ -170,6 +188,12 @@ export class CloudSyncService {
   }
 
   async getSyncStatus(accountId: string): Promise<SyncStatus> {
+    if (!accountId) {
+      this.logger.warn(
+        'getSyncStatus called without accountId — auth guard may not have resolved account context',
+      );
+      throw new BadRequestException('Missing accountId');
+    }
     const link = await this.prisma.cloudLink.findUnique({
       where: { accountId },
     });

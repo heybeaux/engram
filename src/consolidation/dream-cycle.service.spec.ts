@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DreamCycleService } from './dream-cycle.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { ConsolidationService } from '../memory/consolidation.service';
 import { ImportanceScorerService } from '../memory/intelligence/importance-scorer.service';
 import { EmbeddingService } from '../memory/embedding.service';
@@ -12,7 +12,11 @@ import {
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
+  DreamCyclePendingStage,
+  DreamCycleTieringStage,
+  DreamCycleConsolidationStage,
 } from './stages';
+import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
 
 const mockPrisma = {
   $queryRawUnsafe: jest.fn(),
@@ -75,6 +79,18 @@ const mockStalenessStage = {
     .fn()
     .mockResolvedValue({ archived: 0, scoresRefreshed: 0, candidates: 0 }),
 };
+const mockPendingStage = {
+  run: jest.fn().mockResolvedValue({
+    processed: 0,
+    autoMerged: 0,
+    autoRejected: 0,
+    llmEvaluated: 0,
+    llmMerged: 0,
+    llmRejected: 0,
+    llmCalls: 0,
+    errors: 0,
+  }),
+};
 const mockPatternsStage = {
   run: jest
     .fn()
@@ -98,6 +114,22 @@ const mockDriftStage = {
   }),
 };
 
+const mockTieringStage = {
+  run: jest.fn().mockResolvedValue({
+    promoted: 0,
+    demoted: 0,
+    evaluated: 0,
+  }),
+};
+
+const mockConsolidationStage = {
+  run: jest.fn().mockResolvedValue({
+    consolidated: 0,
+    clusters: 0,
+    llmCalls: 0,
+  }),
+};
+
 describe('DreamCycleService', () => {
   let service: DreamCycleService;
 
@@ -116,6 +148,16 @@ describe('DreamCycleService', () => {
       scoresRefreshed: 0,
       candidates: 0,
     });
+    mockPendingStage.run.mockResolvedValue({
+      processed: 0,
+      autoMerged: 0,
+      autoRejected: 0,
+      llmEvaluated: 0,
+      llmMerged: 0,
+      llmRejected: 0,
+      llmCalls: 0,
+      errors: 0,
+    });
     mockPatternsStage.run.mockResolvedValue({
       patternsCreated: 0,
       clustersFound: 0,
@@ -126,11 +168,21 @@ describe('DreamCycleService', () => {
       snapshotsPersisted: 0,
       alerts: [],
     });
+    mockTieringStage.run.mockResolvedValue({
+      promoted: 0,
+      demoted: 0,
+      evaluated: 0,
+    });
+    mockConsolidationStage.run.mockResolvedValue({
+      consolidated: 0,
+      clusters: 0,
+      llmCalls: 0,
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DreamCycleService,
-        { provide: PrismaService, useValue: mockPrisma },
+        { provide: ServicePrismaService, useValue: mockPrisma },
         { provide: ConsolidationService, useValue: mockConsolidation },
         { provide: ImportanceScorerService, useValue: mockScorer },
         { provide: EmbeddingService, useValue: mockEmbedding },
@@ -138,9 +190,29 @@ describe('DreamCycleService', () => {
         { provide: ConfigService, useValue: mockConfig },
         { provide: DreamCycleDedupStage, useValue: mockDedupStage },
         { provide: DreamCycleStalenessStage, useValue: mockStalenessStage },
+        { provide: DreamCyclePendingStage, useValue: mockPendingStage },
         { provide: DreamCyclePatternsStage, useValue: mockPatternsStage },
         { provide: DreamCycleDriftStage, useValue: mockDriftStage },
         { provide: DreamCycleIdentityStage, useValue: mockIdentityStage },
+        { provide: DreamCycleTieringStage, useValue: mockTieringStage },
+        {
+          provide: DreamCycleConsolidationStage,
+          useValue: mockConsolidationStage,
+        },
+        {
+          provide: DreamCycleRunTrackerService,
+          useValue: {
+            getTotalMemoryCount: jest.fn().mockResolvedValue(0),
+            startStage: jest.fn().mockResolvedValue({
+              id: 'stage-1',
+              runId: 'run-1',
+              stage: 'test',
+            }),
+            completeStage: jest.fn().mockResolvedValue(undefined),
+            abortStage: jest.fn().mockResolvedValue(undefined),
+            errorStage: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 

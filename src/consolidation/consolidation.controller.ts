@@ -1,4 +1,14 @@
-import { Controller, Post, Query, Body, Get, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Query,
+  Body,
+  Get,
+  UseGuards,
+  HttpCode,
+  Optional,
+  Req,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   DreamCycleService,
@@ -12,6 +22,7 @@ import type {
 } from './generate-context.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
+import { DreamCycleQueueProducer } from './dream-cycle-queue.producer';
 
 @ApiTags('Consolidation')
 @UseGuards(ApiKeyOrJwtGuard)
@@ -21,6 +32,7 @@ export class ConsolidationController {
     private dreamCycle: DreamCycleService,
     private generateContext: GenerateContextService,
     private prisma: PrismaService,
+    @Optional() private readonly queueProducer?: DreamCycleQueueProducer,
   ) {}
 
   @Post('dream-cycle')
@@ -39,6 +51,32 @@ export class ConsolidationController {
       userId: body?.userId,
       maxMemories: body?.maxMemories,
     });
+  }
+
+  @Post('dream-cycle/async')
+  @HttpCode(202)
+  async startDreamCycleAsync(
+    @Body()
+    body?: {
+      dryRun?: boolean;
+      userId?: string;
+      maxLlmCalls?: number;
+      maxMemories?: number;
+    },
+    @Req() req?: any,
+  ): Promise<{ runId: string; status: string }> {
+    if (!this.queueProducer) throw new Error('Queue not configured');
+    const userId =
+      body?.userId ??
+      req?.user?.id ??
+      (req as any)?.agent?.userId ??
+      'default';
+    const runId = await this.queueProducer.enqueue(userId, {
+      dryRun: body?.dryRun ?? false,
+      maxLlmCalls: body?.maxLlmCalls,
+      maxMemories: body?.maxMemories,
+    });
+    return { runId, status: 'queued' };
   }
 
   @Post('generate-context')

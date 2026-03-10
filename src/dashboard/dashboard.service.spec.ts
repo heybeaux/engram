@@ -44,6 +44,7 @@ describe('DashboardService', () => {
   describe('getStats', () => {
     it('should return dashboard statistics', async () => {
       const agentId = 'agent-1';
+      const accountId = 'acc-123';
       mockPrisma.user.findMany.mockResolvedValue([
         { id: 'user-1' },
         { id: 'user-2' },
@@ -69,7 +70,7 @@ describe('DashboardService', () => {
         },
       ]);
 
-      const result = await service.getStats(agentId);
+      const result = await service.getStats(agentId, accountId);
 
       expect(result.totalMemories).toBe(100);
       expect(result.totalUsers).toBe(2);
@@ -92,7 +93,7 @@ describe('DashboardService', () => {
       mockPrisma.memory.groupBy.mockResolvedValue([]);
       mockPrisma.memory.findMany.mockResolvedValue([]);
 
-      const result = await service.getStats('agent-1');
+      const result = await service.getStats('agent-1', 'acc-123');
 
       expect(result.totalMemories).toBe(0);
       expect(result.totalUsers).toBe(0);

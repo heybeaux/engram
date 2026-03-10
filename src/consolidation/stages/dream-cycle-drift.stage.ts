@@ -1,5 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { DriftDetectionService } from '../../ensemble/drift-detection.service';
 import { EnsembleService } from '../../ensemble/ensemble.service';
 
@@ -12,7 +12,7 @@ export interface DriftStageResult {
 @Injectable()
 export class DreamCycleDriftStage {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: ServicePrismaService,
     @Optional() private readonly driftDetectionService?: DriftDetectionService,
     @Optional() private readonly ensembleService?: EnsembleService,
   ) {}

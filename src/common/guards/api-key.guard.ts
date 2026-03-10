@@ -65,8 +65,53 @@ export class ApiKeyGuard implements CanActivate {
         }
       }
       if (!request.agent) {
-        request.agent = null;
-        request.user = null;
+        // No agent context resolved from headers — resolve default account
+        // so downstream services (e.g. cloud sync) have accountId available
+        try {
+          const defaultAccount = await this.prisma.account.findFirst({
+            orderBy: { createdAt: 'asc' },
+          });
+          if (defaultAccount) {
+            request.accountId = defaultAccount.id;
+            this.logger.debug(
+              `LAN request: resolved default account ${defaultAccount.id}`,
+            );
+
+            // Also try to resolve default agent and user for this account
+            const defaultAgent = await this.prisma.agent.findFirst({
+              where: { accountId: defaultAccount.id, deletedAt: null },
+              orderBy: { createdAt: 'asc' },
+            });
+            if (defaultAgent) {
+              request.agent = defaultAgent;
+              const defaultUser = await this.prisma.user.findFirst({
+                where: { agentId: defaultAgent.id, deletedAt: null },
+                orderBy: { createdAt: 'asc' },
+              });
+              if (defaultUser) {
+                request.user = defaultUser;
+                request.userId = defaultUser.id;
+              } else {
+                request.user = null;
+              }
+            } else {
+              request.agent = null;
+              request.user = null;
+            }
+          } else {
+            this.logger.warn(
+              'LAN request: no accounts found in database — accountId will be undefined',
+            );
+            request.agent = null;
+            request.user = null;
+          }
+        } catch (err) {
+          this.logger.warn('LAN auth: failed to resolve default account', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+          request.agent = null;
+          request.user = null;
+        }
       }
       return true;
     }

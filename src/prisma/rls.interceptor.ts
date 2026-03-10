@@ -46,8 +46,7 @@ export class RlsInterceptor implements NestInterceptor {
       url.includes('/consolidation/') ||
       url.includes('/consolidate') ||
       url.includes('/dedup/scan') ||
-      url.includes('/dedup/batch') ||
-      url.includes('/awareness/');
+      url.includes('/dedup/batch');
     if (skipRls) {
       return next.handle();
     }

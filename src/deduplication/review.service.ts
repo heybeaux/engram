@@ -505,6 +505,73 @@ export class ReviewService {
   }
 
   /**
+   * ENG-17: Auto-approve high-confidence pending candidates.
+   * Finds PENDING MergeCandidates older than minAgeHours with similarity >= minSimilarity,
+   * runs safety checks, and auto-approves safe ones.
+   */
+  async processBacklog(
+    minSimilarity: number = 0.93,
+    minAgeHours: number = 24,
+  ): Promise<{ approved: number; skippedSafety: number; errors: number }> {
+    const cutoff = new Date(Date.now() - minAgeHours * 60 * 60 * 1000);
+
+    const candidates = await this.prisma.mergeCandidate.findMany({
+      where: {
+        status: CandidateStatus.PENDING,
+        similarity: { gte: minSimilarity },
+        createdAt: { lt: cutoff },
+      },
+      orderBy: { similarity: 'desc' },
+      take: 200,
+    });
+
+    let approved = 0;
+    let skippedSafety = 0;
+    let errors = 0;
+
+    for (const candidate of candidates) {
+      try {
+        // Safety check — never auto-merge protected memories
+        const safetyResults = await this.safetyService.checkMultipleSafety(
+          candidate.memoryIds,
+        );
+        const hasProtected = safetyResults.some((r) => r.isProtected);
+        const canAutoMerge = safetyResults.every((r) => r.canAutoMerge);
+
+        if (hasProtected || !canAutoMerge) {
+          skippedSafety++;
+          continue;
+        }
+
+        await this.approve(
+          candidate.id,
+          { strategy: candidate.suggestedStrategy as MergeStrategy },
+          'backlog-auto-approve',
+        );
+        approved++;
+      } catch {
+        // If merge fails (e.g. memory already deleted), mark as resolved
+        try {
+          await this.prisma.mergeCandidate.update({
+            where: { id: candidate.id },
+            data: {
+              status: CandidateStatus.APPROVED,
+              reviewedAt: new Date(),
+              reviewedBy: 'backlog-auto-approve',
+              reviewNotes: 'Auto-approved: merge execution failed',
+            },
+          });
+          approved++;
+        } catch {
+          errors++;
+        }
+      }
+    }
+
+    return { approved, skippedSafety, errors };
+  }
+
+  /**
    * Check if a pair has been previously rejected
    */
   async wasRejected(memoryIdA: string, memoryIdB: string): Promise<boolean> {

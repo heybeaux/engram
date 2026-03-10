@@ -2,7 +2,7 @@ name: API Spec
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
 
 permissions:
   contents: write

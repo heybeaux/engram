@@ -1,7 +1,7 @@
 import { Injectable, Optional, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DreamPatternFoundEvent } from '../../events/event-types';
-import { PrismaService } from '../../prisma/prisma.service';
+import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { ConsolidationService } from '../../memory/consolidation.service';
 import { LLMService } from '../../llm/llm.service';
 import { ConfigService } from '@nestjs/config';
@@ -18,7 +18,7 @@ export class DreamCyclePatternsStage {
   private readonly patternClusterMinSize: number;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: ServicePrismaService,
     private readonly consolidation: ConsolidationService,
     private readonly llm: LLMService,
     private readonly config: ConfigService,

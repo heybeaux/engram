@@ -1,9 +1,39 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { DreamCycleDedupStage } from './dream-cycle-dedup.stage';
-import { PrismaService } from '../../prisma/prisma.service';
+import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { EmbeddingService } from '../../memory/embedding.service';
 import { LLMService } from '../../llm/llm.service';
+import { TemporalSamplingService } from '../temporal-sampling.service';
+
+const defaultStats = {
+  totalAvailable: 0,
+  sampleSize: 0,
+  tierBreakdown: { recent: 0, midRange: 0, deep: 0, random: 0 },
+};
+
+function mockSample(memories: any[]) {
+  const sampled = memories.map((m: any) => ({
+    ...m,
+    tier: 'recent',
+    retrievalCount: 0,
+    layer: m.layer ?? 'GENERAL',
+  }));
+  mockTemporalSampling.sampleMemories.mockResolvedValue({
+    memories: sampled,
+    totalAvailable: sampled.length,
+    tierStats: { recent: sampled.length, midRange: 0, deep: 0, random: 0 },
+  });
+}
+
+const mockTemporalSampling = {
+  sampleMemories: jest.fn().mockResolvedValue({
+    memories: [],
+    totalAvailable: 0,
+    tierStats: { recent: 0, midRange: 0, deep: 0, random: 0 },
+  }),
+  getSamplingStats: jest.fn().mockResolvedValue({ totalAvailable: 0 }),
+};
 
 const mockPrisma = {
   memory: {
@@ -37,10 +67,11 @@ describe('DreamCycleDedupStage', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DreamCycleDedupStage,
-        { provide: PrismaService, useValue: mockPrisma },
+        { provide: ServicePrismaService, useValue: mockPrisma },
         { provide: EmbeddingService, useValue: mockEmbedding },
         { provide: LLMService, useValue: mockLlm },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: TemporalSamplingService, useValue: mockTemporalSampling },
       ],
     }).compile();
     stage = module.get<DreamCycleDedupStage>(DreamCycleDedupStage);
@@ -48,12 +79,20 @@ describe('DreamCycleDedupStage', () => {
 
   it('should return zeros when fewer than 2 memories', async () => {
     mockPrisma.memory.findMany.mockResolvedValue([{ id: '1', raw: 'test' }]);
+    mockSample([{ id: '1', raw: 'test' }]);
     const result = await stage.run('user1', false);
-    expect(result).toEqual({ merged: 0, flagged: 0, scanned: 1, llmCalls: 0 });
+    expect(result).toEqual(
+      expect.objectContaining({
+        merged: 0,
+        flagged: 0,
+        scanned: 1,
+        llmCalls: 0,
+      }),
+    );
   });
 
   it('should skip memories without embeddings', async () => {
-    mockPrisma.memory.findMany.mockResolvedValue([
+    const mems = [
       {
         id: '1',
         raw: 'a',
@@ -68,7 +107,9 @@ describe('DreamCycleDedupStage', () => {
         effectiveScore: 1,
         memoryType: 'FACT',
       },
-    ]);
+    ];
+    mockPrisma.memory.findMany.mockResolvedValue(mems);
+    mockSample(mems);
     mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
     const result = await stage.run('user1', false);
     expect(result.merged).toBe(0);
@@ -95,6 +136,7 @@ describe('DreamCycleDedupStage', () => {
       },
     ];
     mockPrisma.memory.findMany.mockResolvedValue(memories);
+    mockSample(memories);
     mockPrisma.$queryRawUnsafe.mockResolvedValue([{ embedding: '[0.1,0.2]' }]);
     mockEmbedding.search.mockResolvedValue([
       { id: '2', score: 0.96 }, // above 0.95 auto-merge threshold
@@ -128,6 +170,7 @@ describe('DreamCycleDedupStage', () => {
       },
     ];
     mockPrisma.memory.findMany.mockResolvedValue(memories);
+    mockSample(memories);
     mockPrisma.$queryRawUnsafe.mockResolvedValue([{ embedding: '[0.1,0.2]' }]);
     mockEmbedding.search.mockResolvedValue([
       { id: '2', score: 0.96 }, // above 0.95 but match is protected
@@ -162,6 +205,7 @@ describe('DreamCycleDedupStage', () => {
       },
     ];
     mockPrisma.memory.findMany.mockResolvedValue(memories);
+    mockSample(memories);
     mockPrisma.$queryRawUnsafe.mockResolvedValue([{ embedding: '[0.1]' }]);
     mockEmbedding.search.mockResolvedValue([
       { id: '2', score: 0.9 }, // above 0.88 auto-merge threshold
@@ -195,6 +239,7 @@ describe('DreamCycleDedupStage', () => {
       },
     ];
     mockPrisma.memory.findMany.mockResolvedValue(memories);
+    mockSample(memories);
     mockPrisma.$queryRawUnsafe.mockResolvedValue([{ embedding: '[0.1]' }]);
     mockEmbedding.search.mockResolvedValue([{ id: '2', score: 0.96 }]);
 
@@ -246,6 +291,7 @@ describe('DreamCycleDedupStage', () => {
       },
     ];
     mockPrisma.memory.findMany.mockResolvedValue(memories);
+    mockSample(memories);
     mockPrisma.$queryRawUnsafe.mockResolvedValue([{ embedding: '[0.1]' }]);
     mockEmbedding.search.mockResolvedValue([{ id: '2', score: 0.86 }]);
     mockLlm.json.mockRejectedValue(new Error('LLM timeout'));

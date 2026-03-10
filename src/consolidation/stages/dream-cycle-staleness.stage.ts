@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
+import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { ImportanceScorerService } from '../../memory/intelligence/importance-scorer.service';
 
 export interface StalenessStageResult {
@@ -16,7 +16,7 @@ export class DreamCycleStalenessStage {
   private readonly maxArchivalsPerRun: number;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: ServicePrismaService,
     private readonly scorer: ImportanceScorerService,
     private readonly config: ConfigService,
   ) {

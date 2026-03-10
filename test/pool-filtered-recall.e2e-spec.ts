@@ -39,7 +39,7 @@ describe('Pool-Filtered Recall (e2e)', () => {
 
     // Clean up existing test data
     try {
-      const existingUser = await prisma.user.findFirst({
+      const existingUser = await (prisma as any).user.findFirst({
         where: { externalId: testUserId },
       });
       if (existingUser) {
@@ -53,22 +53,26 @@ describe('Pool-Filtered Recall (e2e)', () => {
         await (prisma as any).memoryAccessLog.deleteMany({
           where: { agentSession: { sessionKey: { startsWith: 'agent:test' } } },
         });
-        await prisma.memory.deleteMany({
+        await (prisma as any).memory.deleteMany({
           where: { userId: existingUser.id },
         });
-        await prisma.user.deleteMany({ where: { externalId: testUserId } });
+        await (prisma as any).user.deleteMany({
+          where: { externalId: testUserId },
+        });
       }
     } catch (e) {
       // Ignore cleanup errors
     }
 
-    await prisma.agent.deleteMany({ where: { apiKeyHash: testApiKeyHash } });
+    await (prisma as any).agent.deleteMany({
+      where: { apiKeyHash: testApiKeyHash },
+    });
     await (prisma as any).agentSession.deleteMany({
       where: { sessionKey: { startsWith: 'agent:test' } },
     });
 
     // Create test agent + user
-    const agent = await prisma.agent.create({
+    const agent = await (prisma as any).agent.create({
       data: {
         name: 'Pool Recall E2E Agent',
         apiKeyHash: testApiKeyHash,
@@ -76,7 +80,7 @@ describe('Pool-Filtered Recall (e2e)', () => {
       },
     });
 
-    const user = await prisma.user.create({
+    const user = await (prisma as any).user.create({
       data: {
         externalId: testUserId,
         agentId: agent.id,
@@ -118,11 +122,15 @@ describe('Pool-Filtered Recall (e2e)', () => {
       await (prisma as any).memoryPool.deleteMany({
         where: { userId: testInternalUserId },
       });
-      await prisma.memory.deleteMany({
+      await (prisma as any).memory.deleteMany({
         where: { userId: testInternalUserId },
       });
-      await prisma.user.deleteMany({ where: { externalId: testUserId } });
-      await prisma.agent.deleteMany({ where: { apiKeyHash: testApiKeyHash } });
+      await (prisma as any).user.deleteMany({
+        where: { externalId: testUserId },
+      });
+      await (prisma as any).agent.deleteMany({
+        where: { apiKeyHash: testApiKeyHash },
+      });
       await (prisma as any).agentSession.deleteMany({
         where: { sessionKey: { startsWith: 'agent:test' } },
       });
@@ -146,10 +154,10 @@ describe('Pool-Filtered Recall (e2e)', () => {
         .expect(201);
 
       // Verify createdBySession was set
-      const memory = await prisma.memory.findUnique({
+      const memory = await (prisma as any).memory.findUnique({
         where: { id: res.body.id },
       });
-      expect((memory as any).createdBySession).toBe('agent:test:main');
+      expect(memory.createdBySession).toBe('agent:test:main');
     });
 
     it('should auto-add memory to global pool', async () => {
@@ -189,10 +197,10 @@ describe('Pool-Filtered Recall (e2e)', () => {
         })
         .expect(201);
 
-      const memory = await prisma.memory.findUnique({
+      const memory = await (prisma as any).memory.findUnique({
         where: { id: res.body.id },
       });
-      expect((memory as any).createdBySession).toBeNull();
+      expect(memory.createdBySession).toBeNull();
     });
   });
 
@@ -275,7 +283,7 @@ describe('Pool-Filtered Recall (e2e)', () => {
       });
 
       // Create a memory and add ONLY to the private pool (not global)
-      const memory = await prisma.memory.create({
+      const memory = await (prisma as any).memory.create({
         data: {
           userId: testInternalUserId,
           raw: 'Pool test: secret memory only in private pool zzzxxx123',
@@ -290,7 +298,7 @@ describe('Pool-Filtered Recall (e2e)', () => {
       const emb = await embeddingService.generate(memory.raw);
       await embeddingService.store(memory.id, emb, {
         userId: testInternalUserId,
-        layer: memory.layer as any,
+        layer: memory.layer,
         importance: memory.importanceScore,
       });
 

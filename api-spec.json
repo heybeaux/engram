@@ -5469,6 +5469,26 @@
         ]
       }
     },
+    "/v1/cloud/health": {
+      "get": {
+        "operationId": "CloudLinkController_healthCheck",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Health check: verify cloud link credentials and API reachability",
+        "tags": [
+          "cloud"
+        ]
+      }
+    },
     "/v1/cloud/sync": {
       "post": {
         "operationId": "CloudSyncController_sync",
@@ -6388,34 +6408,45 @@
           "flush"
         ]
       }
+    },
+    "/v1/emails": {
+      "get": {
+        "operationId": "InboundEmailController_findEmails",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "InboundEmail"
+        ]
+      }
+    },
+    "/v1/webhooks/inbound-email": {
+      "post": {
+        "operationId": "InboundEmailController_handleWebhook",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "InboundEmail"
+        ]
+      }
     }
   },
   "info": {
     "title": "Engram API",
-    "description": "Memory infrastructure for AI agents",
-    "version": "2.0",
+    "description": "",
+    "version": "1.0",
     "contact": {}
   },
   "tags": [],
   "servers": [],
   "components": {
-    "securitySchemes": {
-      "bearer": {
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "type": "http"
-      },
-      "api-key": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-AM-API-Key"
-      },
-      "user-id": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-AM-User-ID"
-      }
-    },
     "schemas": {
       "CreateMemoryDto": {
         "type": "object",

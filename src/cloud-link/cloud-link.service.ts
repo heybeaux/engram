@@ -71,9 +71,13 @@ export class CloudLinkService {
         },
       );
       if (syncKeyResponse.ok) {
-        const syncKeyData = (await syncKeyResponse.json()) as { key: string };
-        if (syncKeyData.key) {
-          encryptedSyncKey = encrypt(syncKeyData.key);
+        const syncKeyData = (await syncKeyResponse.json()) as {
+          syncKey?: string;
+          key?: string;
+        };
+        const rawSyncKey = syncKeyData.syncKey || syncKeyData.key;
+        if (rawSyncKey) {
+          encryptedSyncKey = encrypt(rawSyncKey);
           this.logger.log(`Created cloud sync key for instance ${hostname}`);
         }
       } else {
@@ -377,6 +381,107 @@ export class CloudLinkService {
       plan: cloudUser.plan,
       email: cloudUser.email,
       lastVerified: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Health check: verifies the stored encrypted credentials still work
+   * against the Railway cloud API. Use to diagnose post-migration issues.
+   */
+  async healthCheck(accountId: string): Promise<{
+    healthy: boolean;
+    linked: boolean;
+    credentialsValid: boolean;
+    syncKeyValid: boolean;
+    cloudReachable: boolean;
+    details: string;
+  }> {
+    const link = await this.prisma.cloudLink.findUnique({
+      where: { accountId },
+    });
+
+    if (!link) {
+      return {
+        healthy: false,
+        linked: false,
+        credentialsValid: false,
+        syncKeyValid: false,
+        cloudReachable: false,
+        details: 'No cloud link found for this account',
+      };
+    }
+
+    // Test API key decryption
+    let apiKey: string;
+    try {
+      apiKey = decrypt(link.cloudApiKey);
+    } catch (err: any) {
+      this.logger.error(
+        `Cloud link health check: failed to decrypt cloudApiKey for account ${accountId}: ${err.message}`,
+      );
+      return {
+        healthy: false,
+        linked: true,
+        credentialsValid: false,
+        syncKeyValid: false,
+        cloudReachable: false,
+        details: `Failed to decrypt cloudApiKey: ${err.message}. Re-link may be required.`,
+      };
+    }
+
+    // Test sync key decryption (if present)
+    let syncKeyValid = true;
+    if (link.cloudSyncKey) {
+      try {
+        decrypt(link.cloudSyncKey);
+      } catch (err: any) {
+        this.logger.error(
+          `Cloud link health check: failed to decrypt cloudSyncKey for account ${accountId}: ${err.message}`,
+        );
+        syncKeyValid = false;
+      }
+    }
+
+    // Test cloud API reachability and credential validity
+    let cloudReachable = false;
+    let credentialsValid = false;
+    try {
+      const response = await fetch(`${this.CLOUD_API_BASE}/v1/auth/me`, {
+        headers: { 'X-AM-API-Key': apiKey },
+        signal: AbortSignal.timeout(10000),
+      });
+      cloudReachable = true;
+      if (response.ok) {
+        credentialsValid = true;
+      } else {
+        this.logger.warn(
+          `Cloud link health check: API returned ${response.status} for account ${accountId}`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `Cloud link health check: cloud API unreachable for account ${accountId}: ${err.message}`,
+      );
+    }
+
+    const healthy = credentialsValid && syncKeyValid && cloudReachable;
+    const details = healthy
+      ? 'All checks passed — cloud link is healthy'
+      : [
+          !cloudReachable && 'Cloud API unreachable',
+          !credentialsValid && cloudReachable && 'API key rejected by cloud',
+          !syncKeyValid && 'Sync key decryption failed',
+        ]
+          .filter(Boolean)
+          .join('; ');
+
+    return {
+      healthy,
+      linked: true,
+      credentialsValid,
+      syncKeyValid,
+      cloudReachable,
+      details,
     };
   }
 

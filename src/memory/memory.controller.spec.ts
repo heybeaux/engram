@@ -25,6 +25,9 @@ describe('MemoryController', () => {
       delete: jest.fn(),
       markUsed: jest.fn(),
       loadContext: jest.fn(),
+      bulkCreate: jest.fn(),
+      bulkTextImport: jest.fn(),
+      exportMemoriesFiltered: jest.fn(),
     } as any;
 
     backfillService = {

@@ -83,6 +83,7 @@ model User {
   graphRelationships GraphRelationship[]
   graphMentions      GraphEntityMention[]
   syncUserMaps       SyncUserMap[]
+  entityProfiles     EntityProfile[]
 
   @@unique([agentId, externalId])
   @@map("users")
@@ -164,6 +165,8 @@ model Memory {
   embeddingId      String?                @unique @map("embedding_id")
   embeddingModel   String?                @map("embedding_model")
   embeddingStatus  EmbeddingStatus        @default(PENDING) @map("embedding_status")
+  isDuplicateOf    String?                @map("is_duplicate_of")
+  ingestedAt       DateTime               @default(now()) @map("ingested_at")
   retrievalCount   Int                    @default(0) @map("retrieval_count")
   lastRetrievedAt  DateTime?              @map("last_retrieved_at")
   usedCount        Int                    @default(0) @map("used_count")
@@ -198,6 +201,9 @@ model Memory {
   // Dream Cycle additions
   archivedReason   String?   @map("archived_reason")
   lastDreamCycleAt DateTime? @map("last_dream_cycle_at")
+  searchable       Boolean   @default(true) @map("searchable")
+  lastDreamedAt    DateTime? @map("last_dreamed_at")
+  tier             String?   @map("tier")
   patternSourceIds String[]  @default([]) @map("pattern_source_ids")
 
   // HEY-174: Scoped memory visibility for cross-agent sharing
@@ -222,6 +228,9 @@ model Memory {
   // Multi-model ensemble embeddings
   ensembleEmbeddings MemoryEmbedding[]
 
+  // Entity Profiles
+  entityProfiles EntityProfileMemory[]
+
   @@index([clusterId])
   @@index([userId, layer])
   @@index([userId, createdAt])
@@ -236,6 +245,10 @@ model Memory {
   @@index([visibility])
   @@index([embeddingStatus])
   @@map("memories")
+
+  // Automated dedup pipeline relations
+  dedupCandidates1 DedupCandidate[] @relation("DedupCandidate1")
+  dedupCandidates2 DedupCandidate[] @relation("DedupCandidate2")
 }
 
 /// UX feedback from dashboard users (in-app widget + NPS)
@@ -297,6 +310,7 @@ model Entity {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   memories       MemoryEntity[]
+  profile        EntityProfile?
 
   @@unique([userId, normalizedName, type])
   @@map("entities")
@@ -495,8 +509,9 @@ model MemoryPool {
   updatedAt   DateTime       @updatedAt @map("updated_at")
   archivedAt  DateTime?      @map("archived_at")
 
-  memberships MemoryPoolMembership[]
-  grants      PoolGrant[]
+  memberships      MemoryPoolMembership[]
+  grants           PoolGrant[]
+  entityProfiles   EntityProfile[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -619,6 +634,7 @@ enum SubjectType {
 
 /// Source of the memory
 enum MemorySource {
+  DREAM_CYCLE
   EXPLICIT_STATEMENT
   AGENT_OBSERVATION
   AGENT_REFLECTION
@@ -1048,6 +1064,7 @@ enum EmbeddingStatus {
   PENDING
   COMPLETE
   FAILED
+  DUPLICATE
 }
 
 enum EnsembleJobStatus {
@@ -1358,7 +1375,7 @@ model IdentitySnapshot {
   /// Structured identity data
   capabilities     Json @default("[]") // Array of { name, confidence, lastSeen }
   preferences      Json @default("{}") // Key-value preference summary
-  trustScores      Json @default("{}") // { source: score } trends
+  trustScores      Json @default("{}") @map("trust_scores") // { source: score } trends
   behavioralTraits Json @default("[]") @map("behavioral_traits") // Array of { trait, strength, evidence }
 
   /// Source tracking
@@ -1390,17 +1407,17 @@ model DreamCycleRun {
 
 /// HEY-335: Dedicated awareness cycle run history with proper fields
 model AwarenessCycleRun {
-  id                 String    @id @default(cuid())
-  status             String    @default("RUNNING") // RUNNING | COMPLETED | FAILED
-  phase              String    @default("starting") // starting | observing | analyzing | generating | idle | failed
-  instanceId         String    @map("instance_id")
-  startTime          DateTime  @default(now()) @map("start_time")
-  endTime            DateTime? @map("end_time")
-  insightsGenerated  Int       @default(0) @map("insights_generated")
-  observations       Int       @default(0)
-  patterns           Int       @default(0)
-  durationMs         Int       @default(0) @map("duration_ms")
-  error              String?
+  id                String    @id @default(cuid())
+  status            String    @default("RUNNING") // RUNNING | COMPLETED | FAILED
+  phase             String    @default("starting") // starting | observing | analyzing | generating | idle | failed
+  instanceId        String    @map("instance_id")
+  startTime         DateTime  @default(now()) @map("start_time")
+  endTime           DateTime? @map("end_time")
+  insightsGenerated Int       @default(0) @map("insights_generated")
+  observations      Int       @default(0)
+  patterns          Int       @default(0)
+  durationMs        Int       @default(0) @map("duration_ms")
+  error             String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1745,14 +1762,14 @@ model SyncIdMap {
 /// In-memory delegation contract for identity verification (HEY-185/HEY-385)
 /// NOT the same as DelegationContract (which is the formal inter-agent contract).
 model IdentityContract {
-  id              String   @id @default(cuid())
-  taskDescription String   @map("task_description")
-  expectedOutputs String[] @map("expected_outputs")
-  successCriteria String[] @map("success_criteria")
+  id              String    @id @default(cuid())
+  taskDescription String    @map("task_description")
+  expectedOutputs String[]  @map("expected_outputs")
+  successCriteria String[]  @map("success_criteria")
   timeout         Int // seconds
-  constraints     String[] @default([])
-  delegatedTo     String   @map("delegated_to")
-  status          String   @default("pending") // pending, in_progress, completed, failed, timed_out
+  constraints     String[]  @default([])
+  delegatedTo     String    @map("delegated_to")
+  status          String    @default("pending") // pending, in_progress, completed, failed, timed_out
   result          String?
   completedAt     DateTime? @map("completed_at")
   accountId       String?   @map("account_id")
@@ -1806,7 +1823,7 @@ model IdentityChallenge {
   taskDescription String    @map("task_description")
   challengeType   String    @map("challenge_type") // unsafe, underspecified, capability_mismatch, resource_constraint
   reasoning       String
-  resolution      String?   // accepted, overridden, modified, dismissed
+  resolution      String? // accepted, overridden, modified, dismissed
   resolvedBy      String?   @map("resolved_by")
   resolvedAt      DateTime? @map("resolved_at")
   accountId       String?   @map("account_id")
@@ -1945,4 +1962,202 @@ model DelegationContract {
   @@index([delegator])
   @@index([delegate])
   @@map("delegation_contracts")
+}
+
+model InboundEmail {
+  id            String    @id @default(uuid())
+  from          String
+  to            String
+  subject       String?
+  textBody      String?   @map("text_body")
+  htmlBody      String?   @map("html_body")
+  rawHeaders    Json?     @map("raw_headers")
+  resendEventId String?   @unique @map("resend_event_id")
+  status        String    @default("received")
+  processedAt   DateTime? @map("processed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([from])
+  @@index([to])
+  @@index([createdAt])
+  @@index([status])
+  @@map("inbound_emails")
+}
+
+/// Audit log for every Dream Cycle stage execution.
+model DreamCycleStageRun {
+  id          String    @id @default(cuid())
+  runId       String    @map("run_id")
+  stage       String
+  status      String    @default("STARTED")
+  rowsTouched Int?      @map("rows_touched")
+  totalRows   Int?      @map("total_rows")
+  errorMsg    String?   @map("error_msg")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  durationMs  Int?      @map("duration_ms")
+
+  @@index([runId])
+  @@index([stage, startedAt])
+  @@index([startedAt])
+  @@map("dream_cycle_stage_runs")
+}
+
+/// Key-value store for system-wide health metrics computed during Dream Cycle.
+model SystemMetric {
+  key         String   @id
+  value       Json
+  description String?
+  computedAt  DateTime @default(now()) @map("computed_at")
+
+  @@map("system_metrics")
+}
+
+// ─── Entity Profiles (ENG-10) ───────────────────────────────────────────────
+
+enum EntityType {
+  PERSON
+  ORGANIZATION
+  PROJECT
+  BRAND
+  PRODUCT
+  LOCATION
+  CONCEPT
+  CUSTOM
+}
+
+enum AttributeType {
+  STRING
+  DATE
+  NUMBER
+  URL
+  EMAIL
+  PHONE
+  ADDRESS
+  JSON
+  MARKDOWN
+}
+
+enum ProfileSource {
+  MANUAL
+  IMPORT
+  API
+  AGENT_CREATED
+}
+
+enum AttachMethod {
+  AUTO_SEMANTIC
+  AUTO_MENTION
+  MANUAL
+  IMPORT
+}
+
+model EntityProfile {
+  id             String              @id @default(uuid())
+  userId         String              @map("user_id")
+  user           User                @relation(fields: [userId], references: [id])
+
+  name           String
+  type           EntityType
+  normalizedName String              @map("normalized_name")
+  aliases        String[]            @default([])
+  avatar         String?
+  description    String?
+
+  attributes     EntityAttribute[]
+
+  entityId       String?             @unique @map("entity_id")
+  entity         Entity?             @relation(fields: [entityId], references: [id])
+
+  memories       EntityProfileMemory[]
+  tags           String[]            @default([])
+
+  source         ProfileSource       @default(MANUAL)
+  verified       Boolean             @default(true)
+
+  embedding      Unsupported("vector(1536)")?
+
+  poolId         String?             @map("pool_id")
+  pool           MemoryPool?         @relation(fields: [poolId], references: [id])
+
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  deletedAt      DateTime?           @map("deleted_at")
+
+  @@index([userId])
+  @@index([normalizedName])
+  @@index([type])
+  @@map("entity_profiles")
+}
+
+model EntityAttribute {
+  id         String        @id @default(uuid())
+  profileId  String        @map("profile_id")
+  profile    EntityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  key        String
+  value      String
+  valueType  AttributeType @default(STRING) @map("value_type")
+  category   String?
+
+  source     String?
+  confidence Float         @default(1.0)
+  verified   Boolean       @default(false)
+
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  @@unique([profileId, key, source])
+  @@index([profileId])
+  @@map("entity_attributes")
+}
+
+model EntityProfileMemory {
+  id             String        @id @default(uuid())
+  profileId      String        @map("profile_id")
+  profile        EntityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  memoryId       String        @map("memory_id")
+  memory         Memory        @relation(fields: [memoryId], references: [id])
+
+  relevanceScore Float         @map("relevance_score")
+  attachMethod   AttachMethod  @map("attach_method")
+
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@unique([profileId, memoryId])
+  @@index([profileId])
+  @@index([memoryId])
+  @@map("entity_profile_memories")
+}
+
+/// Automated dedup pipeline — candidate pairs detected by vector/text similarity
+model DedupCandidate {
+  id              String    @id @default(cuid())
+  memoryId1       String    @map("memory_id_1")
+  memoryId2       String    @map("memory_id_2")
+  similarityScore Float     @map("similarity_score")
+  /// VECTOR | TEXT
+  detectionMethod String    @map("detection_method")
+
+  /// DUPLICATE | SUPPORTING | OVERLAPPING | CONFLICTING | RELATED
+  classification  String?
+  confidence      Float?
+  mergedContent   String?   @map("merged_content")
+  reasoning       String?
+
+  /// PENDING | CLASSIFIED | RESOLVED
+  status          String    @default("PENDING")
+  classifiedAt    DateTime? @map("classified_at")
+  resolvedAt      DateTime? @map("resolved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  memory1 Memory @relation("DedupCandidate1", fields: [memoryId1], references: [id])
+  memory2 Memory @relation("DedupCandidate2", fields: [memoryId2], references: [id])
+
+  @@unique([memoryId1, memoryId2])
+  @@index([status])
+  @@index([classification])
+  @@index([createdAt])
+  @@map("dedup_candidates")
 }

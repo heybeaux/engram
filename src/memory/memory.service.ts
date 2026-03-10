@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import {
   Injectable,
   Inject,
@@ -23,6 +24,12 @@ import {
   ImportMemoryItemDto,
   ImportResult,
 } from './dto/export-import.dto';
+import {
+  BulkCreateMemoryDto,
+  BulkCreateResult,
+  BulkTextImportDto,
+  BulkTextResult,
+} from './dto/bulk.dto';
 import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import { UpdateMemoryDto, CorrectMemoryDto } from './dto/update-memory.dto';
 import { Memory, MemoryLayer, MemorySource, SubjectType } from '@prisma/client';
@@ -37,13 +44,10 @@ import { generateContentHash } from '../common/content-hash.util';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
 
 // Extracted services
-import {
-  MemoryDedupService,
-  SOURCE_CONFIDENCE,
-  INSIGHT_DEDUP_THRESHOLD,
-} from './memory-dedup.service';
+import { MemoryDedupService, SOURCE_CONFIDENCE } from './memory-dedup.service';
 import { MemoryQueryService } from './memory-query.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
+import { EmbeddingQueueProducer } from './embedding-queue.producer';
 import { rlsContext } from '../prisma/rls-context';
 import { MemoryGraphService } from './memory-graph.service';
 import { MemoryExportService } from './memory-export.service';
@@ -80,6 +84,7 @@ export class MemoryService {
     @Optional() private memoryPoolService?: MemoryPoolService,
     @Optional() private memoryAccessLogService?: MemoryAccessLogService,
     @Optional() private eventEmitter?: EventEmitter2,
+    @Optional() private readonly embeddingQueue?: EmbeddingQueueProducer,
   ) {}
 
   /**
@@ -140,33 +145,7 @@ export class MemoryService {
     // 2. Determine source type
     const source = dto.source ?? MemorySource.EXPLICIT_STATEMENT;
 
-    // 3. Check for duplicates (three-tier dedup v2)
-    // Insights use a lower threshold (0.92) because LLM-generated content
-    // has more wording variation for semantically identical ideas (HEY-152)
-    const dedupThreshold =
-      dto.layer === MemoryLayer.INSIGHT ? INSIGHT_DEDUP_THRESHOLD : undefined;
-    const dedupResult = await this.dedupService.findDuplicateV2(
-      userId,
-      rawContent,
-      dedupThreshold,
-    );
-    if (dedupResult.action !== 'create' && dedupResult.existingMemory) {
-      if (dedupResult.action === 'merged') {
-        await this.dedupService.autoMergeMemory(
-          dedupResult.existingMemory.id,
-          rawContent,
-          source as any,
-        );
-      } else if (dedupResult.action === 'reinforced') {
-        await this.dedupService.reinforceMemory(
-          dedupResult.existingMemory.id,
-          dto.context?.sessionId,
-        );
-      }
-      return this.getById(
-        dedupResult.existingMemory.id,
-      ) as Promise<MemoryWithExtraction>;
-    }
+    // 3. [HEY-462] Dedup now runs async in EmbeddingQueueProcessor — skipped on hot path
 
     // 4. Calculate initial importance score
     const importanceScore = this.importance.calculate({
@@ -258,14 +237,23 @@ export class MemoryService {
     };
 
     // 9. Extract structure asynchronously (with fresh RLS context)
-    this.runWithRls(accountId, () =>
-      this.pipelineService.extractAndEmbed(
-        memory.id,
-        rawContent,
+    if (this.embeddingQueue) {
+      await this.embeddingQueue.enqueueEmbedding({
+        memoryId: memory.id,
         userId,
-        extractionContext,
-      ),
-    );
+        raw: rawContent,
+        runDedup: true,
+      });
+    } else {
+      this.runWithRls(accountId, () =>
+        this.pipelineService.extractAndEmbed(
+          memory.id,
+          rawContent,
+          userId,
+          extractionContext,
+        ),
+      );
+    }
 
     // 10a. Increment account memoriesUsed
     this.runWithRls(accountId, () => this.incrementMemoriesUsed(userId, 1));
@@ -356,6 +344,216 @@ export class MemoryService {
     }
 
     return { created, failed };
+  }
+
+  /**
+   * Bulk create memories using createMany for fast Postgres insertion,
+   * then queue embeddings asynchronously via EmbeddingQueueProducer.
+   */
+  async bulkCreate(
+    userId: string,
+    dto: BulkCreateMemoryDto,
+  ): Promise<BulkCreateResult> {
+    const memoryIds: string[] = [];
+    const now = new Date();
+
+    const data = dto.memories.map((item) => {
+      const id = crypto.randomUUID();
+      memoryIds.push(id);
+
+      const layer =
+        item.layer &&
+        Object.values(MemoryLayer).includes(item.layer as MemoryLayer)
+          ? (item.layer as MemoryLayer)
+          : this.extraction.classifyLayer(item.raw);
+
+      const importanceScore = this.importance.calculate({
+        hint: item.importanceHint,
+        layer: layer as any,
+      });
+
+      return {
+        id,
+        userId,
+        raw: item.raw,
+        layer: layer as any,
+        source: (item.source as any) ?? MemorySource.EXPLICIT_STATEMENT,
+        importanceHint: item.importanceHint ?? undefined,
+        importanceScore,
+        confidence: 1.0,
+        contentHash: generateContentHash(item.raw),
+        projectId: dto.context?.projectId ?? null,
+        sessionId: dto.context?.sessionId ?? null,
+        agentId: dto.agentId ?? null,
+        metadata: item.metadata ?? undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+    });
+
+    // Batch insert via createMany for performance
+    await this.prisma.memory.createMany({ data });
+
+    // Queue embedding jobs asynchronously
+    if (this.embeddingQueue) {
+      for (const record of data) {
+        this.embeddingQueue
+          .enqueueEmbedding({
+            memoryId: record.id,
+            userId,
+            raw: record.raw,
+            runDedup: true,
+          })
+          .catch((err) => {
+            this.logger.error(
+              `[BulkCreate] Failed to enqueue embedding for ${record.id}:`,
+              err,
+            );
+          });
+      }
+    }
+
+    // Increment account memoriesUsed
+    this.incrementMemoriesUsed(userId, memoryIds.length).catch((err) => {
+      this.logger.error(
+        '[BulkCreate] Failed to increment memoriesUsed:',
+        err,
+      );
+    });
+
+    return { created: memoryIds.length, memoryIds };
+  }
+
+  /**
+   * Accept raw text, auto-chunk at ~chunkSize chars on paragraph boundaries,
+   * then bulk-insert all chunks.
+   */
+  async bulkTextImport(
+    userId: string,
+    dto: BulkTextImportDto,
+  ): Promise<BulkTextResult> {
+    const chunkSize = dto.chunkSize ?? 3500;
+    const chunks = this.chunkText(dto.text, chunkSize);
+
+    const bulkDto: BulkCreateMemoryDto = {
+      memories: chunks.map((chunk) => ({
+        raw: chunk,
+        layer: dto.layer,
+      })),
+      context: dto.context,
+    };
+
+    const result = await this.bulkCreate(userId, bulkDto);
+    return {
+      created: result.created,
+      chunks: chunks.length,
+      memoryIds: result.memoryIds,
+    };
+  }
+
+  /**
+   * Split text into chunks of approximately `targetSize` characters,
+   * breaking on paragraph boundaries (double newlines), then sentence
+   * boundaries (. ! ?), to keep chunks semantically coherent.
+   */
+  private chunkText(text: string, targetSize: number): string[] {
+    if (text.length <= targetSize) {
+      return [text.trim()];
+    }
+
+    const paragraphs = text.split(/\n\s*\n/);
+    const chunks: string[] = [];
+    let current = '';
+
+    for (const paragraph of paragraphs) {
+      const trimmed = paragraph.trim();
+      if (!trimmed) continue;
+
+      // If adding this paragraph stays under target, append it
+      if (current.length + trimmed.length + 2 <= targetSize) {
+        current = current ? current + '\n\n' + trimmed : trimmed;
+        continue;
+      }
+
+      // If current chunk has content, push it
+      if (current) {
+        chunks.push(current);
+        current = '';
+      }
+
+      // If a single paragraph exceeds target, split on sentences
+      if (trimmed.length > targetSize) {
+        const sentences = trimmed.match(/[^.!?]+[.!?]+\s*/g) || [trimmed];
+        for (const sentence of sentences) {
+          if (current.length + sentence.length <= targetSize) {
+            current = current ? current + sentence : sentence;
+          } else {
+            if (current) chunks.push(current.trim());
+            current = sentence;
+          }
+        }
+      } else {
+        current = trimmed;
+      }
+    }
+
+    if (current.trim()) {
+      chunks.push(current.trim());
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Export memories with filters, supporting JSON/CSV/NDJSON format.
+   * Returns cursor-paginated batches for streaming.
+   */
+  async exportMemoriesFiltered(
+    userId: string,
+    filters: {
+      layer?: string;
+      projectId?: string;
+      startDate?: string;
+      endDate?: string;
+    },
+    take: number,
+    cursor?: string,
+  ): Promise<ExportedMemory[]> {
+    const where: any = { userId, deletedAt: null };
+    if (filters.layer) where.layer = filters.layer;
+    if (filters.projectId) where.projectId = filters.projectId;
+    if (filters.startDate || filters.endDate) {
+      where.createdAt = {};
+      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
+      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
+    }
+
+    const memories = await this.prisma.memory.findMany({
+      where,
+      include: { extraction: true },
+      orderBy: { createdAt: 'asc' },
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    });
+
+    return memories.map((m) => ({
+      id: m.id,
+      raw: m.raw,
+      layer: m.layer,
+      importance: m.importanceScore,
+      tags: (m as any).extraction?.topics ?? [],
+      metadata: {
+        source: m.source,
+        confidence: m.confidence,
+        subjectType: m.subjectType,
+        subjectId: m.subjectId,
+        projectId: m.projectId,
+        sessionId: m.sessionId,
+      },
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString(),
+      graph: { entities: [], relationships: [] },
+    }));
   }
 
   /**

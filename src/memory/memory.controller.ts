@@ -38,6 +38,13 @@ import {
   ImportMemoriesDto,
   ImportResult,
 } from './dto/export-import.dto';
+import {
+  BulkCreateMemoryDto,
+  BulkCreateResult,
+  BulkTextImportDto,
+  BulkTextResult,
+  ExportFilteredQueryDto,
+} from './dto/bulk.dto';
 import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import { UpdateMemoryDto } from './dto/update-memory.dto';
 import { ContextualRecallService } from './contextual-recall.service';
@@ -191,6 +198,127 @@ export class MemoryController {
       throw new NotFoundException(`Job ${jobId} not found`);
     }
     return status;
+  }
+
+  // =========================================================================
+  // BULK IMPORT (fast createMany + async embedding)
+  // =========================================================================
+
+  /**
+   * POST /v1/memories/bulk
+   * Bulk create memories using createMany for fast Postgres insertion.
+   * Embeddings are queued asynchronously via EmbeddingQueueProcessor.
+   */
+  @Post('memories/bulk')
+  @ApiOperation({
+    summary: 'Bulk create memories',
+    description:
+      'Insert up to 1000 memories in a single createMany call. Embeddings are queued asynchronously.',
+  })
+  @ApiResponse({ status: 201, description: 'Memories created successfully.' })
+  async bulkCreate(
+    @UserId() userId: string,
+    @Body() dto: BulkCreateMemoryDto,
+  ): Promise<BulkCreateResult> {
+    return this.memoryService.bulkCreate(userId, dto);
+  }
+
+  /**
+   * POST /v1/memories/bulk/text
+   * Accept raw text, auto-chunk at ~3500 chars, and bulk-insert.
+   */
+  @Post('memories/bulk/text')
+  @ApiOperation({
+    summary: 'Bulk import from raw text',
+    description:
+      'Accepts raw text, auto-chunks at ~3500 characters on paragraph/sentence boundaries, and bulk-inserts all chunks.',
+  })
+  @ApiResponse({ status: 201, description: 'Text chunked and stored.' })
+  async bulkTextImport(
+    @UserId() userId: string,
+    @Body() dto: BulkTextImportDto,
+  ): Promise<BulkTextResult> {
+    return this.memoryService.bulkTextImport(userId, dto);
+  }
+
+  /**
+   * GET /v1/memories/export/filtered
+   * Export memories as JSON, CSV, or NDJSON with filters.
+   */
+  @Get('memories/export/filtered')
+  @RateLimit(5)
+  @ApiOperation({
+    summary: 'Export memories with filters',
+    description:
+      'Export memories as JSON, CSV, or NDJSON with optional layer, project, and date filters.',
+  })
+  async exportMemoriesFiltered(
+    @UserId() userId: string,
+    @Query() query: ExportFilteredQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const format = query.format || 'json';
+    const date = new Date().toISOString().split('T')[0];
+    const ext = format === 'ndjson' ? 'ndjson' : format === 'csv' ? 'csv' : 'json';
+
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="engram-export-${date}.${ext}"`,
+    );
+
+    const filters = {
+      layer: query.layer,
+      projectId: query.projectId,
+      startDate: query.startDate,
+      endDate: query.endDate,
+    };
+
+    const BATCH_SIZE = 500;
+    let cursor: string | undefined;
+    let isFirst = true;
+
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.write('id,raw,layer,importance,createdAt,updatedAt\n');
+    } else if (format === 'ndjson') {
+      res.setHeader('Content-Type', 'application/x-ndjson');
+    } else {
+      res.setHeader('Content-Type', 'application/json');
+      res.write('[');
+    }
+
+    while (true) {
+      const batch = await this.memoryService.exportMemoriesFiltered(
+        userId,
+        filters,
+        BATCH_SIZE,
+        cursor,
+      );
+      if (batch.length === 0) break;
+
+      for (const memory of batch) {
+        if (format === 'csv') {
+          const escapedRaw = '"' + memory.raw.replace(/"/g, '""') + '"';
+          res.write(
+            `${memory.id},${escapedRaw},${memory.layer},${memory.importance},${memory.createdAt},${memory.updatedAt}\n`,
+          );
+        } else if (format === 'ndjson') {
+          res.write(JSON.stringify(memory) + '\n');
+        } else {
+          if (!isFirst) res.write(',');
+          res.write(JSON.stringify(memory));
+          isFirst = false;
+        }
+      }
+
+      if (batch.length < BATCH_SIZE) break;
+      cursor = batch[batch.length - 1].id;
+    }
+
+    if (format === 'json') {
+      res.write(']');
+    }
+    res.end();
   }
 
   /**

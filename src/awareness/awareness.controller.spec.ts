@@ -25,6 +25,9 @@ describe('AwarenessController', () => {
       memory: {
         findMany: jest.fn().mockResolvedValue([]),
       },
+      user: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'user1' }]),
+      },
     } as any;
   });
 
@@ -102,11 +105,12 @@ describe('AwarenessController', () => {
       prisma.memory.findMany = jest.fn().mockResolvedValue(mockMemories);
       controller = new AwarenessController(prisma, wakingCycle);
 
-      const result = await controller.listInsights();
+      const mockAgent = { id: 'agent1', accountId: 'acc1' };
+      const result = await controller.listInsights(mockAgent);
 
       expect(prisma.memory.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { layer: 'INSIGHT', deletedAt: null },
+          where: { layer: 'INSIGHT', deletedAt: null, userId: { in: ['user1'] } },
         }),
       );
       expect(result).toEqual([
@@ -125,7 +129,8 @@ describe('AwarenessController', () => {
       prisma.memory.findMany = jest.fn().mockResolvedValue([]);
       controller = new AwarenessController(prisma, wakingCycle);
 
-      const result = await controller.listInsights();
+      const mockAgent = { id: 'agent1', accountId: 'acc1' };
+      const result = await controller.listInsights(mockAgent);
 
       expect(result).toEqual([]);
     });
