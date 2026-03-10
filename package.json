@@ -30,7 +30,7 @@
     "api:spec": "pnpm build && node scripts/generate-api-spec.mjs",
     "api:routes": "node scripts/generate-routes.mjs",
     "seed:staging:legacy": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed-staging.ts",
-    "benchmark": "jest --config ./test/jest-e2e.json --testPathPattern=benchmark --runInBand --forceExit",
+    "benchmark": "jest --config ./test/jest-e2e.json --testPathPatterns=benchmark --runInBand --forceExit",
     "benchmark:report": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' test/benchmark/run-benchmark.ts",
     "benchmark:compare": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' -e \"const h = require('./test/benchmark/history'); const c = h.loadLatestReport(); const p = h.loadPreviousReport(); if (c && p) console.log(h.compareReports(c, p)); else console.log('Need at least 2 benchmark runs to compare');\""
   },

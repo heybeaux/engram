@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [staging, production]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   benchmark:
     name: Recall Benchmark
