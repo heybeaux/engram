@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   LLMProvider,
@@ -23,6 +23,7 @@ import { EmbeddingService } from '../embedding/embedding.service';
  */
 @Injectable()
 export class LLMService {
+  private readonly logger = new Logger(LLMService.name);
   private defaultProvider: LLMProvider;
   private embeddingProvider: LLMProvider;
   private providers: Map<string, LLMProvider> = new Map();
@@ -119,9 +120,16 @@ export class LLMService {
       this.providers.get(embeddingProvider) || this.providers.get('openai')!;
 
     if (!this.defaultProvider) {
-      throw new Error(
-        `No LLM provider configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or use Ollama/LM Studio.`,
-      );
+      const nodeEnv = this.config.get<string>('NODE_ENV', 'development');
+      if (nodeEnv === 'test') {
+        this.logger.warn(
+          'No LLM provider configured in test environment — LLM calls will throw at invocation time',
+        );
+      } else {
+        throw new Error(
+          `No LLM provider configured. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or use Ollama/LM Studio.`,
+        );
+      }
     }
   }
 
