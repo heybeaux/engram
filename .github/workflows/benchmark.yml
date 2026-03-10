@@ -36,6 +36,8 @@ jobs:
       JWT_SECRET: test-jwt-secret-for-ci
       EMBEDDING_PROVIDER: local
       LOCAL_EMBED_URL: http://localhost:8080
+      LOCAL_EMBED_MODEL: bge-base-en-v1.5
+      VECTOR_SEARCH_MODEL: bge-base-en-v1.5
       BENCHMARK_REAL_EMBEDDINGS: 'true'
 
     steps:

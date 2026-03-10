@@ -67,10 +67,10 @@ export async function generateCorpusEmbeddings(
       const embedding = embeddings[j];
       const embeddingStr = `[${embedding.join(',')}]`;
 
-      // Update inline embedding column on memories table
+      // Update embedding status (skip inline embedding column — it's vector(1536) for OpenAI,
+      // but our CI model produces 768-dim vectors. Search uses memory_embeddings table anyway.)
       await prisma.$executeRawUnsafe(
-        `UPDATE memories SET embedding = $1::vector, embedding_status = 'COMPLETE' WHERE id = $2`,
-        embeddingStr,
+        `UPDATE memories SET embedding_status = 'COMPLETE' WHERE id = $1`,
         mem.id,
       );
 
