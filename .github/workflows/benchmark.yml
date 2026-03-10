@@ -61,7 +61,8 @@ jobs:
         run: |
           docker run -d --name embed-server --network host \
             ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
-            --model-id BAAI/bge-base-en-v1.5 --port 8080
+            --model-id BAAI/bge-base-en-v1.5 --port 8080 \
+            --max-input-length 512 --max-client-batch-size 32
 
           echo "Waiting for embedding server to be ready..."
           for i in $(seq 1 60); do

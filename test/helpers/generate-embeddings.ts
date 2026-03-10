@@ -17,6 +17,8 @@ import type { SeedCorpusResult } from './seed-corpus';
 const logger = new Logger('GenerateEmbeddings');
 
 const BATCH_SIZE = 10;
+/** Max chars to send to embedding model (~375 words ≈ 512 tokens for bge-base) */
+const MAX_EMBED_CHARS = 1500;
 
 interface MemoryRow {
   id: string;
@@ -56,7 +58,11 @@ export async function generateCorpusEmbeddings(
 
   for (let i = 0; i < memories.length; i += BATCH_SIZE) {
     const batch = memories.slice(i, i + BATCH_SIZE);
-    const texts = batch.map((m) => m.raw);
+    const texts = batch.map((m) =>
+      m.raw.length > MAX_EMBED_CHARS
+        ? m.raw.slice(0, MAX_EMBED_CHARS)
+        : m.raw,
+    );
 
     // Generate embeddings in batch
     const embeddings = await embeddingService.embed(texts);
