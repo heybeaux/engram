@@ -26,11 +26,11 @@ export async function truncateAll(prisma: PrismaService): Promise<void> {
   ] as const;
 
   for (const table of tables) {
-    await prisma.$executeRawUnsafe(`TRUNCATE TABLE "${table}" CASCADE`).catch(
-      () => {
+    await prisma
+      .$executeRawUnsafe(`TRUNCATE TABLE "${table}" CASCADE`)
+      .catch(() => {
         // Table may not exist in this schema version — skip silently
-      },
-    );
+      });
   }
 }
 
@@ -59,6 +59,8 @@ export async function cleanupAgent(
       where: { memory: { user: { agentId } } },
     })
     .catch(() => {});
-  await prisma.memory.deleteMany({ where: { user: { agentId } } }).catch(() => {});
+  await prisma.memory
+    .deleteMany({ where: { user: { agentId } } })
+    .catch(() => {});
   await prisma.user.deleteMany({ where: { agentId } }).catch(() => {});
 }

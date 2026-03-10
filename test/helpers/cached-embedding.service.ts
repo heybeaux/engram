@@ -45,6 +45,7 @@ export class CachedEmbeddingService {
    * Return a deterministic vector for a single text.
    * Drop-in replacement for EmbeddingService.embedOne().
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   async embedOne(text: string): Promise<number[]> {
     return deterministicVector(text);
   }
@@ -53,6 +54,7 @@ export class CachedEmbeddingService {
    * Return deterministic vectors for multiple texts.
    * Drop-in replacement for EmbeddingService.embed().
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   async embed(texts: string[]): Promise<number[][]> {
     return texts.map(deterministicVector);
   }

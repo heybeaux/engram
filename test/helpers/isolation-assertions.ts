@@ -41,7 +41,7 @@ export function assertNoCrossTenantLeak(
       : [];
 
   const leaks = memories.filter((m) => {
-    const mem = m as Record<string, unknown>;
+    const mem = m as Record<string, string>;
     const raw = String(mem?.raw ?? mem?.content ?? '');
     return raw.startsWith(canaryPrefix);
   });
@@ -51,7 +51,7 @@ export function assertNoCrossTenantLeak(
       `Cross-tenant data leak detected! ` +
         `Response for a different user contains ${leaks.length} memory/memories ` +
         `belonging to userId "${userId}" (canary: "${canaryPrefix}"). ` +
-        `Leaked IDs: ${leaks.map((m) => (m as any).id).join(', ')}`,
+        `Leaked IDs: ${leaks.map((m) => (m as Record<string, string>).id).join(', ')}`,
     );
   }
 }
@@ -68,14 +68,15 @@ export function assertMemoryNotOwnedBy(
 ): void {
   if (memory?.userId === userId) {
     throw new Error(
-      `Cross-tenant leak: memory ${memory.id} has userId "${userId}" but should not be visible.`,
+      `Cross-tenant leak: memory ${String(memory.id)} has userId "${userId}" but should not be visible.`,
     );
   }
   if (canaryPrefix) {
-    const raw = String(memory?.raw ?? memory?.content ?? '');
+    const rawValue = memory?.raw ?? memory?.content;
+    const raw = typeof rawValue === 'string' ? rawValue : '';
     if (raw.startsWith(canaryPrefix)) {
       throw new Error(
-        `Cross-tenant leak: memory ${memory.id} contains canary "${canaryPrefix}" belonging to userId "${userId}".`,
+        `Cross-tenant leak: memory ${String(memory.id)} contains canary "${canaryPrefix}" belonging to userId "${userId}".`,
       );
     }
   }
