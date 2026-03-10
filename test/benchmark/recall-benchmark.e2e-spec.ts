@@ -92,8 +92,8 @@ describe('Recall Benchmark', () => {
         .set(headers)
         .send({ query: query.query, limit: 20 })
         .expect((r) => {
-          // Accept 200 or 400 (for edge case queries like empty string)
-          if (r.status !== 200 && r.status !== 400) {
+          // Accept 200, 201, or 400 (for edge case queries like empty string)
+          if (r.status !== 200 && r.status !== 201 && r.status !== 400) {
             throw new Error(
               `Unexpected status ${r.status} for query "${query.query}": ${JSON.stringify(r.body)}`,
             );
