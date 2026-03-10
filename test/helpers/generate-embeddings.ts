@@ -69,7 +69,7 @@ export async function generateCorpusEmbeddings(
 
       // Update inline embedding column on memories table
       await prisma.$executeRawUnsafe(
-        `UPDATE memories SET embedding = $1::vector, embedding_status = 'COMPLETED' WHERE id = $2`,
+        `UPDATE memories SET embedding = $1::vector, embedding_status = 'COMPLETE' WHERE id = $2`,
         embeddingStr,
         mem.id,
       );
