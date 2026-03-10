@@ -34,7 +34,9 @@ jobs:
       DIRECT_URL: postgresql://engram_test:test_password@localhost:5432/engram_test
       NODE_ENV: test
       JWT_SECRET: test-jwt-secret-for-ci
-      EMBEDDING_PROVIDER: cached-stub
+      EMBEDDING_PROVIDER: local
+      LOCAL_EMBED_URL: http://localhost:8080
+      BENCHMARK_REAL_EMBEDDINGS: 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +54,26 @@ jobs:
         run: |
           npx prisma migrate deploy
           npx prisma generate
+
+      - name: Start embedding server
+        run: |
+          docker run -d --name embed-server --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id BAAI/bge-base-en-v1.5 --port 8080
+
+          echo "Waiting for embedding server to be ready..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Embedding server ready after ~${i}0 seconds"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "::error::Embedding server failed to start"
+              docker logs embed-server
+              exit 1
+            fi
+            sleep 10
+          done
 
       - name: Run benchmark
         id: benchmark

@@ -20,6 +20,7 @@ import { asUser } from '../helpers/auth-helpers';
 import { GOLD_QUERIES, QUERIES_BY_CATEGORY } from '../fixtures';
 import type { GoldQuery } from '../fixtures/types';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { EmbeddingService as EmbeddingGeneratorService } from '../../src/embedding/embedding.service';
 import {
   scoreQuery,
   buildReport,
@@ -29,6 +30,7 @@ import {
   type BenchmarkReport,
 } from './scoring';
 import { saveReport, getGitInfo } from './history';
+import { generateCorpusEmbeddings } from '../helpers/generate-embeddings';
 
 // Generous timeout — corpus seeding + 80+ queries through full stack
 jest.setTimeout(300_000);
@@ -40,13 +42,18 @@ describe('Recall Benchmark', () => {
   let userMap: Map<string, SeededUser>;
 
   beforeAll(async () => {
-    const testApp = await createTestApp();
+    // Use real embedding service (no CachedEmbeddingService override)
+    const testApp = await createTestApp(false);
     app = testApp.app;
     prisma = testApp.prisma;
 
-    // Seed full corpus
+    // Seed full corpus (accounts, users, memories via SQL — no embeddings yet)
     corpus = await seedCorpus(prisma);
     userMap = new Map(corpus.seededUsers.map((u) => [u.name, u]));
+
+    // Generate real embedding vectors for all seeded memories
+    const embeddingGenerator = app.get(EmbeddingGeneratorService);
+    await generateCorpusEmbeddings(prisma, embeddingGenerator, corpus);
   });
 
   afterAll(async () => {
