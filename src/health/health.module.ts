@@ -7,11 +7,17 @@ import { EmbedHealthService } from './embed-health.service';
 import { EmbeddingRetryService } from './embedding-retry.service';
 import { HealthMetricsService } from './health-metrics.service';
 import { HealthMetricsController } from './health-metrics.controller';
+import { HealthSnapshotService } from './health-snapshot.service';
 
 @Module({
   imports: [PrismaModule, MemoryModule, ServicePrismaModule],
   controllers: [HealthController, HealthMetricsController],
-  providers: [EmbedHealthService, EmbeddingRetryService, HealthMetricsService],
-  exports: [EmbedHealthService, HealthMetricsService],
+  providers: [
+    EmbedHealthService,
+    EmbeddingRetryService,
+    HealthMetricsService,
+    HealthSnapshotService,
+  ],
+  exports: [EmbedHealthService, HealthMetricsService, HealthSnapshotService],
 })
 export class HealthModule {}

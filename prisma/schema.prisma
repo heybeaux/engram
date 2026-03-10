@@ -2162,3 +2162,21 @@ model DedupCandidate {
   @@index([createdAt])
   @@map("dedup_candidates")
 }
+
+/// Historical snapshots of health metrics for trending/graphing.
+/// Valid metricName values: memory_freshness, embedding_coverage,
+/// consolidation_health, dedup_health, memory_vitality
+model HealthMetricSnapshot {
+  id         String   @id @default(cuid())
+  accountId  String   @map("account_id")
+  agentId    String?  @map("agent_id")
+  metricName String   @map("metric_name")
+  value      Float
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([accountId])
+  @@index([agentId])
+  @@index([accountId, metricName, createdAt(sort: Desc)])
+  @@map("health_metric_snapshots")
+}

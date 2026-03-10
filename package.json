@@ -25,10 +25,11 @@
     "migrate:safe": "./scripts/safe-migrate.sh migrate deploy",
     "migrate:deploy": "prisma migrate deploy",
     "migrate:status": "prisma migrate status",
-    "premigrate:dev": "echo \"\n⚠️  WARNING: Use npm run migrate:safe or npm run migrate:deploy instead of prisma migrate dev\n\" && exit 1",
-    "seed:staging": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed-staging.ts",
+    "premigrate:dev": "echo \"\n\u26a0\ufe0f  WARNING: Use npm run migrate:safe or npm run migrate:deploy instead of prisma migrate dev\n\" && exit 1",
+    "seed:staging": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' src/scripts/seed-staging.ts",
     "api:spec": "pnpm build && node scripts/generate-api-spec.mjs",
-    "api:routes": "node scripts/generate-routes.mjs"
+    "api:routes": "node scripts/generate-routes.mjs",
+    "seed:staging:legacy": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed-staging.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
