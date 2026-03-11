@@ -48,10 +48,10 @@ export class RecallWeightService {
     this.durabilityBoostEnabled =
       this.config.get<string>('DURABILITY_BOOST_ENABLED', 'false') === 'true';
     this.durableBoost = parseFloat(
-      this.config.get('DURABLE_BOOST_MULTIPLIER', '1.3'),
+      this.config.get('DURABLE_BOOST_MULTIPLIER', '1.5'),
     );
     this.ephemeralPenalty = parseFloat(
-      this.config.get('EPHEMERAL_PENALTY_MULTIPLIER', '0.85'),
+      this.config.get('EPHEMERAL_PENALTY_MULTIPLIER', '0.6'),
     );
 
     // ENG-27: Usage-weighted retrieval configuration

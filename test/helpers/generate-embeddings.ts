@@ -64,8 +64,25 @@ export async function generateCorpusEmbeddings(
         : m.raw,
     );
 
-    // Generate embeddings in batch
-    const embeddings = await embeddingService.embed(texts);
+    // Generate embeddings in batch — with retry on null vectors (server flakiness workaround)
+    let embeddings: number[][] = [];
+    const MAX_RETRIES = 5;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const raw = await embeddingService.embed(texts);
+      // Check for null/undefined values (flaky server returns null floats)
+      const hasNulls = raw.some(emb => emb.some(v => v === null || v === undefined));
+      if (!hasNulls) {
+        embeddings = raw;
+        break;
+      }
+      logger.warn(`Attempt ${attempt + 1}: null vectors detected, retrying after 2s...`);
+      await new Promise(r => setTimeout(r, 2000));
+      if (attempt === MAX_RETRIES - 1) {
+        // Last resort: use valid embeddings, skip memories with nulls
+        embeddings = raw.map(emb => emb.map(v => (v === null || v === undefined) ? 0 : v));
+        logger.warn('Using zero-filled fallback for null vectors');
+      }
+    }
 
     // Write each embedding to DB
     for (let j = 0; j < batch.length; j++) {

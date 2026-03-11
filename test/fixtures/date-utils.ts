@@ -3,8 +3,8 @@
  * Uses a fixed reference date so fixtures are deterministic.
  */
 
-/** Fixed reference: 2026-03-10T00:00:00Z */
-const REFERENCE_DATE = new Date('2026-03-10T00:00:00Z');
+/** Dynamic reference: current time so relative dates stay accurate across test runs */
+const REFERENCE_DATE = new Date();
 
 export function subDays(days: number): Date {
   const d = new Date(REFERENCE_DATE);

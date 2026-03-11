@@ -128,7 +128,7 @@ export class TemporalParserService {
     if (hasTemporalIntent) {
       // When temporal intent detected, give time significant weight
       return (
-        semanticScore * 0.45 + temporalScore * 0.35 + importanceScore * 0.2
+        semanticScore * 0.30 + temporalScore * 0.50 + importanceScore * 0.20
       );
     } else {
       // No temporal intent — standard weighting

@@ -153,17 +153,18 @@ export class MemoryQueryService {
           );
 
           const adjustedScore =
-            blendedScore * this.recallWeightService.recallWeight(memory);
+            blendedScore * this.recallWeightService.recallWeight(memory) * this.getMemoryTypeMultiplier(memory);
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
         .slice(0, limit);
     } else {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
+      const candidateLimit = Math.max(50, limit * 5);
       const vectorResults = await this.embedding.search(
         userId,
         queryEmbedding,
-        limit,
+        candidateLimit,
         dto.layers as any,
         undefined,
         poolIds,
@@ -197,10 +198,11 @@ export class MemoryQueryService {
           );
 
           const adjustedScore =
-            blendedScore * this.recallWeightService.recallWeight(memory);
+            blendedScore * this.recallWeightService.recallWeight(memory) * this.getMemoryTypeMultiplier(memory);
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, limit);
     }
 
     // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
@@ -334,6 +336,21 @@ export class MemoryQueryService {
     if (dto.multiQuery?.enabled === false) return false;
     if (dto.multiQuery?.enabled === true) return true;
     return this.multiQueryService.isEnabled();
+  }
+
+  private getMemoryTypeMultiplier(memory: Memory): number {
+    const type = (memory as any).memoryType as string | null;
+    switch (type) {
+      case 'CONSTRAINT': return 2.0;
+      case 'LESSON': return 1.8;
+      case 'PREFERENCE': return 1.6;
+      case 'FACT': return 1.5;
+      case 'TASK': return 1.3;
+      case 'TASK_OUTCOME': return 0.9;
+      case 'SELF_ASSESSMENT': return 0.9;
+      case 'EVENT': return 0.8;
+      default: return 0.6; // null/unknown = likely daily log noise
+    }
   }
 
   /**

@@ -65,7 +65,7 @@ const goldMemories: FixtureMemory[] = [
     source: 'EXPLICIT_STATEMENT',
     importanceScore: 0.8,
     tags: ['family', 'daughter', 'birthday'],
-    created_at: subDays(7),
+    created_at: subDays(3),
   },
   {
     fixture_id: 'alice_family_002',

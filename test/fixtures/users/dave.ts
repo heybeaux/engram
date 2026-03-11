@@ -19,7 +19,7 @@ function generateDaveMemories(): FixtureMemory[] {
     dateFn: (i: number) => Date;
     count: number;
   }> = [
-    { label: 'today', dateFn: (i) => subDays(i), count: 50 },
+    { label: 'today', dateFn: (_i) => new Date(), count: 50 },
     { label: 'week', dateFn: (i) => subDays(7 + i), count: 50 },
     { label: '6months', dateFn: (_i) => subMonths(6), count: 50 },
     { label: '2years', dateFn: (_i) => subYears(2), count: 50 },
