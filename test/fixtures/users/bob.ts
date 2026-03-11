@@ -147,7 +147,7 @@ function generateBobMemories(): FixtureMemory[] {
       layer: layers[counter % layers.length],
       memoryType: 'EVENT',
       source: 'EXPLICIT_STATEMENT',
-      importanceScore: 0.3 + (counter % 5) * 0.1,
+      importanceScore: 0.3 + (counter % 3) * 0.1, // cap noise at 0.3–0.5
       tags: [topic],
       created_at: subDays(counter % 365),
     });

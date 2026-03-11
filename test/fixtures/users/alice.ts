@@ -544,7 +544,12 @@ function generateTemplateMemories(): FixtureMemory[] {
           memoryType: 'EVENT',
           source: sources[(t + s) % sources.length],
           importanceScore:
-            0.3 + Math.round((((t * 7 + s * 13) % 7) / 10) * 100) / 100,
+            // Noise memories cap at 0.3–0.5. Formula previously used % 7,
+            // which made s=1 memories ("quick walk", "search pipeline", etc.)
+            // score 0.9 importance — higher than real gold memories (0.7).
+            // That contaminated the final reranker blend, burying specific gold
+            // memories behind generic daily routine entries.
+            0.3 + Math.round((((t * 7 + s * 13) % 3) / 10) * 100) / 100,
           tags: [topic, subs[s].split(' ')[0].toLowerCase()],
           created_at: subDays(counter % 365),
           metadata: {},
