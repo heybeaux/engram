@@ -178,11 +178,10 @@ export class MemoryQueryService {
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       let memoryIds = vectorResults.map((r) => r.id);
 
-      // BM25/tsvector hybrid: safety net for exact-keyword queries (phone numbers, proper nouns)
-      // IMPORTANT: ftsOnlyIds tracks which memories came *only* from FTS (not in pgvector results).
-      // These are force-included in the reranker pool regardless of their cosine score,
-      // because a keyword match (e.g. "phone number") is a strong signal the memory is relevant.
-      const ftsOnlyIds = new Set<string>();
+      // BM25/tsvector hybrid: safety net for exact-keyword queries (phone numbers, proper nouns).
+      // ftsResultIds tracks ALL FTS matches. Any FTS hit not in the cosine top-120 is
+      // force-included in the reranker pool — whether it was in pgvector results or not.
+      const ftsResultIds = new Set<string>();
       try {
         const ftsResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
           `SELECT id FROM memories
@@ -197,14 +196,15 @@ export class MemoryQueryService {
         );
         let ftsAdded = 0;
         for (const row of ftsResults) {
+          ftsResultIds.add(row.id);
           if (!scoreMap.has(row.id)) {
-            // Give FTS-only memories a competitive cosine score so they survive the top-120 cut.
-            // The reranker will re-score them properly — this just ensures they reach it.
+            // Memory is FTS-only (not in pgvector results): inject with competitive score.
             scoreMap.set(row.id, 0.75);
             memoryIds.push(row.id);
-            ftsOnlyIds.add(row.id);
             ftsAdded++;
           }
+          // Memories that ARE in pgvector but may be ranked #121-200 are handled below
+          // at the slice boundary — ftsResultIds ensures they get rescued even if cut.
         }
         if (ftsAdded > 0) {
           this.logger.debug(`[Recall] BM25 hybrid: injected ${ftsAdded} FTS-only candidates`);
@@ -236,10 +236,27 @@ export class MemoryQueryService {
 
       const topByScore = sorted.slice(0, 120);
       const topIds = new Set(topByScore.map((m) => m.id));
-      // Force-include any FTS-only memories not already in the top-120
-      const forcedFts = sorted.filter(
-        (m) => ftsOnlyIds.has(m.id) && !topIds.has(m.id),
-      );
+
+      // Force-include ANY FTS match not already in the cosine top-120.
+      // This rescues two cases:
+      //   (a) FTS-only memories (not in pgvector at all) — score already set to 0.75 above
+      //   (b) Memories ranked #121-200 by cosine that BM25 independently identified as relevant
+      //       (e.g. alice_coffee_001 for "coffee" query — in pgvector top-200 but cut at 120)
+      const memoryMap = new Map(sorted.map((m) => [m.id, m]));
+      const forcedFts: MemoryWithScore[] = [];
+      for (const id of ftsResultIds) {
+        if (!topIds.has(id)) {
+          const mem = memoryMap.get(id);
+          if (mem) {
+            forcedFts.push({ ...mem, score: 0.75 } as MemoryWithScore);
+          }
+        }
+      }
+      if (forcedFts.length > 0) {
+        this.logger.debug(
+          `[Recall] BM25 rescued ${forcedFts.length} candidates cut by cosine top-120`,
+        );
+      }
       scoredMemories = [...topByScore, ...forcedFts];
     }
 
