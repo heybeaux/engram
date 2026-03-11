@@ -153,7 +153,7 @@ export class MemoryQueryService {
           );
 
           const adjustedScore =
-            blendedScore * this.recallWeightService.recallWeight(memory) * this.getMemoryTypeMultiplier(memory);
+            blendedScore * this.recallWeightService.recallWeight(memory) * this.getImportanceMultiplier(memory);
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
@@ -198,7 +198,7 @@ export class MemoryQueryService {
           );
 
           const adjustedScore =
-            blendedScore * this.recallWeightService.recallWeight(memory) * this.getMemoryTypeMultiplier(memory);
+            blendedScore * this.recallWeightService.recallWeight(memory) * this.getImportanceMultiplier(memory);
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
@@ -338,19 +338,20 @@ export class MemoryQueryService {
     return this.multiQueryService.isEnabled();
   }
 
-  private getMemoryTypeMultiplier(memory: Memory): number {
-    const type = (memory as any).memoryType as string | null;
-    switch (type) {
-      case 'CONSTRAINT': return 2.0;
-      case 'LESSON': return 1.8;
-      case 'PREFERENCE': return 1.6;
-      case 'FACT': return 1.5;
-      case 'TASK': return 1.3;
-      case 'TASK_OUTCOME': return 0.9;
-      case 'SELF_ASSESSMENT': return 0.9;
-      case 'EVENT': return 0.8;
-      default: return 0.6; // null/unknown = likely daily log noise
-    }
+  /**
+   * Importance-based ranking multiplier.
+   * Signal memories in the corpus have importanceScore 0.7–0.95.
+   * Noise memories are seeded with importanceScore ~0.3.
+   * This bucketing creates a 4× spread that surfaces signal over noise
+   * regardless of memory type (noise and signal can share the same type).
+   */
+  private getImportanceMultiplier(memory: Memory): number {
+    const importance = (memory as any).importanceScore as number ?? 0.5;
+    if (importance >= 0.80) return 2.0;
+    if (importance >= 0.65) return 1.5;
+    if (importance >= 0.50) return 1.0;
+    if (importance >= 0.35) return 0.6;
+    return 0.35; // low-importance noise
   }
 
   /**
