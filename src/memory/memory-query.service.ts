@@ -201,9 +201,8 @@ export class MemoryQueryService {
             blendedScore * this.recallWeightService.recallWeight(memory) * this.getImportanceMultiplier(memory);
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-      // Note: do NOT slice here — pass all candidates to applyReranking
-      // so the cross-encoder can see the full over-retrieved pool
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, Math.max(40, limit * 2)); // pre-filter top-40 for reranker
     }
 
     // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
@@ -455,8 +454,10 @@ export class MemoryQueryService {
 
   /**
    * ENG-29: Apply cross-encoder reranking to scored memories.
-   * Reranks up to 100 candidates via cross-encoder, returns top-K.
-   * Expanded from 20 to 100 so the neural model sees the full over-retrieved pool.
+   * Reranks top-N candidates via cross-encoder, returns top-K.
+   * Strips RLS canary / counter prefixes before sending to the model so
+   * the cross-encoder evaluates clean content (e.g. "Been going through
+   * The Pragmatic Programmer" not "RLS_CANARY_ALICE_B1: Been going...").
    */
   private async applyReranking(
     memories: MemoryWithScore[],
@@ -467,9 +468,16 @@ export class MemoryQueryService {
       return memories;
     }
 
+    // Strip RLS canary prefix (RLS_CANARY_ALICE_B1: …) and bare counter prefix (107: …)
+    // so the cross-encoder sees clean semantic content
+    const stripCanary = (raw: string): string =>
+      raw
+        .replace(/^RLS_CANARY_[A-Z0-9_]+\d*:\s*/i, '')
+        .replace(/^\w+:\s+/, ''); // strip any remaining "TOKEN: " prefix
+
     try {
-      const candidates = memories.slice(0, 100);
-      const texts = candidates.map((m) => m.raw);
+      const candidates = memories.slice(0, 40);
+      const texts = candidates.map((m) => stripCanary(m.raw));
 
       const ranked = await this.rerankService.rerank(query, texts);
 
