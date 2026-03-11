@@ -11,7 +11,7 @@
  */
 
 // Tightly-scoped keywords — only unambiguously emotional words.
-// Generic words (hard, missing, great, calm, love) intentionally excluded
+// Generic words (hard, great, love) intentionally excluded
 // to avoid false-positive polarity matches on non-emotional queries.
 export const NEGATIVE_KEYWORDS = [
   'stress', 'stressed', 'stresses', 'stressful',
@@ -31,6 +31,8 @@ export const NEGATIVE_KEYWORDS = [
   'miserable', 'miserably',
   'desperate', 'despair',
   'hopeless', 'hopelessness',
+  'sad', 'sadness',
+  'missing',
 ];
 
 export const POSITIVE_KEYWORDS = [
@@ -51,6 +53,8 @@ export const POSITIVE_KEYWORDS = [
   'elated', 'elation',
   'overjoyed',
   'blissful', 'bliss',
+  'perfect',
+  'calm', 'calmer', 'calmly', 'calmness',
 ];
 
 export type SentimentPolarity = 'positive' | 'negative' | 'neutral';
