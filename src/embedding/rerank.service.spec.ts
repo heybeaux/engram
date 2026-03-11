@@ -69,6 +69,7 @@ describe('RerankService', () => {
               'User lives in NYC',
               'User dog is named Max',
             ],
+            raw_scores: false,
           }),
         }),
       );
