@@ -113,6 +113,16 @@ export class PgVectorEnsembleProvider {
   /**
    * Query embeddings for a specific model
    * Uses cosine distance for similarity search
+   *
+   * Each call runs in its own $transaction to get an independent pooled
+   * connection. $transaction is in NON_TRANSACTIONAL_PROPS so the PrismaService
+   * proxy bypasses the surrounding RLS transaction and opens a fresh connection.
+   * This prevents 25P02 "current transaction is aborted" errors from propagating
+   * across parallel model queries that share the RLS transaction connection.
+   *
+   * The memories RLS policy is: rls_account_id() IS NULL OR user_id IN (...).
+   * Without SET LOCAL the policy returns NULL → passes for all rows (admin mode).
+   * User scoping is enforced by the explicit m.user_id = $4 WHERE clause.
    */
   async queryByModel(
     options: EnsembleSearchOptions,
@@ -120,17 +130,16 @@ export class PgVectorEnsembleProvider {
     const embeddingStr = `[${options.embedding.join(',')}]`;
     const dimensions = options.embedding.length;
 
-    // Join with memories table to filter by userId
-    const results = await this.prisma.$queryRawUnsafe<
-      Array<{ memory_id: string; score: number }>
-    >(
-      `
-      SELECT 
+    const results = await this.prisma.$transaction(
+      async (tx) =>
+        tx.$queryRawUnsafe<Array<{ memory_id: string; score: number }>>(
+          `
+      SELECT
         me.memory_id,
         1 - (me.embedding <=> $1::vector) as score
       FROM memory_embeddings me
       JOIN memories m ON m.id = me.memory_id
-      WHERE me.model_id = $2 
+      WHERE me.model_id = $2
         AND me.dimensions = $3
         AND me.embedding IS NOT NULL
         AND m.user_id = $4
@@ -138,11 +147,12 @@ export class PgVectorEnsembleProvider {
       ORDER BY me.embedding <=> $1::vector
       LIMIT $5
       `,
-      embeddingStr,
-      options.modelId,
-      dimensions,
-      options.userId,
-      options.limit,
+          embeddingStr,
+          options.modelId,
+          dimensions,
+          options.userId,
+          options.limit,
+        ),
     );
 
     return results.map((r) => ({
