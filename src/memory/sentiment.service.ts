@@ -10,6 +10,9 @@
  * correctly-polarised candidates.
  */
 
+// Tightly-scoped keywords — only unambiguously emotional words.
+// Generic words (hard, missing, great, calm, love) intentionally excluded
+// to avoid false-positive polarity matches on non-emotional queries.
 export const NEGATIVE_KEYWORDS = [
   'stress', 'stressed', 'stresses', 'stressful',
   'overwhelm', 'overwhelmed', 'overwhelming',
@@ -17,52 +20,37 @@ export const NEGATIVE_KEYWORDS = [
   'worried', 'worry', 'worrying',
   'frustrated', 'frustration', 'frustrating',
   'grief', 'grieving', 'grieve',
-  'sad', 'sadness',
-  'depression', 'depressed', 'depressing',
+  'depressed', 'depression',
   'angry', 'anger',
   'exhausted', 'exhaustion',
   'burnout',
   'dread', 'dreading',
-  'fear', 'fearful', 'fears',
-  'scared',
-  'terrible',
-  'awful',
-  'worst',
-  'struggling', 'struggle',
-  'difficult', 'difficulty',
-  'hard',
-  'missing', // grief-context: "Missing my dad today"
-  'miss',
+  'scared', 'fearful',
+  'terrible', 'awful',
   'lonely', 'loneliness',
-  'hurt', 'pain',
-  'upset',
+  'miserable', 'miserably',
+  'desperate', 'despair',
+  'hopeless', 'hopelessness',
 ];
 
 export const POSITIVE_KEYWORDS = [
   'happy', 'happiness',
-  'joy', 'joyful',
+  'joy', 'joyful', 'joyfully',
   'proud', 'pride', 'proudest', 'proudly',
   'excited', 'excitement',
   'wonderful',
   'amazing',
-  'great',
-  'love', 'loved', 'loving',
   'fantastic',
-  'excellent',
   'brilliant',
   'delighted', 'delight',
-  'glad',
-  'cheerful',
-  'optimistic', 'optimism',
-  'pleased',
   'thrilled',
-  'peaceful', 'peace',
-  'calm', 'calmer', 'calmness',
-  'content', 'contentment',
-  'satisfied', 'satisfaction',
-  'laughing', 'laughter', 'laugh',
-  'perfect',
-  'celebrate', 'celebration',
+  'cheerful', 'cheerfully',
+  'laughing', 'laughter',
+  'celebrate', 'celebration', 'celebrated',
+  'ecstatic',
+  'elated', 'elation',
+  'overjoyed',
+  'blissful', 'bliss',
 ];
 
 export type SentimentPolarity = 'positive' | 'negative' | 'neutral';
