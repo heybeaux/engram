@@ -6,7 +6,7 @@
  * Solves the "emotional clustering" problem: bge-base-en-v1.5 places all
  * emotionally-charged text near each other in embedding space, causing
  * alice_joy_001 to surface for "stressed" queries and vice versa.
- * A cross-polarity penalty of 0.5× pushes mismatched memories below
+ * A cross-polarity penalty of 0.15× pushes mismatched memories below
  * correctly-polarised candidates.
  */
 
@@ -83,14 +83,17 @@ export class SentimentService {
    * Returns a score multiplier (0–1) based on polarity mismatch.
    *
    * - 1.0 → no penalty (same polarity, or either side is neutral)
-   * - 0.5 → cross-polarity penalty (positive query ↔ negative memory, or vice versa)
+   * - 0.15 → cross-polarity penalty (positive query ↔ negative memory, or vice versa)
    */
   static sentimentPenalty(
     queryPolarity: SentimentPolarity,
     memoryPolarity: SentimentPolarity,
   ): number {
     if (queryPolarity === 'neutral' || memoryPolarity === 'neutral') return 1.0;
-    if (queryPolarity !== memoryPolarity) return 0.5;
+    // 0.15× is aggressive enough to push opposite-polarity memories out of
+    // the top-20 result window (not just demote them within top-5).
+    // Previous 0.5× was only strong enough to demote within top-5.
+    if (queryPolarity !== memoryPolarity) return 0.15;
     return 1.0;
   }
 
