@@ -234,14 +234,16 @@ export class MemoryQueryService {
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
-      const topByScore = sorted.slice(0, 120);
-      const topIds = new Set(topByScore.map((m) => m.id));
+      // Pass ALL 200 vector results to the reranker, not just top-120.
+      // The top-120 slice was the root cause of consistent benchmark failures:
+      // gold memories (e.g. alice_coffee_001) embed at rank ~130-180 in a 500-memory
+      // corpus with many topically similar noise memories. The cross-encoder would
+      // correctly surface them — but only if it gets to see them first.
+      // With the 10s reranker timeout, 200 candidates is still well within budget.
+      const RERANK_POOL = sorted.length; // all vector results (up to 200)
 
-      // Force-include ANY FTS match not already in the cosine top-120.
-      // This rescues two cases:
-      //   (a) FTS-only memories (not in pgvector at all) — score already set to 0.75 above
-      //   (b) Memories ranked #121-200 by cosine that BM25 independently identified as relevant
-      //       (e.g. alice_coffee_001 for "coffee" query — in pgvector top-200 but cut at 120)
+      // Still force-include FTS matches not already in the vector results
+      const topIds = new Set(sorted.map((m) => m.id));
       const memoryMap = new Map(sorted.map((m) => [m.id, m]));
       const forcedFts: MemoryWithScore[] = [];
       for (const id of ftsResultIds) {
@@ -252,12 +254,10 @@ export class MemoryQueryService {
           }
         }
       }
-      if (forcedFts.length > 0) {
-        this.logger.debug(
-          `[Recall] BM25 rescued ${forcedFts.length} candidates cut by cosine top-120`,
-        );
-      }
-      scoredMemories = [...topByScore, ...forcedFts];
+      this.logger.debug(
+        `[Recall] Reranker pool: ${RERANK_POOL} vector + ${forcedFts.length} FTS-only = ${RERANK_POOL + forcedFts.length} total candidates`,
+      );
+      scoredMemories = [...sorted, ...forcedFts];
     }
 
     // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
