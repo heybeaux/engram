@@ -131,8 +131,8 @@ export class TemporalParserService {
         semanticScore * 0.30 + temporalScore * 0.50 + importanceScore * 0.20
       );
     } else {
-      // No temporal intent — standard weighting
-      return semanticScore * 0.65 + importanceScore * 0.35;
+      // No temporal intent — cosine-first weighting (mirrors post-reranker final blend)
+      return semanticScore * 0.85 + importanceScore * 0.15;
     }
   }
 

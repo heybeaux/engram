@@ -160,7 +160,7 @@ export class MemoryQueryService {
         .slice(0, limit);
     } else {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
-      const candidateLimit = Math.max(50, limit * 5);
+      const candidateLimit = Math.max(120, limit * 10);
       const vectorResults = await this.embedding.search(
         userId,
         queryEmbedding,
@@ -172,7 +172,35 @@ export class MemoryQueryService {
       );
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
-      const memoryIds = vectorResults.map((r) => r.id);
+      let memoryIds = vectorResults.map((r) => r.id);
+
+      // BM25/tsvector hybrid: safety net for exact-keyword queries (phone numbers, proper nouns)
+      try {
+        const ftsResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+          `SELECT id FROM memories
+           WHERE user_id = $1
+             AND to_tsvector('english', raw) @@ plainto_tsquery('english', $2)
+             AND deleted_at IS NULL
+             AND superseded_by_id IS NULL
+           ORDER BY ts_rank(to_tsvector('english', raw), plainto_tsquery('english', $2)) DESC
+           LIMIT 30`,
+          singleUserId,
+          searchQuery,
+        );
+        let ftsAdded = 0;
+        for (const row of ftsResults) {
+          if (!scoreMap.has(row.id)) {
+            scoreMap.set(row.id, 0.3); // modest default score for FTS-only matches
+            memoryIds.push(row.id);
+            ftsAdded++;
+          }
+        }
+        if (ftsAdded > 0) {
+          this.logger.debug(`[Recall] BM25 hybrid: injected ${ftsAdded} FTS-only candidates`);
+        }
+      } catch (ftsError) {
+        this.logger.debug(`[Recall] BM25 hybrid skipped: ${(ftsError as Error).message}`);
+      }
 
       const memories = await this.prisma.memory.findMany({
         where: {
@@ -185,24 +213,15 @@ export class MemoryQueryService {
         include: { extraction: true },
       });
 
+      // Pure cosine pre-filter: importance is NOT included here.
+      // Final importance blend happens post-reranker in applyReranking().
       scoredMemories = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
-          const importanceScore =
-            memory.effectiveScore ?? memory.importanceScore;
-          const blendedScore = this.temporalParser.blendScores(
-            semanticScore,
-            0.5,
-            importanceScore,
-            false,
-          );
-
-          const adjustedScore =
-            blendedScore * this.recallWeightService.recallWeight(memory) * this.getImportanceMultiplier(memory);
-          return { ...memory, score: adjustedScore } as MemoryWithScore;
+          return { ...memory, score: semanticScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, Math.max(40, limit * 2)); // pre-filter top-40 for reranker
+        .slice(0, 120); // top-120 candidates for reranker
     }
 
     // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
@@ -464,8 +483,23 @@ export class MemoryQueryService {
     query: string,
     limit: number,
   ): Promise<MemoryWithScore[]> {
+    // Helper: apply no-reranker final blend (cosine * 0.85 + importance * 0.15 + misc_gen penalty)
+    const applyFallbackBlend = (mems: MemoryWithScore[]): MemoryWithScore[] =>
+      mems
+        .map((m) => {
+          const importanceScore =
+            (m as any).effectiveScore ?? (m as any).importanceScore ?? 0.5;
+          const cosineScore = m.score ?? 0;
+          const finalScore =
+            (cosineScore * 0.85 + importanceScore * 0.15) *
+            this.getImportanceMultiplier(m as any);
+          return { ...m, score: finalScore };
+        })
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, limit);
+
     if (!this.rerankService || memories.length === 0) {
-      return memories;
+      return applyFallbackBlend(memories);
     }
 
     // Strip RLS canary prefix (RLS_CANARY_ALICE_B1: …) and bare counter prefix (107: …)
@@ -476,20 +510,24 @@ export class MemoryQueryService {
         .replace(/^\w+:\s+/, ''); // strip any remaining "TOKEN: " prefix
 
     try {
-      const candidates = memories.slice(0, 40);
+      const candidates = memories.slice(0, 120);
       const texts = candidates.map((m) => stripCanary(m.raw));
 
       const ranked = await this.rerankService.rerank(query, texts);
 
-      // If all scores are 0, reranking was skipped (disabled or failed) — keep original order
+      // If all scores are 0, reranker was disabled or failed — apply fallback blend
       const hasScores = ranked.some((r) => r.score > 0);
-      if (!hasScores) return memories;
+      if (!hasScores) return applyFallbackBlend(memories);
 
+      // Post-reranker final blend: rerankerScore * 0.85 + importanceScore * 0.15
       const reranked = ranked
-        .map((r) => ({
-          ...candidates[r.index],
-          score: r.score,
-        }))
+        .map((r) => {
+          const mem = candidates[r.index];
+          const importanceScore =
+            (mem as any).effectiveScore ?? (mem as any).importanceScore ?? 0.5;
+          const finalScore = r.score * 0.85 + importanceScore * 0.15;
+          return { ...mem, score: finalScore };
+        })
         .slice(0, limit);
 
       this.logger.debug(
@@ -501,7 +539,7 @@ export class MemoryQueryService {
       this.logger.warn(
         `[Recall] Reranking failed, using original order: ${(error as Error).message}`,
       );
-      return memories;
+      return applyFallbackBlend(memories);
     }
   }
 
