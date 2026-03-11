@@ -163,7 +163,7 @@ export class RerankService {
       fetch(`${url}/rerank`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, texts }),
+        body: JSON.stringify({ query, texts, raw_scores: false }),
       }),
       new Promise<never>((_, reject) =>
         setTimeout(
