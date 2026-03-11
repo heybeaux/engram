@@ -42,6 +42,8 @@ jobs:
       DURABILITY_BOOST_ENABLED: 'true'
       DURABLE_BOOST_MULTIPLIER: '1.3'
       EPHEMERAL_PENALTY_MULTIPLIER: '0.85'
+      RERANK_ENABLED: 'true'
+      RERANK_URLS: 'http://localhost:8081,http://localhost:8082'
 
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +81,27 @@ jobs:
               exit 1
             fi
             sleep 10
+          done
+
+      - name: Start reranker servers
+        run: |
+          docker run -d --name reranker-1 --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id BAAI/bge-reranker-base --port 8081 \
+            --auto-truncate --max-client-batch-size 32
+          docker run -d --name reranker-2 --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id mixedbread-ai/mxbai-rerank-base-v1 --port 8082 \
+            --auto-truncate --max-client-batch-size 32
+          echo "Waiting for reranker servers..."
+          for port in 8081 8082; do
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:$port/health > /dev/null 2>&1; then
+                echo "Reranker port $port ready"; break
+              fi
+              [ "$i" -eq 30 ] && echo "Warning: reranker $port not ready, continuing anyway"
+              sleep 5
+            done
           done
 
       - name: Run benchmark
