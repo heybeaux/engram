@@ -24,6 +24,7 @@ import {
 import { RecallWeightService } from './recall-weight.service';
 import { RerankService } from '../embedding/rerank.service';
 import { GraphRecallService } from './graph-recall.service';
+import { SentimentService } from './sentiment.service';
 
 @Injectable()
 export class MemoryQueryService {
@@ -483,16 +484,18 @@ export class MemoryQueryService {
     query: string,
     limit: number,
   ): Promise<MemoryWithScore[]> {
-    // Helper: apply no-reranker final blend (cosine * 0.85 + importance * 0.15 + misc_gen penalty)
+    // Helper: apply no-reranker final blend (cosine * 0.85 + importance * 0.15 + misc_gen penalty + sentiment penalty)
     const applyFallbackBlend = (mems: MemoryWithScore[]): MemoryWithScore[] =>
       mems
         .map((m) => {
           const importanceScore =
             (m as any).effectiveScore ?? (m as any).importanceScore ?? 0.5;
           const cosineScore = m.score ?? 0;
+          const sp = SentimentService.scorePenalty(query, (m as any).raw ?? '');
           const finalScore =
             (cosineScore * 0.85 + importanceScore * 0.15) *
-            this.getImportanceMultiplier(m as any);
+            this.getImportanceMultiplier(m as any) *
+            sp;
           return { ...m, score: finalScore };
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
@@ -519,13 +522,14 @@ export class MemoryQueryService {
       const hasScores = ranked.some((r) => r.score > 0);
       if (!hasScores) return applyFallbackBlend(memories);
 
-      // Post-reranker final blend: rerankerScore * 0.85 + importanceScore * 0.15
+      // Post-reranker final blend: rerankerScore * 0.85 + importanceScore * 0.15 + sentiment penalty
       const reranked = ranked
         .map((r) => {
           const mem = candidates[r.index];
           const importanceScore =
             (mem as any).effectiveScore ?? (mem as any).importanceScore ?? 0.5;
-          const finalScore = r.score * 0.85 + importanceScore * 0.15;
+          const sp = SentimentService.scorePenalty(query, (mem as any).raw ?? '');
+          const finalScore = (r.score * 0.85 + importanceScore * 0.15) * sp;
           return { ...mem, score: finalScore };
         })
         .slice(0, limit);
