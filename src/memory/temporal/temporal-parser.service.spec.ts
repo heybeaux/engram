@@ -203,8 +203,8 @@ describe('TemporalParserService', () => {
     it('should weight temporal heavily when temporal intent detected', () => {
       // High semantic, high temporal, medium importance
       const score = service.blendScores(0.9, 1.0, 0.5, true);
-      // 0.9*0.45 + 1.0*0.35 + 0.5*0.20 = 0.405 + 0.35 + 0.10 = 0.855
-      expect(score).toBeCloseTo(0.855, 2);
+      // 0.9*0.30 + 1.0*0.50 + 0.5*0.20 = 0.27 + 0.50 + 0.10 = 0.87
+      expect(score).toBeCloseTo(0.87, 2);
     });
 
     it('should ignore temporal when no temporal intent', () => {
@@ -220,8 +220,8 @@ describe('TemporalParserService', () => {
       const scoreB = service.blendScores(0.6, 1.0, 0.5, true);
 
       // B should rank higher because temporal intent matters
-      // A: 0.9*0.45 + 0.1*0.35 + 0.5*0.20 = 0.405 + 0.035 + 0.10 = 0.54
-      // B: 0.6*0.45 + 1.0*0.35 + 0.5*0.20 = 0.27 + 0.35 + 0.10 = 0.72
+      // A: 0.9*0.30 + 0.1*0.50 + 0.5*0.20 = 0.27 + 0.05 + 0.10 = 0.42
+      // B: 0.6*0.30 + 1.0*0.50 + 0.5*0.20 = 0.18 + 0.50 + 0.10 = 0.78
       expect(scoreB).toBeGreaterThan(scoreA);
     });
   });
