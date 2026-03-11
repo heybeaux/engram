@@ -132,7 +132,7 @@ export class TemporalParserService {
       );
     } else {
       // No temporal intent — standard weighting
-      return semanticScore * 0.45 + importanceScore * 0.55;
+      return semanticScore * 0.65 + importanceScore * 0.35;
     }
   }
 

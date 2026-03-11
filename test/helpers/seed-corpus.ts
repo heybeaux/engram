@@ -167,13 +167,12 @@ async function seedMemories(
       .map((m) => {
         const escaped = m.content.replace(/'/g, "''");
         const createdAt = m.created_at.toISOString();
-        const memType = m.memoryType ? `'${m.memoryType}'` : 'NULL';
-        return `('${m.fixture_id}', '${escaped}', '${m.layer}', '${m.source}', ${m.importanceScore}, ${m.importanceScore}, ${memType}, '${userId}', '${createdAt}'::timestamptz, NOW())`;
+        return `('${m.fixture_id}', '${escaped}', '${m.layer}', '${m.source}', ${m.importanceScore}, '${userId}', '${createdAt}'::timestamptz, NOW())`;
       })
       .join(',\n');
 
     await prisma.$executeRawUnsafe(`
-      INSERT INTO memories (id, raw, layer, source, importance_score, effective_score, memory_type, user_id, created_at, updated_at)
+      INSERT INTO memories (id, raw, layer, source, importance_score, user_id, created_at, updated_at)
       VALUES ${values}
       ON CONFLICT (id) DO NOTHING
     `);

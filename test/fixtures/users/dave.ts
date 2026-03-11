@@ -14,16 +14,44 @@ function generateDaveMemories(): FixtureMemory[] {
   const memories: FixtureMemory[] = [];
   let counter = 1;
 
+  // dave_today_001 and dave_today_002 have specific content so temporal queries can target them
+  const todaySpecific: FixtureMemory[] = [
+    {
+      fixture_id: 'dave_today_001',
+      content: `${CANARY}1: Today I merged the authentication PR and unblocked the team. Biggest win of the sprint.`,
+      layer: 'SESSION',
+      memoryType: 'EVENT',
+      source: 'EXPLICIT_STATEMENT',
+      importanceScore: 0.7,
+      tags: ['standup', 'daily', 'today'],
+      created_at: new Date(),
+    },
+    {
+      fixture_id: 'dave_today_002',
+      content: `${CANARY}2: Finished the memory recall service refactor today. Fixed the cosine threshold bug that was breaking search.`,
+      layer: 'SESSION',
+      memoryType: 'EVENT',
+      source: 'EXPLICIT_STATEMENT',
+      importanceScore: 0.7,
+      tags: ['standup', 'daily', 'today'],
+      created_at: new Date(),
+    },
+  ];
+  counter = 3; // start loop at 3 to avoid overwriting 001/002
+
   const clusters: Array<{
     label: string;
     dateFn: (i: number) => Date;
     count: number;
   }> = [
-    { label: 'today', dateFn: (_i) => new Date(), count: 50 },
+    { label: 'today', dateFn: (_i) => new Date(), count: 48 }, // 48 + 2 specific = 50 total
     { label: 'week', dateFn: (i) => subDays(7 + i), count: 50 },
     { label: '6months', dateFn: (_i) => subMonths(6), count: 50 },
     { label: '2years', dateFn: (_i) => subYears(2), count: 50 },
   ];
+
+  // Add the specific today memories first
+  memories.push(...todaySpecific);
 
   for (const cluster of clusters) {
     for (let i = 0; i < cluster.count; i++) {

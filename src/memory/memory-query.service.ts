@@ -201,8 +201,9 @@ export class MemoryQueryService {
             blendedScore * this.recallWeightService.recallWeight(memory) * this.getImportanceMultiplier(memory);
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, limit);
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      // Note: do NOT slice here — pass all candidates to applyReranking
+      // so the cross-encoder can see the full over-retrieved pool
     }
 
     // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
@@ -339,20 +340,15 @@ export class MemoryQueryService {
   }
 
   /**
-   * Importance-based ranking multiplier.
-   * Signal memories in the corpus have importanceScore 0.7–0.95.
-   * Noise memories are seeded with importanceScore ~0.3.
-   * This bucketing creates a 4× spread that surfaces signal over noise
-   * regardless of memory type (noise and signal can share the same type).
+   * Importance-based noise penalty.
+   * Only penalises very-low-importance (< 0.35) memories such as alice_misc_gen_*
+   * which are seeded with a fixed importanceScore of 0.3.
+   * Everything else is left neutral — the cross-encoder reranker handles the rest
+   * once it can see the full 100-candidate pool.
    */
   private getImportanceMultiplier(memory: Memory): number {
-    // Use effectiveScore (set by Dream Cycle / now seeded from fixture) or fall back to importanceScore
-    const importance = ((memory as any).effectiveScore as number) ?? ((memory as any).importanceScore as number) ?? 0.5;
-    if (importance >= 0.80) return 2.0;
-    if (importance >= 0.65) return 1.5;
-    if (importance >= 0.50) return 1.0;
-    if (importance >= 0.35) return 0.6;
-    return 0.35; // low-importance noise
+    const importance = (memory as any).importanceScore as number ?? 0.5;
+    return importance < 0.35 ? 0.4 : 1.0;
   }
 
   /**
@@ -459,7 +455,8 @@ export class MemoryQueryService {
 
   /**
    * ENG-29: Apply cross-encoder reranking to scored memories.
-   * Takes top-20 candidates, reranks via cross-encoder, returns top-K.
+   * Reranks up to 100 candidates via cross-encoder, returns top-K.
+   * Expanded from 20 to 100 so the neural model sees the full over-retrieved pool.
    */
   private async applyReranking(
     memories: MemoryWithScore[],
@@ -471,7 +468,7 @@ export class MemoryQueryService {
     }
 
     try {
-      const candidates = memories.slice(0, 20);
+      const candidates = memories.slice(0, 100);
       const texts = candidates.map((m) => m.raw);
 
       const ranked = await this.rerankService.rerank(query, texts);

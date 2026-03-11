@@ -125,7 +125,7 @@ describe('Recall Benchmark', () => {
 
           // Isolation is always a hard fail
           if (!score.isolationPassed) {
-            fail(
+            throw new Error(
               `ISOLATION FAILURE: must_absent items found in results: ${score.details.mustAbsentViolations.join(', ')}`,
             );
           }
@@ -193,7 +193,7 @@ describe('Recall Benchmark', () => {
         );
         if (zeroHitQueries.length > 0) {
           const ids = zeroHitQueries.map((q) => q.queryId).join(', ');
-          fail(`Queries with 0 hits on must_top5: ${ids}`);
+          throw new Error(`Queries with 0 hits on must_top5: ${ids}`);
         }
       } else {
         // With cached embeddings, just log the baseline
