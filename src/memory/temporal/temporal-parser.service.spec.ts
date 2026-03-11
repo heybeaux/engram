@@ -209,8 +209,8 @@ describe('TemporalParserService', () => {
 
     it('should ignore temporal when no temporal intent', () => {
       const score = service.blendScores(0.9, 0.0, 0.5, false);
-      // 0.9*0.45 + 0.5*0.55 = 0.405 + 0.275 = 0.68
-      expect(score).toBeCloseTo(0.68, 2);
+      // 0.9*0.65 + 0.5*0.35 = 0.585 + 0.175 = 0.76
+      expect(score).toBeCloseTo(0.76, 2);
     });
 
     it('should rank temporally relevant memories higher', () => {
