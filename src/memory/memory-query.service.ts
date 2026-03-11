@@ -136,6 +136,9 @@ export class MemoryQueryService {
       );
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
 
+      // Pass 120 candidates to the reranker (not just `limit`=20).
+      // The reranker needs a wide pool to surface the best temporal match.
+      const TEMPORAL_RERANK_POOL = 120;
       scoredMemories = temporalMemories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0.1;
@@ -158,7 +161,7 @@ export class MemoryQueryService {
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, limit);
+        .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
     } else {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
       const candidateLimit = Math.max(120, limit * 10);
