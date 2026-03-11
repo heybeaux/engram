@@ -186,10 +186,10 @@ export class MemoryQueryService {
         const ftsResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
           `SELECT id FROM memories
            WHERE user_id = $1
-             AND to_tsvector('english', raw) @@ plainto_tsquery('english', $2)
+             AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
              AND deleted_at IS NULL
              AND superseded_by_id IS NULL
-           ORDER BY ts_rank(to_tsvector('english', raw), plainto_tsquery('english', $2)) DESC
+           ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
            LIMIT 30`,
           singleUserId,
           searchQuery,
