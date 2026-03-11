@@ -176,6 +176,10 @@ export class MemoryQueryService {
       let memoryIds = vectorResults.map((r) => r.id);
 
       // BM25/tsvector hybrid: safety net for exact-keyword queries (phone numbers, proper nouns)
+      // IMPORTANT: ftsOnlyIds tracks which memories came *only* from FTS (not in pgvector results).
+      // These are force-included in the reranker pool regardless of their cosine score,
+      // because a keyword match (e.g. "phone number") is a strong signal the memory is relevant.
+      const ftsOnlyIds = new Set<string>();
       try {
         const ftsResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
           `SELECT id FROM memories
@@ -191,8 +195,11 @@ export class MemoryQueryService {
         let ftsAdded = 0;
         for (const row of ftsResults) {
           if (!scoreMap.has(row.id)) {
-            scoreMap.set(row.id, 0.3); // modest default score for FTS-only matches
+            // Give FTS-only memories a competitive cosine score so they survive the top-120 cut.
+            // The reranker will re-score them properly — this just ensures they reach it.
+            scoreMap.set(row.id, 0.75);
             memoryIds.push(row.id);
+            ftsOnlyIds.add(row.id);
             ftsAdded++;
           }
         }
@@ -216,13 +223,21 @@ export class MemoryQueryService {
 
       // Pure cosine pre-filter: importance is NOT included here.
       // Final importance blend happens post-reranker in applyReranking().
-      scoredMemories = memories
+      // FTS-only memories are guaranteed into the pool regardless of score.
+      const sorted = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
           return { ...memory, score: semanticScore } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, 120); // top-120 candidates for reranker
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+      const topByScore = sorted.slice(0, 120);
+      const topIds = new Set(topByScore.map((m) => m.id));
+      // Force-include any FTS-only memories not already in the top-120
+      const forcedFts = sorted.filter(
+        (m) => ftsOnlyIds.has(m.id) && !topIds.has(m.id),
+      );
+      scoredMemories = [...topByScore, ...forcedFts];
     }
 
     // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
