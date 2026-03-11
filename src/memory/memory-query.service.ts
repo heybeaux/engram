@@ -346,7 +346,8 @@ export class MemoryQueryService {
    * regardless of memory type (noise and signal can share the same type).
    */
   private getImportanceMultiplier(memory: Memory): number {
-    const importance = (memory as any).importanceScore as number ?? 0.5;
+    // Use effectiveScore (set by Dream Cycle / now seeded from fixture) or fall back to importanceScore
+    const importance = ((memory as any).effectiveScore as number) ?? ((memory as any).importanceScore as number) ?? 0.5;
     if (importance >= 0.80) return 2.0;
     if (importance >= 0.65) return 1.5;
     if (importance >= 0.50) return 1.0;
