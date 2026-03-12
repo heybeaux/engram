@@ -37,7 +37,7 @@ const goldMemories: FixtureMemory[] = [
   // Family — different family, same keywords
   {
     fixture_id: 'bob_family_001',
-    content: `${CANARY}3: My son Max started kindergarten. He made three friends on the first day.`,
+    content: `${CANARY}3: Family milestone: my kid Max started kindergarten today. He made three friends on the first day.`,
     layer: 'IDENTITY',
     memoryType: 'EVENT',
     source: 'EXPLICIT_STATEMENT',

@@ -18,7 +18,7 @@ function generateDaveMemories(): FixtureMemory[] {
   const todaySpecific: FixtureMemory[] = [
     {
       fixture_id: 'dave_today_001',
-      content: `${CANARY}1: Standup today: merged the authentication PR and unblocked the team. Biggest win of the sprint.`,
+      content: `${CANARY}1: Standup notes today: merged the authentication PR and unblocked the team. Biggest win of the sprint.`,
       layer: 'SESSION',
       memoryType: 'EVENT',
       source: 'EXPLICIT_STATEMENT',

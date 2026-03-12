@@ -59,7 +59,7 @@ const goldMemories: FixtureMemory[] = [
   // Family
   {
     fixture_id: 'alice_family_001',
-    content: `${CANARY}5: My daughter Stella just turned 5. We had a unicorn-themed birthday party.`,
+    content: `${CANARY}5: Family update: my daughter Stella just turned 5! The kids loved the unicorn-themed birthday party.`,
     layer: 'IDENTITY',
     memoryType: 'EVENT',
     source: 'EXPLICIT_STATEMENT',
@@ -91,7 +91,7 @@ const goldMemories: FixtureMemory[] = [
   // Work/Tech
   {
     fixture_id: 'alice_work_001',
-    content: `${CANARY}8: I'm building a NestJS backend with Prisma and PostgreSQL. The pgvector extension is amazing for semantic search.`,
+    content: `${CANARY}8: My tech stack is NestJS with Prisma and PostgreSQL. Writing all the backend code in TypeScript — the pgvector extension is amazing for semantic search.`,
     layer: 'PROJECT',
     memoryType: 'FACT',
     source: 'AGENT_OBSERVATION',
@@ -123,7 +123,7 @@ const goldMemories: FixtureMemory[] = [
   // Health
   {
     fixture_id: 'alice_health_001',
-    content: `${CANARY}11: I take Synthroid every morning for hypothyroidism. Must be taken on an empty stomach.`,
+    content: `${CANARY}11: My daily medication: I take Synthroid every morning for hypothyroidism. Must be taken on an empty stomach.`,
     layer: 'IDENTITY',
     memoryType: 'CONSTRAINT',
     source: 'EXPLICIT_STATEMENT',
@@ -133,7 +133,7 @@ const goldMemories: FixtureMemory[] = [
   },
   {
     fixture_id: 'alice_health_002',
-    content: `${CANARY}12: Started running again. Did 5K in 28 minutes today — not bad after 6 months off.`,
+    content: `${CANARY}12: Getting back into fitness and exercise: started running again. Did 5K in 28 minutes today — not bad after 6 months off.`,
     layer: 'SESSION',
     memoryType: 'EVENT',
     source: 'EXPLICIT_STATEMENT',
@@ -191,7 +191,7 @@ const goldMemories: FixtureMemory[] = [
   // Finances
   {
     fixture_id: 'alice_finance_001',
-    content: `${CANARY}17: We're saving for a house down payment. Goal is $50K by end of year.`,
+    content: `${CANARY}17: We're saving money for a house down payment. Goal is $50K by end of year.`,
     layer: 'IDENTITY',
     memoryType: 'TASK',
     source: 'EXPLICIT_STATEMENT',
@@ -392,7 +392,7 @@ const goldMemories: FixtureMemory[] = [
   },
   {
     fixture_id: 'alice_high_importance_001',
-    content: `${CANARY}X2: CRITICAL: Never deploy on Fridays. Last time we did, the on-call had to work all weekend fixing a data corruption bug.`,
+    content: `${CANARY}X2: Deployment rule and constraint: CRITICAL — never deploy on Fridays. Last time we did, the on-call had to work all weekend fixing a data corruption bug.`,
     layer: 'IDENTITY',
     memoryType: 'CONSTRAINT',
     source: 'EXPLICIT_STATEMENT',
@@ -412,7 +412,7 @@ const goldMemories: FixtureMemory[] = [
   },
   {
     fixture_id: 'alice_insight_001',
-    content: `${CANARY}X4: Pattern detected: User tends to refactor code right after shipping features. Suggest scheduling refactor time in sprint planning.`,
+    content: `${CANARY}X4: Work habit pattern noticed: tends to refactor code right after shipping features. Suggest scheduling refactor time in sprint planning.`,
     layer: 'INSIGHT',
     memoryType: 'FACT',
     source: 'PATTERN_DETECTED',
