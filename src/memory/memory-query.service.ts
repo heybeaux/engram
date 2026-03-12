@@ -657,8 +657,7 @@ export class MemoryQueryService {
           const sp = SentimentService.scorePenalty(query, (mem as any).raw ?? '');
           const layerMultiplier = LAYER_BOOST[(mem as any).layer ?? ''] ?? 1.0;
           const memtypeMultiplier = MEMTYPE_BOOST[(mem as any).memoryType ?? ''] ?? 1.0;
-          const noisePenalty = this.getImportanceMultiplier(mem as any);
-          const finalScore = (r.score * 0.80 + importanceScore * 0.20) * sp * layerMultiplier * memtypeMultiplier * noisePenalty;
+          const finalScore = (r.score * 0.80 + importanceScore * 0.20) * sp * layerMultiplier * memtypeMultiplier;
           return { ...mem, score: finalScore };
         })
         .slice(0, limit);
