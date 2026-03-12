@@ -359,12 +359,12 @@ const goldMemories: FixtureMemory[] = [
   },
   {
     fixture_id: 'alice_oldest_memory_001',
-    content: `${CANARY}T5: Started learning to code with Python. Built a small CLI tool. This is where it all began.`,
+    content: `${CANARY}T5: This is how I started coding: first learned Python programming from scratch, built a small CLI tool as my very first project. This is where my coding journey began.`,
     layer: 'IDENTITY',
     memoryType: 'EVENT',
     source: 'EXPLICIT_STATEMENT',
-    importanceScore: 0.4,
-    tags: ['work', 'learning', 'origin'],
+    importanceScore: 0.75,
+    tags: ['work', 'learning', 'origin', 'coding'],
     created_at: subYears(2),
   },
   {

@@ -121,6 +121,29 @@ describe('TemporalParserService', () => {
       expect(daysDiff).toBe(3);
     });
 
+    it('should detect "recent" (adjective form) and filter to last 3 days', () => {
+      const result = service.parse('recent conversations about work', NOW);
+
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('recent');
+      // "recent" = last 3 days (same window as "recently")
+      const daysDiff = Math.round(
+        (NOW.getTime() - result.temporalFilter!.start.getTime()) /
+          (24 * 60 * 60 * 1000),
+      );
+      expect(daysDiff).toBe(3);
+      // "recent" should be stripped from the semantic query
+      expect(result.semanticQuery).toBe('conversations about work');
+    });
+
+    it('should detect case-insensitive "Recent" at start of query', () => {
+      const result = service.parse('Recent standup notes', NOW);
+
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('Recent');
+      expect(result.semanticQuery).toBe('standup notes');
+    });
+
     it('should detect "earlier today"', () => {
       const result = service.parse(
         'What did we talk about earlier today?',

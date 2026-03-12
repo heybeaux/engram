@@ -202,9 +202,11 @@ export class MemoryQueryService {
             scoreMap.set(row.id, 0.75);
             memoryIds.push(row.id);
             ftsAdded++;
+          } else {
+            // Memory is already in pgvector results but may be at a low cosine rank.
+            // Boost its score so the reranker can see it among the top candidates.
+            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.75));
           }
-          // Memories that ARE in pgvector but may be ranked #121-200 are handled below
-          // at the slice boundary — ftsResultIds ensures they get rescued even if cut.
         }
         if (ftsAdded > 0) {
           this.logger.debug(`[Recall] BM25 hybrid: injected ${ftsAdded} FTS-only candidates`);
@@ -320,7 +322,10 @@ export class MemoryQueryService {
     );
 
     // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
-    scoredMemories = await this.applyReranking(scoredMemories, searchQuery, limit);
+    // For temporal queries, pass the original query (with temporal expression) to the
+    // cross-encoder so it can use "last week", "today", etc. as ranking signals.
+    const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
+    scoredMemories = await this.applyReranking(scoredMemories, rerankQuery, limit);
 
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
@@ -487,10 +492,12 @@ export class MemoryQueryService {
 
       if (relevantInsights.length === 0) return existingResults;
 
-      // Merge: insert insights into results, maintaining sort order
+      // Merge: insert insights into results, maintaining sort order.
+      // Do NOT slice here — let applyReranking() decide the final top-N.
+      // Slicing to `limit` before reranking drops gold memories that the
+      // cross-encoder would correctly promote.
       const merged = [...existingResults, ...relevantInsights]
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, limit);
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
       this.logger.log(
         `[Recall] Surfaced ${relevantInsights.length} INSIGHT memories (of ${insights.length} candidates)`,
@@ -548,7 +555,11 @@ export class MemoryQueryService {
         .replace(/^\w+:\s+/, ''); // strip any remaining "TOKEN: " prefix
 
     try {
-      const candidates = memories.slice(0, 120);
+      // Pass ALL candidates to the cross-encoder — not just the first 120.
+      // Gold memories embed at rank 121-200 in a 500-memory corpus and were
+      // silently dropped before the cross-encoder could surface them.
+      // Root cause of ~15 zero-hit failures (confirmed by 2 independent agents).
+      const candidates = memories;
       const texts = candidates.map((m) => stripCanary(m.raw));
 
       const ranked = await this.rerankService.rerank(query, texts);

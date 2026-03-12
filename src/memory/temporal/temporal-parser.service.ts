@@ -219,9 +219,9 @@ export class TemporalParserService {
         regex: /\bthis\s+month\b/i,
         resolve: (m) => this.thisMonth(now, m[0]),
       },
-      // "recently" / "lately"
+      // "recently" / "lately" / "recent"
       {
-        regex: /\b(recently|lately)\b/i,
+        regex: /\b(recently|lately|recent)\b/i,
         resolve: (m) => this.lastNDays(now, 3, m[0]),
       },
       // "earlier today" / "earlier"
