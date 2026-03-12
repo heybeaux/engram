@@ -180,9 +180,16 @@ export class MemoryQueryService {
         searchQuery,
       );
 
-      // BM25/tsvector hybrid: top 50 (reduced from 100 — RRF fusion handles merging).
+      // BM25/tsvector hybrid: two-pass (AND then OR rescue).
+      // Pass 1: AND semantics (high precision, low recall) — top 50.
+      // Pass 2: If AND found < 5 results, supplement with OR semantics top 10.
+      //   OR rescues gold memories missed when a single query word isn't in the
+      //   text (e.g. "medication I need to take every morning" — AND misses
+      //   alice_health_001 because "need" isn't present; OR matches on
+      //   "medication + take + morning"). Capped at 10 to avoid flooding RRF.
       let ftsRankedResults: { id: string }[] = [];
       try {
+        // Pass 1: AND (websearch_to_tsquery)
         ftsRankedResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
           `SELECT id FROM memories
            WHERE user_id = $1
@@ -194,6 +201,54 @@ export class MemoryQueryService {
           singleUserId,
           searchQuery,
         );
+
+        // Pass 2: OR rescue when AND found few results
+        if (ftsRankedResults.length < 5) {
+          const STOP_WORDS = new Set([
+            'i','me','my','we','our','you','your','he','she','it','its','they','their',
+            'him','her','them','a','an','the','is','am','are','was','were','be','been',
+            'being','do','does','did','have','has','had','will','would','can','could',
+            'should','shall','may','might','to','of','in','for','on','at','by','with',
+            'from','about','and','or','but','not','no','so','if','then','than','too',
+            'very','just','only','also','what','which','who','whom','how','where','when',
+            'this','that','these','those','up','out','off','all','each','both','tell',
+          ]);
+          const queryWords = searchQuery
+            .toLowerCase()
+            .replace(/[^a-z\s]/g, '')
+            .split(/\s+/)
+            .filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
+
+          if (queryWords.length > 0) {
+            try {
+              const orTsquery = queryWords.join(' | ');
+              const andIds = new Set(ftsRankedResults.map((r) => r.id));
+              const orResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM memories
+                 WHERE user_id = $1
+                   AND to_tsvector('english', raw) @@ to_tsquery('english', $2)
+                   AND deleted_at IS NULL
+                   AND superseded_by_id IS NULL
+                 ORDER BY ts_rank(to_tsvector('english', raw), to_tsquery('english', $2)) DESC
+                 LIMIT 10`,
+                singleUserId,
+                orTsquery,
+              );
+              let rescued = 0;
+              for (const r of orResults) {
+                if (!andIds.has(r.id)) {
+                  ftsRankedResults.push(r);
+                  rescued++;
+                }
+              }
+              if (rescued > 0) {
+                this.logger.debug(`[Recall] BM25 OR rescue: +${rescued} candidates (AND had ${andIds.size})`);
+              }
+            } catch (orError) {
+              this.logger.debug(`[Recall] BM25 OR rescue skipped: ${(orError as Error).message}`);
+            }
+          }
+        }
 
         // ILIKE fallback: if BM25 found nothing, try substring match on significant query words.
         // Catches vocabulary that tsvector drops (stop words, stemming edge cases).
