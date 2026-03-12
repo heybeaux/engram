@@ -248,4 +248,46 @@ describe('TemporalParserService', () => {
       expect(scoreB).toBeGreaterThan(scoreA);
     });
   });
+
+  describe('month/year temporal patterns', () => {
+    it('should detect "6 months ago"', () => {
+      const result = service.parse('standup notes from 6 months ago', NOW);
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('6 months ago');
+      // Window should be 6 months back from NOW
+      const sixMonthsAgo = new Date(NOW);
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      expect(result.temporalFilter!.start.getMonth()).toBe(sixMonthsAgo.getMonth());
+    });
+
+    it('should detect "2 years ago"', () => {
+      const result = service.parse('standup notes from 2 years ago', NOW);
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('2 years ago');
+      const twoYearsAgo = new Date(NOW);
+      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+      expect(result.temporalFilter!.start.getFullYear()).toBe(twoYearsAgo.getFullYear());
+    });
+
+    it('should detect "years ago" without number', () => {
+      const result = service.parse('standup notes from years ago', NOW);
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('years ago');
+      // Should cover 1-3 years range
+      const threeYearsAgo = new Date(NOW);
+      threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+      expect(result.temporalFilter!.start.getFullYear()).toBe(threeYearsAgo.getFullYear());
+    });
+
+    it('should detect "3 weeks ago"', () => {
+      const result = service.parse('messages from 3 weeks ago', NOW);
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('3 weeks ago');
+      const daysDiff = Math.round(
+        (NOW.getTime() - result.temporalFilter!.start.getTime()) /
+          (24 * 60 * 60 * 1000),
+      );
+      expect(daysDiff).toBe(21);
+    });
+  });
 });

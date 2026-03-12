@@ -193,7 +193,7 @@ export class MemoryQueryService {
              AND deleted_at IS NULL
              AND superseded_by_id IS NULL
            ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
-           LIMIT 30`,
+           LIMIT 100`,
           singleUserId,
           searchQuery,
         );
