@@ -163,41 +163,61 @@ export class MemoryQueryService {
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
         .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
     } else {
-      // STANDARD PATH — RRF fusion pre-prunes reranker pool to top 80.
-      // Identity queries get IDENTITY-layer forced injection before reranking.
-
-      // Fix cross_006: detect vague self-referential queries → force-inject IDENTITY memories.
-      const isIdentityQuery = /\b(who am i|what do i do|tell me about (myself|me)|my (identity|role|background|bio))\b/i.test(dto.query);
-
-      // Vector search: top 150 (reduced from 400 — RRF handles quality, not brute-force pool size).
+      // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
+      // Expand cosine pool to catch gold memories that embed far from the query.
+      // bge-base-en-v1.5 (768-dim) places health/medical memories 200-350 ranks from
+      // queries like "medication every morning" — limit * 10 = 200 is too tight.
+      const candidateLimit = Math.max(200, limit * 20);
       const vectorResults = await this.embedding.search(
         userId,
         queryEmbedding,
-        150,
+        candidateLimit,
         dto.layers as any,
         undefined,
         poolIds,
         searchQuery,
       );
 
-      // BM25/tsvector hybrid: top 50 (reduced from 100 — RRF fusion handles merging).
-      let ftsRankedResults: { id: string }[] = [];
+      const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
+      let memoryIds = vectorResults.map((r) => r.id);
+
+      // BM25/tsvector hybrid: safety net for exact-keyword queries (phone numbers, proper nouns).
+      // ftsResultIds tracks ALL FTS matches. Any FTS hit not in the cosine top-120 is
+      // force-included in the reranker pool — whether it was in pgvector results or not.
+      const ftsResultIds = new Set<string>();
       try {
-        ftsRankedResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+        const ftsResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
           `SELECT id FROM memories
            WHERE user_id = $1
              AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
              AND deleted_at IS NULL
              AND superseded_by_id IS NULL
            ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
-           LIMIT 50`,
+           LIMIT 100`,
           singleUserId,
           searchQuery,
         );
+        let ftsAdded = 0;
+        for (const row of ftsResults) {
+          ftsResultIds.add(row.id);
+          if (!scoreMap.has(row.id)) {
+            // Memory is FTS-only (not in pgvector results): inject with competitive score.
+            scoreMap.set(row.id, 0.75);
+            memoryIds.push(row.id);
+            ftsAdded++;
+          } else {
+            // Memory is already in pgvector results but may be at a low cosine rank.
+            // Boost its score so the reranker can see it among the top candidates.
+            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.75));
+          }
+        }
+        if (ftsAdded > 0) {
+          this.logger.debug(`[Recall] BM25 hybrid: injected ${ftsAdded} FTS-only candidates`);
+        }
 
         // ILIKE fallback: if BM25 found nothing, try substring match on significant query words.
         // Catches vocabulary that tsvector drops (stop words, stemming edge cases).
-        if (ftsRankedResults.length === 0) {
+        if (ftsResults.length === 0) {
           const words = searchQuery
             .toLowerCase()
             .split(/\s+/)
@@ -218,9 +238,19 @@ export class MemoryQueryService {
                 singleUserId,
                 ...ilikeParams,
               );
-              if (ilikeResults.length > 0) {
-                ftsRankedResults = ilikeResults;
-                this.logger.debug(`[Recall] ILIKE fallback: rescued ${ilikeResults.length} candidates`);
+              let ilikeAdded = 0;
+              for (const row of ilikeResults) {
+                ftsResultIds.add(row.id);
+                if (!scoreMap.has(row.id)) {
+                  scoreMap.set(row.id, 0.7);
+                  memoryIds.push(row.id);
+                  ilikeAdded++;
+                } else {
+                  scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.7));
+                }
+              }
+              if (ilikeAdded > 0) {
+                this.logger.debug(`[Recall] ILIKE fallback: rescued ${ilikeAdded} candidates`);
               }
             } catch (ilikeError) {
               this.logger.debug(`[Recall] ILIKE fallback skipped: ${(ilikeError as Error).message}`);
@@ -231,42 +261,9 @@ export class MemoryQueryService {
         this.logger.debug(`[Recall] BM25 hybrid skipped: ${(ftsError as Error).message}`);
       }
 
-      // RRF fusion: rank-fuse vector (top 150) + BM25 (top 50) → keep top 80.
-      // This prunes noise before the cross-encoder sees it, fixing semantic_002
-      // where 100 BM25 'morning' noise memories crowded out the gold result.
-      const rrfScoreMap = this.rrfFusion(vectorResults, ftsRankedResults, 60, 80);
-      const rrfCandidateIds = [...rrfScoreMap.keys()];
-
-      // Identity intent router: force-inject all IDENTITY memories for self-referential queries.
-      // Fixes cross_006 ('Who am I and what do I do?') where the embedding model cannot
-      // distinguish the vague query from hundreds of other memories.
-      if (isIdentityQuery) {
-        const identityMems = await this.prisma.memory.findMany({
-          where: {
-            userId: userIdFilter,
-            layer: 'IDENTITY' as any,
-            deletedAt: null,
-            supersededById: null,
-          },
-          select: { id: true },
-          take: 30,
-        });
-        let injected = 0;
-        for (const m of identityMems) {
-          if (!rrfScoreMap.has(m.id)) {
-            rrfScoreMap.set(m.id, 0.02); // competitive RRF-equivalent score
-            rrfCandidateIds.push(m.id);
-            injected++;
-          }
-        }
-        if (injected > 0) {
-          this.logger.debug(`[Recall] Identity router: injected ${injected} IDENTITY candidates`);
-        }
-      }
-
       const memories = await this.prisma.memory.findMany({
         where: {
-          id: { in: rrfCandidateIds },
+          id: { in: memoryIds },
           deletedAt: null,
           supersededById: null,
           ...subjectTypeFilter,
@@ -275,17 +272,40 @@ export class MemoryQueryService {
         include: { extraction: true },
       });
 
+      // Pure cosine pre-filter: importance is NOT included here.
+      // Final importance blend happens post-reranker in applyReranking().
+      // FTS-only memories are guaranteed into the pool regardless of score.
       const sorted = memories
-        .map((memory) => ({
-          ...memory,
-          score: rrfScoreMap.get(memory.id) ?? 0,
-        } as MemoryWithScore))
+        .map((memory) => {
+          const semanticScore = scoreMap.get(memory.id) ?? 0;
+          return { ...memory, score: semanticScore } as MemoryWithScore;
+        })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
+      // Pass ALL 200 vector results to the reranker, not just top-120.
+      // The top-120 slice was the root cause of consistent benchmark failures:
+      // gold memories (e.g. alice_coffee_001) embed at rank ~130-180 in a 500-memory
+      // corpus with many topically similar noise memories. The cross-encoder would
+      // correctly surface them — but only if it gets to see them first.
+      // With the 10s reranker timeout, 200 candidates is still well within budget.
+      const RERANK_POOL = sorted.length; // all vector results (up to 200)
+
+      // Still force-include FTS matches not already in the vector results
+      const topIds = new Set(sorted.map((m) => m.id));
+      const memoryMap = new Map(sorted.map((m) => [m.id, m]));
+      const forcedFts: MemoryWithScore[] = [];
+      for (const id of ftsResultIds) {
+        if (!topIds.has(id)) {
+          const mem = memoryMap.get(id);
+          if (mem) {
+            forcedFts.push({ ...mem, score: 0.75 } as MemoryWithScore);
+          }
+        }
+      }
       this.logger.debug(
-        `[Recall] RRF reranker pool: ${sorted.length} candidates (vector 150 + BM25 50 → RRF top 80${isIdentityQuery ? ' + identity injection' : ''})`,
+        `[Recall] Reranker pool: ${RERANK_POOL} vector + ${forcedFts.length} FTS-only = ${RERANK_POOL + forcedFts.length} total candidates`,
       );
-      scoredMemories = sorted;
+      scoredMemories = [...sorted, ...forcedFts];
     }
 
     // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
@@ -541,28 +561,6 @@ export class MemoryQueryService {
   }
 
   /**
-   * Reciprocal Rank Fusion: merge vector and BM25 ranked lists into a single score.
-   * RRF(d) = Σ 1/(k + rank_i) for each retriever that returned document d.
-   * Returns a Map of id→score, truncated to the top-N candidates.
-   */
-  private rrfFusion(
-    vectorResults: { id: string; score: number }[],
-    bm25Results: { id: string }[],
-    k: number = 60,
-    topN: number = 80,
-  ): Map<string, number> {
-    const rrfScores = new Map<string, number>();
-    vectorResults.forEach((r, i) => {
-      rrfScores.set(r.id, (rrfScores.get(r.id) ?? 0) + 1 / (k + i + 1));
-    });
-    bm25Results.forEach((r, i) => {
-      rrfScores.set(r.id, (rrfScores.get(r.id) ?? 0) + 1 / (k + i + 1));
-    });
-    const sorted = [...rrfScores.entries()].sort((a, b) => b[1] - a[1]);
-    return new Map(sorted.slice(0, topN));
-  }
-
-  /**
    * ENG-29: Apply cross-encoder reranking to scored memories.
    * Reranks top-N candidates via cross-encoder, returns top-K.
    * Strips RLS canary / counter prefixes before sending to the model so
@@ -622,21 +620,13 @@ export class MemoryQueryService {
       // pool and never reaches the top-20 return window. A hard floor risks filtering gold
       // memories that have low reranker scores (small cross-encoder model limitation) and
       // creating new zero-hit failures for valid queries.
-      // Layer multiplier: IDENTITY/CONSTRAINT/INSIGHT get a modest boost post-reranking.
-      // Fixes cross_001 (medication/CONSTRAINT) and reinforces cross_006 (identity/IDENTITY).
-      const LAYER_BOOST: Record<string, number> = {
-        IDENTITY: 1.2,
-        CONSTRAINT: 1.1,
-        INSIGHT: 1.05,
-      };
       const reranked = ranked
         .map((r) => {
           const mem = candidates[r.index];
           const importanceScore =
             (mem as any).effectiveScore ?? (mem as any).importanceScore ?? 0.5;
           const sp = SentimentService.scorePenalty(query, (mem as any).raw ?? '');
-          const layerMultiplier = LAYER_BOOST[(mem as any).layer ?? ''] ?? 1.0;
-          const finalScore = (r.score * 0.85 + importanceScore * 0.15) * sp * layerMultiplier;
+          const finalScore = (r.score * 0.85 + importanceScore * 0.15) * sp;
           return { ...mem, score: finalScore };
         })
         .slice(0, limit);
