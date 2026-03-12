@@ -562,7 +562,7 @@ export class MemoryQueryService {
       // This prevents opposite-polarity memories (0.15× sentiment penalty) from leaking into
       // the bottom of the top-20 return window when the cross-encoder also scores them low.
       // A legitimate memory (reranker ≥ 0.2, no penalty) scores ≥ 0.185, well above this floor.
-      const MIN_RERANK_SCORE = 0.06;
+      const MIN_RERANK_SCORE = 0.10;
       const reranked = ranked
         .map((r) => {
           const mem = candidates[r.index];

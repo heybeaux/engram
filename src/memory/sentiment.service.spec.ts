@@ -129,9 +129,13 @@ describe('SentimentService', () => {
       expect(SentimentService.sentimentPenalty('neutral', 'neutral')).toBe(1.0);
     });
 
-    it('returns 1.0 when memory is neutral (no penalty regardless of query)', () => {
-      expect(SentimentService.sentimentPenalty('positive', 'neutral')).toBe(1.0);
-      expect(SentimentService.sentimentPenalty('negative', 'neutral')).toBe(1.0);
+    it('returns 0.75 when memory is neutral and query has sentiment (mild noise suppression)', () => {
+      expect(SentimentService.sentimentPenalty('positive', 'neutral')).toBe(0.75);
+      expect(SentimentService.sentimentPenalty('negative', 'neutral')).toBe(0.75);
+    });
+
+    it('returns 1.0 when both query and memory are neutral', () => {
+      expect(SentimentService.sentimentPenalty('neutral', 'neutral')).toBe(1.0);
     });
   });
 
@@ -162,10 +166,10 @@ describe('SentimentService', () => {
       expect(SentimentService.scorePenalty(query, stressMemory)).toBe(1.0);
     });
 
-    it('does not penalize neutral memory for emotional query', () => {
+    it('applies mild 0.75× penalty to neutral memory for emotional query (noise suppression)', () => {
       const query = 'when I felt stressed or overwhelmed';
       const neutralMemory = 'Building a NestJS backend with Prisma and PostgreSQL.';
-      expect(SentimentService.scorePenalty(query, neutralMemory)).toBe(1.0);
+      expect(SentimentService.scorePenalty(query, neutralMemory)).toBe(0.75);
     });
 
     it('does not penalize alice_grief_001 for a grief query', () => {

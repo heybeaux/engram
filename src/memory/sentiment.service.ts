@@ -6,8 +6,12 @@
  * Solves the "emotional clustering" problem: bge-base-en-v1.5 places all
  * emotionally-charged text near each other in embedding space, causing
  * alice_joy_001 to surface for "stressed" queries and vice versa.
- * A cross-polarity penalty of 0.15× pushes mismatched memories below
- * correctly-polarised candidates.
+ *
+ * Two-tier penalty system:
+ * - 0.15× for opposite-polarity memories (joy memory for grief query)
+ * - 0.75× for neutral memories when the query has strong sentiment
+ *   (daily-gen noise like "Morning routine: cleared my inbox" competes
+ *    with specific emotional memories; this mild penalty tips the balance)
  */
 
 // Tightly-scoped keywords — only unambiguously emotional words.
@@ -82,18 +86,28 @@ export class SentimentService {
   /**
    * Returns a score multiplier (0–1) based on polarity mismatch.
    *
-   * - 1.0 → no penalty (same polarity, or either side is neutral)
-   * - 0.15 → cross-polarity penalty (positive query ↔ negative memory, or vice versa)
+   * - 1.0  → no penalty (same polarity, or neutral query)
+   * - 0.75 → mild penalty: emotional query but neutral memory
+   *          (prevents generic daily-routine memories from occupying top-5
+   *           slots ahead of specific emotional memories)
+   * - 0.15 → strong penalty: opposite polarity
+   *          (joy memory for frustration query, stress memory for proud query)
    */
   static sentimentPenalty(
     queryPolarity: SentimentPolarity,
     memoryPolarity: SentimentPolarity,
   ): number {
-    if (queryPolarity === 'neutral' || memoryPolarity === 'neutral') return 1.0;
-    // 0.15× is aggressive enough to push opposite-polarity memories out of
-    // the top-20 result window (not just demote them within top-5).
-    // Previous 0.5× was only strong enough to demote within top-5.
-    if (queryPolarity !== memoryPolarity) return 0.15;
+    // Neutral query: no polarity-based adjustment at all
+    if (queryPolarity === 'neutral') return 1.0;
+
+    // Opposite polarity: strong suppression
+    if (memoryPolarity !== 'neutral' && queryPolarity !== memoryPolarity) return 0.15;
+
+    // Neutral memory on an emotional query: mild suppression
+    // Keeps same-polarity emotional memories ranked above general noise.
+    if (memoryPolarity === 'neutral') return 0.75;
+
+    // Same polarity: no penalty
     return 1.0;
   }
 
