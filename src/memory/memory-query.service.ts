@@ -164,7 +164,10 @@ export class MemoryQueryService {
         .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
     } else {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
-      const candidateLimit = Math.max(120, limit * 10);
+      // Expand cosine pool to catch gold memories that embed far from the query.
+      // bge-base-en-v1.5 (768-dim) places health/medical memories 200-350 ranks from
+      // queries like "medication every morning" — limit * 10 = 200 is too tight.
+      const candidateLimit = Math.max(200, limit * 20);
       const vectorResults = await this.embedding.search(
         userId,
         queryEmbedding,
@@ -210,6 +213,49 @@ export class MemoryQueryService {
         }
         if (ftsAdded > 0) {
           this.logger.debug(`[Recall] BM25 hybrid: injected ${ftsAdded} FTS-only candidates`);
+        }
+
+        // ILIKE fallback: if BM25 found nothing, try substring match on significant query words.
+        // Catches vocabulary that tsvector drops (stop words, stemming edge cases).
+        if (ftsResults.length === 0) {
+          const words = searchQuery
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((w) => w.length >= 4); // skip short words (the, my, is, etc.)
+          if (words.length > 0) {
+            try {
+              const ilikeConditions = words
+                .map((_, i) => `LOWER(raw) LIKE $${i + 2}`)
+                .join(' OR ');
+              const ilikeParams = words.map((w) => `%${w}%`);
+              const ilikeResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM memories
+                 WHERE user_id = $1
+                   AND (${ilikeConditions})
+                   AND deleted_at IS NULL
+                   AND superseded_by_id IS NULL
+                 LIMIT 20`,
+                singleUserId,
+                ...ilikeParams,
+              );
+              let ilikeAdded = 0;
+              for (const row of ilikeResults) {
+                ftsResultIds.add(row.id);
+                if (!scoreMap.has(row.id)) {
+                  scoreMap.set(row.id, 0.7);
+                  memoryIds.push(row.id);
+                  ilikeAdded++;
+                } else {
+                  scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.7));
+                }
+              }
+              if (ilikeAdded > 0) {
+                this.logger.debug(`[Recall] ILIKE fallback: rescued ${ilikeAdded} candidates`);
+              }
+            } catch (ilikeError) {
+              this.logger.debug(`[Recall] ILIKE fallback skipped: ${(ilikeError as Error).message}`);
+            }
+          }
         }
       } catch (ftsError) {
         this.logger.debug(`[Recall] BM25 hybrid skipped: ${(ftsError as Error).message}`);

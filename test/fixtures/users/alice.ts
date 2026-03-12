@@ -91,7 +91,7 @@ const goldMemories: FixtureMemory[] = [
   // Work/Tech
   {
     fixture_id: 'alice_work_001',
-    content: `${CANARY}8: My tech stack is NestJS with Prisma and PostgreSQL. Writing all the backend code in TypeScript — the pgvector extension is amazing for semantic search.`,
+    content: `${CANARY}8: Main work project: my tech stack is NestJS with Prisma and PostgreSQL. Writing all the backend code in TypeScript — the pgvector extension is amazing for semantic search.`,
     layer: 'PROJECT',
     memoryType: 'FACT',
     source: 'AGENT_OBSERVATION',
@@ -123,7 +123,7 @@ const goldMemories: FixtureMemory[] = [
   // Health
   {
     fixture_id: 'alice_health_001',
-    content: `${CANARY}11: My daily medication: I take Synthroid every morning for hypothyroidism. Must be taken on an empty stomach.`,
+    content: `${CANARY}11: Health and medical info — my daily medication: I take Synthroid every morning for hypothyroidism. Must be taken on an empty stomach.`,
     layer: 'IDENTITY',
     memoryType: 'CONSTRAINT',
     source: 'EXPLICIT_STATEMENT',
