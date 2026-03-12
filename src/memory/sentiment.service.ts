@@ -101,7 +101,7 @@ export class SentimentService {
     if (queryPolarity === 'neutral') return 1.0;
 
     // Opposite polarity: strong suppression
-    if (memoryPolarity !== 'neutral' && queryPolarity !== memoryPolarity) return 0.15;
+    if (memoryPolarity !== 'neutral' && queryPolarity !== memoryPolarity) return 0.05;
 
     // Neutral memory on an emotional query: mild suppression
     // Keeps same-polarity emotional memories ranked above general noise.
