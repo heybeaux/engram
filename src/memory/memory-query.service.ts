@@ -558,6 +558,11 @@ export class MemoryQueryService {
       if (!hasScores) return applyFallbackBlend(memories);
 
       // Post-reranker final blend: rerankerScore * 0.85 + importanceScore * 0.15 + sentiment penalty
+      // Minimum score threshold: drop any memory that scores below 0.06 after all adjustments.
+      // This prevents opposite-polarity memories (0.15× sentiment penalty) from leaking into
+      // the bottom of the top-20 return window when the cross-encoder also scores them low.
+      // A legitimate memory (reranker ≥ 0.2, no penalty) scores ≥ 0.185, well above this floor.
+      const MIN_RERANK_SCORE = 0.06;
       const reranked = ranked
         .map((r) => {
           const mem = candidates[r.index];
@@ -567,6 +572,7 @@ export class MemoryQueryService {
           const finalScore = (r.score * 0.85 + importanceScore * 0.15) * sp;
           return { ...mem, score: finalScore };
         })
+        .filter((m) => (m.score ?? 0) >= MIN_RERANK_SCORE)
         .slice(0, limit);
 
       this.logger.debug(
