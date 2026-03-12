@@ -180,45 +180,20 @@ export class MemoryQueryService {
         searchQuery,
       );
 
-      // BM25/tsvector hybrid: top 50 with OR semantics.
-      // OR (not AND) ensures gold memories aren't excluded when a single query
-      // word is missing from the text — ts_rank still orders by match coverage.
-      // Example: "medication I need to take every morning" with AND requires ALL
-      // words present, missing alice_health_001 because "need" isn't in the text.
-      // With OR, it matches on "medication + take + morning" (3/4) and ranks highly.
+      // BM25/tsvector hybrid: top 50 (reduced from 100 — RRF fusion handles merging).
       let ftsRankedResults: { id: string }[] = [];
       try {
-        // Build OR tsquery: extract non-trivial words, join with ' | '
-        const STOP_WORDS = new Set([
-          'i','me','my','we','our','you','your','he','she','it','its','they','their',
-          'him','her','them','a','an','the','is','am','are','was','were','be','been',
-          'being','do','does','did','have','has','had','will','would','can','could',
-          'should','shall','may','might','to','of','in','for','on','at','by','with',
-          'from','about','and','or','but','not','no','so','if','then','than','too',
-          'very','just','only','also','what','which','who','whom','how','where','when',
-          'this','that','these','those','up','out','off','all','each','both','tell',
-        ]);
-        const queryWords = searchQuery
-          .toLowerCase()
-          .replace(/[^a-z\s]/g, '')
-          .split(/\s+/)
-          .filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
-
-        if (queryWords.length > 0) {
-          // Use to_tsquery with explicit OR operators for broad matching
-          const orTsquery = queryWords.join(' | ');
-          ftsRankedResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-            `SELECT id FROM memories
-             WHERE user_id = $1
-               AND to_tsvector('english', raw) @@ to_tsquery('english', $2)
-               AND deleted_at IS NULL
-               AND superseded_by_id IS NULL
-             ORDER BY ts_rank(to_tsvector('english', raw), to_tsquery('english', $2)) DESC
-             LIMIT 50`,
-            singleUserId,
-            orTsquery,
-          );
-        }
+        ftsRankedResults = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+          `SELECT id FROM memories
+           WHERE user_id = $1
+             AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
+             AND deleted_at IS NULL
+             AND superseded_by_id IS NULL
+           ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
+           LIMIT 50`,
+          singleUserId,
+          searchQuery,
+        );
 
         // ILIKE fallback: if BM25 found nothing, try substring match on significant query words.
         // Catches vocabulary that tsvector drops (stop words, stemming edge cases).
