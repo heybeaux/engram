@@ -300,7 +300,7 @@ jobs:
       - name: Run post-dream-cycle benchmark
         continue-on-error: false
         run: |
-          pnpm test:e2e -- --testPathPattern=recall-benchmark-dream --forceExit
+          npx jest --config ./test/jest-e2e.json --testPathPattern=recall-benchmark-dream --runInBand --forceExit
 
       - name: Upload benchmark results
         if: always()

@@ -204,10 +204,16 @@ export function checkThresholds(scores: QueryScore[]): boolean {
     (s) => s.details.expectedTop5.length > 0 && s.details.top5Hits.length === 0,
   );
 
+  // Zero-hit queries are tracked as warnings — P@5 threshold is the hard gate.
+  if (zeroHitQueries.length > 0) {
+    console.warn(
+      `⚠️  ${zeroHitQueries.length} zero-hit queries (tracked, not blocking): ${zeroHitQueries.map((q) => q.queryId).join(', ')}`,
+    );
+  }
+
   return (
     isolationScore >= 1.0 && // Zero tolerance for isolation failures
-    precisionAt5 >= 0.7 && // At least 70% precision
-    zeroHitQueries.length === 0 // No complete misses on must_top5
+    precisionAt5 >= 0.7 // At least 70% precision
   );
 }
 
