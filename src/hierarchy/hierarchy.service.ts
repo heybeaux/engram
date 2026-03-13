@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { LLMService } from '../llm/llm.service';
 import { VectorService } from '../vector/vector.service';
 import {
@@ -60,6 +61,30 @@ export interface AggregatedSearchResult {
 }
 
 /**
+ * Retry a function up to `maxAttempts` times with exponential backoff.
+ * Base delay: 200 ms — doubles each attempt (200 → 400 → 800).
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 200,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxAttempts) {
+        const delay = baseDelayMs * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
  * Hierarchy Service
  *
  * Main facade for hierarchical embeddings functionality.
@@ -68,6 +93,12 @@ export interface AggregatedSearchResult {
  * - Storing embeddings in Pinecone with level metadata
  * - Multi-level search with result aggregation
  * - Query routing
+ *
+ * IMPORTANT: processMemory is called fire-and-forget from the memory pipeline
+ * (after the HTTP request ends). All background DB writes MUST use
+ * `servicePrisma` (ServicePrismaService) — NOT `prisma` (RLS proxy) — to
+ * avoid "Transaction already closed" errors caused by the AsyncLocalStorage
+ * context expiring with the HTTP request. Same pattern as HEY-458.
  */
 @Injectable()
 export class HierarchyService {
@@ -78,6 +109,7 @@ export class HierarchyService {
   constructor(
     private config: ConfigService,
     private prisma: PrismaService,
+    private servicePrisma: ServicePrismaService,
     private llm: LLMService,
     private vector: VectorService,
     private segmentation: SegmentationService,
@@ -104,6 +136,10 @@ export class HierarchyService {
 
   /**
    * Process a memory into hierarchical units (L0 sentences, L1 paragraphs)
+   *
+   * Called fire-and-forget from the memory pipeline — HTTP request may have
+   * already ended by the time DB writes occur. Uses ServicePrismaService to
+   * bypass the RLS proxy.
    *
    * @param memoryId - The memory to process
    * @param text - The memory content
@@ -194,7 +230,14 @@ export class HierarchyService {
   }
 
   /**
-   * Create a hierarchy unit and store its embedding
+   * Create a hierarchy unit and store its embedding.
+   *
+   * Uses ServicePrismaService (BYPASSRLS) for the PostgreSQL write so that
+   * this method is safe to call after the originating HTTP request has ended
+   * (fire-and-forget from the memory pipeline).
+   *
+   * Retries up to 3 times with exponential backoff (200 ms base) to handle
+   * transient connection errors that previously failed silently.
    */
   private async createAndStoreUnit(
     level: HierarchyLevel,
@@ -230,26 +273,35 @@ export class HierarchyService {
         },
       });
 
-      // Store in PostgreSQL
-      const unit = await this.prisma.hierarchyUnit.create({
-        data: {
-          id: unitId,
-          level: level as PrismaHierarchyLevel,
-          text,
-          sourceMemoryId,
-          parentUnitId,
-          position,
-          charStart,
-          charEnd,
-          pineconeId,
-          pineconeNamespace: namespace,
-          userId,
-        },
-      });
+      // Store in PostgreSQL via ServicePrismaService (BYPASSRLS).
+      // This call happens after the HTTP request may have ended, so we MUST
+      // NOT use the RLS-scoped PrismaService here — its AsyncLocalStorage
+      // context is gone and the transaction is closed (HEY-458 pattern).
+      // Retry up to 3x with exponential backoff for transient errors.
+      const unit = await withRetry(() =>
+        this.servicePrisma.hierarchyUnit.create({
+          data: {
+            id: unitId,
+            level: level as PrismaHierarchyLevel,
+            text,
+            sourceMemoryId,
+            parentUnitId,
+            position,
+            charStart,
+            charEnd,
+            pineconeId,
+            pineconeNamespace: namespace,
+            userId,
+          },
+        }),
+      );
 
       return unit;
     } catch (error) {
-      this.logger.error(`Failed to create ${level} unit:`, error);
+      this.logger.error(
+        `Failed to create ${level} unit for memory ${sourceMemoryId} after retries:`,
+        error,
+      );
       return null;
     }
   }
