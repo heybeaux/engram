@@ -24,6 +24,7 @@ describe('Pool-Filtered Recall (e2e)', () => {
   const testApiKeyHash = createHash('sha256').update(testApiKey).digest('hex');
   const testUserId = 'test-user-pool-recall';
   let testInternalUserId: string;
+  let testAccountId: string;
   let globalPoolId: string;
 
   beforeAll(async () => {
@@ -71,19 +72,29 @@ describe('Pool-Filtered Recall (e2e)', () => {
       where: { sessionKey: { startsWith: 'agent:test' } },
     });
 
-    // Create test agent + user
+    // Create test account + agent + user
+    const account = await (prisma as any).account.create({
+      data: {
+        name: 'Pool Recall E2E Account',
+        email: `pool-recall-e2e-${Date.now()}@test.local`,
+        passwordHash: 'not-a-real-hash',
+      },
+    });
+    testAccountId = account.id;
+
     const agent = await (prisma as any).agent.create({
       data: {
         name: 'Pool Recall E2E Agent',
         apiKeyHash: testApiKeyHash,
         apiKeyHint: testApiKey.slice(-4),
+        accountId: account.id,
       },
     });
 
     const user = await (prisma as any).user.create({
       data: {
         externalId: testUserId,
-        agentId: agent.id,
+        accountId: account.id,
       },
     });
     testInternalUserId = user.id;
@@ -134,6 +145,11 @@ describe('Pool-Filtered Recall (e2e)', () => {
       await (prisma as any).agentSession.deleteMany({
         where: { sessionKey: { startsWith: 'agent:test' } },
       });
+      if (testAccountId) {
+        await (prisma as any).account
+          .deleteMany({ where: { id: testAccountId } })
+          .catch(() => {});
+      }
     } catch (e) {
       // Ignore
     }
