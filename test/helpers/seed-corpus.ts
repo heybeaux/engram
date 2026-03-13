@@ -135,8 +135,8 @@ async function seedFixtureUser(
 
   // Create user with external_id matching the userId for auth header (table: users)
   await prisma.$executeRawUnsafe(`
-    INSERT INTO users (id, external_id, agent_id, created_at, updated_at)
-    VALUES ('${userId}', '${userId}', '${agentId}', NOW(), NOW())
+    INSERT INTO users (id, external_id, account_id, is_default, created_at, updated_at)
+    VALUES ('${userId}', '${userId}', '${accountId}', false, NOW(), NOW())
   `);
 
   // Batch insert memories
@@ -200,3 +200,4 @@ async function cleanupSeededUser(
     /* ignore cleanup errors */
   }
 }
+// Schema: User.accountId (was User.agentId) — identity consolidation HEY-498
