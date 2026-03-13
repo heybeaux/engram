@@ -91,11 +91,12 @@ export class MemoryController {
     const accountId = req.accountId ?? req.agent?.accountId;
     if (!accountId) return null;
 
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (agentId) {
-      where.agentId = agentId;
+      // Scope to users from the account that owns this agent
+      where.account = { agents: { some: { id: agentId, deletedAt: null } } };
     } else {
-      where.agent = { accountId, deletedAt: null };
+      where.accountId = accountId;
     }
 
     const users = await this.prisma.user.findMany({

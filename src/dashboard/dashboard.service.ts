@@ -239,12 +239,13 @@ export class DashboardService {
     agentId: string,
     accountId?: string,
   ): Promise<UsersListResponse> {
-    // If accountId is provided, return users across all agents under the account
+    // If accountId is provided, return users across the account directly
     const where: any = { deletedAt: null };
     if (accountId) {
-      where.agent = { accountId, deletedAt: null };
+      where.accountId = accountId;
     } else {
-      where.agentId = agentId;
+      // Scope to users from the account that owns this agent
+      where.account = { agents: { some: { id: agentId, deletedAt: null } } };
     }
 
     const users = await this.prisma.user.findMany({
