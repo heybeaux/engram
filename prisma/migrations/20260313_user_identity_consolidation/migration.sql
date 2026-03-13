@@ -44,6 +44,10 @@ CREATE INDEX IF NOT EXISTS "users_account_id_idx" ON "users"("account_id");
 CREATE INDEX IF NOT EXISTS "users_account_id_external_id_idx" ON "users"("account_id", "external_id");
 CREATE INDEX IF NOT EXISTS "users_account_id_is_default_idx" ON "users"("account_id", "is_default");
 
+-- Step 10: Make agent_id nullable (transition period — still populated on old rows)
+-- This allows new inserts that don't specify agent_id (users now owned by accounts, not agents).
+ALTER TABLE "users" ALTER COLUMN "agent_id" DROP NOT NULL;
+
 -- NOTE: agent_id column is intentionally left in place during transition.
 -- After consolidation script is run and verified, a follow-up migration
 -- should drop the column and remove the old FK constraint.
