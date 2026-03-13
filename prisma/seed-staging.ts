@@ -180,7 +180,7 @@ async function main() {
           id,
           externalId: `ext_user_${i + 1}`,
           displayName: ['Alice Chen', 'Bob Martinez', 'Charlie Kim'][i],
-          agentId: i < 2 ? agentHuman.id : agentAI.id,
+          accountId: account.id,
         },
       }),
     ),

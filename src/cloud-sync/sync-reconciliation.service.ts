@@ -210,7 +210,7 @@ export class SyncReconciliationService {
 
           // Find a default user for the account
           const defaultUser = await this.prisma.user.findFirst({
-            where: { agent: { accountId } },
+            where: { accountId },
             select: { id: true },
           });
           if (!defaultUser) {

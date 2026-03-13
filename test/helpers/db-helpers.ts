@@ -49,18 +49,25 @@ export async function cleanupAgent(
   prisma: PrismaService,
   agentId: string,
 ): Promise<void> {
+  // Users now belong to accounts (not agents) — resolve accountId first
+  const agent = await prisma.agent
+    .findUnique({ where: { id: agentId }, select: { accountId: true } })
+    .catch(() => null);
+  const accountId = agent?.accountId;
+  if (!accountId) return;
+
   await prisma.memoryChainLink
     .deleteMany({
-      where: { source: { user: { agentId } } },
+      where: { source: { user: { accountId } } },
     })
     .catch(() => {});
   await prisma.memoryExtraction
     .deleteMany({
-      where: { memory: { user: { agentId } } },
+      where: { memory: { user: { accountId } } },
     })
     .catch(() => {});
   await prisma.memory
-    .deleteMany({ where: { user: { agentId } } })
+    .deleteMany({ where: { user: { accountId } } })
     .catch(() => {});
-  await prisma.user.deleteMany({ where: { agentId } }).catch(() => {});
+  await prisma.user.deleteMany({ where: { accountId } }).catch(() => {});
 }

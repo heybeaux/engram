@@ -16,6 +16,9 @@ describe('AnalyticsService', () => {
         {
           provide: PrismaService,
           useValue: {
+            agent: {
+              findUnique: jest.fn(),
+            },
             user: {
               findMany: jest.fn(),
             },
@@ -33,6 +36,11 @@ describe('AnalyticsService', () => {
 
     service = module.get<AnalyticsService>(AnalyticsService);
     prisma = module.get<PrismaService>(PrismaService);
+
+    // getUserIdsForAgent now resolves agent.accountId first
+    jest
+      .spyOn(prisma.agent, 'findUnique')
+      .mockResolvedValue({ accountId: 'mock-account-id' } as any);
   });
 
   it('should be defined', () => {

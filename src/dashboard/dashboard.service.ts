@@ -55,7 +55,7 @@ export class DashboardService {
 
     // Scope all queries to the requesting account
     const accountUsers = await this.prisma.user.findMany({
-      where: { agent: { accountId }, deletedAt: null },
+      where: { accountId, deletedAt: null },
       select: { id: true },
     });
     const accountUserIds = accountUsers.map((u) => u.id);
@@ -94,13 +94,13 @@ export class DashboardService {
 
     // Total users (scoped to account)
     const totalUsers = await this.prisma.user.count({
-      where: { agent: { accountId }, deletedAt: null },
+      where: { accountId, deletedAt: null },
     });
 
     // Users from last week vs previous week (scoped to account)
     const usersLastWeek = await this.prisma.user.count({
       where: {
-        agent: { accountId },
+        accountId,
         deletedAt: null,
         createdAt: { gte: oneWeekAgo },
       },
@@ -108,7 +108,7 @@ export class DashboardService {
 
     const usersPreviousWeek = await this.prisma.user.count({
       where: {
-        agent: { accountId },
+        accountId,
         deletedAt: null,
         createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
       },

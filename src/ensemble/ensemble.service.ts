@@ -193,9 +193,9 @@ export class EnsembleService implements OnModuleInit {
       // User → Agent → Account
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { agent: { select: { account: { select: { plan: true } } } } },
+        select: { account: { select: { plan: true } } },
       });
-      const account = user?.agent?.account;
+      const account = user?.account;
       const plan: Plan = account?.plan ?? 'FREE';
       return PLAN_LIMITS[plan].ensembleModels;
     } catch (err) {

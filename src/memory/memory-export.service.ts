@@ -53,54 +53,6 @@ export class MemoryExportService {
       );
   }
 
-  async exportMemoriesFiltered(
-    userId: string,
-    filters: {
-      layer?: string;
-      projectId?: string;
-      startDate?: string;
-      endDate?: string;
-    },
-    take: number,
-    cursor?: string,
-  ): Promise<ExportedMemory[]> {
-    const where: any = { userId, deletedAt: null };
-    if (filters.layer) where.layer = filters.layer;
-    if (filters.projectId) where.projectId = filters.projectId;
-    if (filters.startDate || filters.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
-      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
-    }
-
-    const memories = await this.prisma.memory.findMany({
-      where,
-      include: { extraction: true },
-      orderBy: { createdAt: 'asc' },
-      take,
-      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-    });
-
-    return memories.map((m) => ({
-      id: m.id,
-      raw: m.raw,
-      layer: m.layer,
-      importance: m.importanceScore,
-      tags: (m as any).extraction?.topics ?? [],
-      metadata: {
-        source: m.source,
-        confidence: m.confidence,
-        subjectType: m.subjectType,
-        subjectId: m.subjectId,
-        projectId: m.projectId,
-        sessionId: m.sessionId,
-      },
-      createdAt: m.createdAt.toISOString(),
-      updatedAt: m.updatedAt.toISOString(),
-      graph: { entities: [], relationships: [] },
-    }));
-  }
-
   async exportMemories(userId: string): Promise<ExportedMemory[]> {
     const memories = await this.prisma.memory.findMany({
       where: { userId, deletedAt: null },
@@ -147,11 +99,12 @@ export class MemoryExportService {
         id: true,
         externalId: true,
         displayName: true,
-        agent: { select: { accountId: true, account: true } },
+        accountId: true,
+        account: true,
       },
     });
 
-    const account = user?.agent?.account as any;
+    const account = user?.account as any;
     const memoriesUsed = account?.memoriesUsed ?? 0;
     let memoryLimit = Infinity;
 
@@ -213,7 +166,7 @@ export class MemoryExportService {
           timestamp: item.createdAt ? new Date(item.createdAt) : new Date(),
         };
 
-        this.runWithRls(user?.agent?.accountId ?? undefined, () =>
+        this.runWithRls(user?.accountId ?? undefined, () =>
           this.pipelineService.extractAndEmbed(
             memory.id,
             item.raw,
@@ -463,9 +416,9 @@ export class MemoryExportService {
   ): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { agent: { select: { accountId: true } } },
+      select: { accountId: true },
     });
-    const accountId = user?.agent?.accountId;
+    const accountId = user?.accountId;
     if (!accountId) return;
 
     if (delta > 0) {

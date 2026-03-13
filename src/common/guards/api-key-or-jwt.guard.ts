@@ -16,6 +16,10 @@ import { createHash } from 'crypto';
  *
  * When JWT is used, resolves the account's first agent and sets
  * request.agent so the @Agent() decorator works.
+ *
+ * User resolution is always account-scoped (not agent-scoped):
+ *   - X-AM-User-ID header → findOrCreate({ accountId, externalId })
+ *   - No header           → findFirst({ accountId, isDefault: true }) || create default
  */
 @Injectable()
 export class ApiKeyOrJwtGuard implements CanActivate {
@@ -67,38 +71,14 @@ export class ApiKeyOrJwtGuard implements CanActivate {
         });
         request.agent = defaultAgent;
 
-        // Resolve user for @UserId() — needed for recall/query endpoints
-        if (defaultAgent) {
-          const externalUserId = request.headers['x-am-user-id'];
-          let user: any = null;
-          if (externalUserId) {
-            user = await this.prisma.user.findUnique({
-              where: {
-                agentId_externalId: {
-                  agentId: defaultAgent.id,
-                  externalId: externalUserId,
-                },
-              },
-            });
-            if (!user) {
-              user = await this.prisma.user.create({
-                data: { agentId: defaultAgent.id, externalId: externalUserId },
-              });
-            }
-          }
-          if (!user) {
-            // Fall back to first user for this agent
-            user = await this.prisma.user.findFirst({
-              where: { agentId: defaultAgent.id },
-              orderBy: { createdAt: 'asc' },
-            });
-          }
-          request.user = user;
-        }
+        // Resolve user — account-scoped (not agent-scoped)
+        const externalUserId = request.headers['x-am-user-id'] as string | undefined;
+        const user = await this.findOrCreateUser(instanceKey.accountId, externalUserId ?? null);
+        request.user = user;
         return true;
       }
 
-      // Regular agent API key
+      // Regular agent API key — delegate to ApiKeyGuard
       return this.apiKeyGuard.canActivate(context);
     }
 
@@ -118,15 +98,15 @@ export class ApiKeyOrJwtGuard implements CanActivate {
       this.isLocalIp(request)
     ) {
       // LAN bypass: use header if provided, otherwise default to first user
-      const externalUserId = request.headers['x-am-user-id'];
-      const internalUserId = request.headers['x-user-id'];
+      const externalUserId = request.headers['x-am-user-id'] as string | undefined;
+      const internalUserId = request.headers['x-user-id'] as string | undefined;
 
       const agent = await this.prisma.agent.findFirst({
         where: { deletedAt: null },
         orderBy: { createdAt: 'asc' },
       });
 
-      if (agent) {
+      if (agent && agent.accountId) {
         let user: any = null;
 
         // If internal user ID provided, look up directly
@@ -136,29 +116,14 @@ export class ApiKeyOrJwtGuard implements CanActivate {
           });
         }
 
-        // Fall back to external ID lookup
+        // Fall back to external ID → account-scoped lookup
         if (!user && externalUserId) {
-          user = await this.prisma.user.findUnique({
-            where: {
-              agentId_externalId: {
-                agentId: agent.id,
-                externalId: externalUserId,
-              },
-            },
-          });
-          if (!user) {
-            user = await this.prisma.user.create({
-              data: { agentId: agent.id, externalId: externalUserId },
-            });
-          }
+          user = await this.findOrCreateUser(agent.accountId, externalUserId);
         }
 
-        // No user ID headers at all — default to first user for this agent
+        // No user ID headers at all — default to isDefault user for this account
         if (!user && !externalUserId && !internalUserId) {
-          user = await this.prisma.user.findFirst({
-            where: { agentId: agent.id },
-            orderBy: { createdAt: 'asc' },
-          });
+          user = await this.findOrCreateUser(agent.accountId, null);
         }
 
         request.agent = agent;
@@ -203,22 +168,13 @@ export class ApiKeyOrJwtGuard implements CanActivate {
 
       request.agent = agent;
 
-      // Resolve or create a default user for this agent (needed by @UserId())
+      // Resolve or create a user scoped to the account (not the agent)
+      // X-AM-User-ID > JWT email > accountId as fallback externalId
       const externalUserId =
-        request.headers['x-am-user-id'] || payload.email || accountId;
-      let user = await this.prisma.user.findUnique({
-        where: {
-          agentId_externalId: {
-            agentId: agent.id,
-            externalId: externalUserId,
-          },
-        },
-      });
-      if (!user) {
-        user = await this.prisma.user.create({
-          data: { agentId: agent.id, externalId: externalUserId },
-        });
-      }
+        (request.headers['x-am-user-id'] as string | undefined) ||
+        payload.email ||
+        accountId;
+      const user = await this.findOrCreateUser(accountId, externalUserId);
       request.user = user;
 
       return true;
@@ -227,6 +183,38 @@ export class ApiKeyOrJwtGuard implements CanActivate {
     throw new UnauthorizedException(
       'Missing authentication: provide X-AM-API-Key or Authorization Bearer token',
     );
+  }
+
+  /**
+   * Find or create a User scoped to an account.
+   *
+   * - If externalId provided: findOrCreate({ accountId, externalId })
+   * - If no externalId:       findFirst({ accountId, isDefault: true }) || create default
+   */
+  private async findOrCreateUser(accountId: string, externalId: string | null) {
+    if (externalId) {
+      let user = await this.prisma.user.findUnique({
+        where: { accountId_externalId: { accountId, externalId } },
+      });
+      if (!user) {
+        user = await this.prisma.user.create({
+          data: { accountId, externalId },
+        });
+      }
+      return user;
+    }
+
+    // No externalId — use/create the isDefault user for this account
+    let user = await this.prisma.user.findFirst({
+      where: { accountId, isDefault: true, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: { accountId, externalId: 'default', isDefault: true },
+      });
+    }
+    return user;
   }
 
   private isLocalIp(request: any): boolean {

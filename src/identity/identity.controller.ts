@@ -142,22 +142,16 @@ export class IdentityController {
         let memoryCount = 0;
         let lastActive: Date | null = null;
         try {
-          const agentUsers = await this.prisma.user.findMany({
-            where: { agentId: agent.id },
-            select: { id: true },
+          // Memory.agentId tracks which agent stored the memory
+          memoryCount = await this.prisma.memory.count({
+            where: { agentId: agent.id, deletedAt: null },
           });
-          const userIds = agentUsers.map((u) => u.id);
-          if (userIds.length > 0) {
-            memoryCount = await this.prisma.memory.count({
-              where: { userId: { in: userIds }, deletedAt: null },
-            });
-            const lastMemory = await this.prisma.memory.findFirst({
-              where: { userId: { in: userIds }, deletedAt: null },
-              orderBy: { createdAt: 'desc' },
-              select: { createdAt: true },
-            });
-            lastActive = lastMemory?.createdAt || null;
-          }
+          const lastMemory = await this.prisma.memory.findFirst({
+            where: { agentId: agent.id, deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true },
+          });
+          lastActive = lastMemory?.createdAt || null;
         } catch {
           // Fallback to defaults
         }

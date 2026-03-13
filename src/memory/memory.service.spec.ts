@@ -1,9 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MemoryService, MemoryWithExtraction } from './memory.service';
-import { MemoryWriteService } from './memory-write.service';
-import { MemoryBulkService } from './memory-bulk.service';
-import { MemoryUpdateService } from './memory-update.service';
-import { MemoryCrudService } from './memory-crud.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExtractionService } from './extraction.service';
 import { EmbeddingService } from './embedding.service';
@@ -198,10 +194,6 @@ describe('MemoryService', () => {
     module = await Test.createTestingModule({
       providers: [
         MemoryService,
-        MemoryWriteService,
-        MemoryBulkService,
-        MemoryUpdateService,
-        MemoryCrudService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ExtractionService, useValue: mockExtraction },
         { provide: EmbeddingService, useValue: mockEmbedding },

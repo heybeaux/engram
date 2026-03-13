@@ -465,7 +465,7 @@ export class AgentRecallService {
 
   private async resolveAccountUserIds(accountId: string): Promise<string[]> {
     const users = await this.prisma.user.findMany({
-      where: { agent: { accountId, deletedAt: null } },
+      where: { accountId, deletedAt: null },
       select: { id: true },
     });
     return users.map((u) => u.id);

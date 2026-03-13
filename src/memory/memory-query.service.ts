@@ -373,6 +373,24 @@ export class MemoryQueryService {
     const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
     scoredMemories = await this.applyReranking(scoredMemories, rerankQuery, limit);
 
+    // v1.7: Agent-scoped filter — restrict to memories from a specific agent
+    if (dto.filterAgentId) {
+      scoredMemories = scoredMemories.filter(
+        (m) => m.agentId === dto.filterAgentId,
+      );
+    }
+
+    // v1.7: Agent boost — surface memories from the requesting agent higher
+    if (dto.agentBoost && dto.agentBoost > 1.0 && dto.agentId) {
+      scoredMemories = scoredMemories.map((m) => {
+        if (m.agentId === dto.agentId && m.score != null) {
+          return { ...m, score: m.score * dto.agentBoost! };
+        }
+        return m;
+      });
+      scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    }
+
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
       result = (await this.attachChains(scoredMemories)) as MemoryWithScore[];

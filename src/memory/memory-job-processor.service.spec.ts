@@ -14,7 +14,7 @@ describe('MemoryJobProcessorService', () => {
           id: 'user-1',
           externalId: 'ext-1',
           displayName: 'Test User',
-          agent: { accountId: null },
+          accountId: null,
         }),
       },
       $transaction: jest.fn((fn) => fn(mockPrisma)),
@@ -67,7 +67,7 @@ describe('MemoryJobProcessorService', () => {
       id: 'user-1',
       externalId: 'ext-1',
       displayName: 'Test',
-      agent: { accountId: 'acc-123' },
+      accountId: 'acc-123',
     });
 
     const job: MemoryJob = {

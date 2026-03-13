@@ -187,10 +187,10 @@ describe('ApiKeyGuard', () => {
   it('should auto-create user on first request', async () => {
     const apiKey = 'engram_new';
     const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
-    const agent = { id: 'agent-1', apiKeyHash, deletedAt: null };
+    const agent = { id: 'agent-1', accountId: 'acc-1', apiKeyHash, deletedAt: null };
     const newUser = {
       id: 'user-new',
-      agentId: 'agent-1',
+      accountId: 'acc-1',
       externalId: 'NewUser',
       deletedAt: null,
     };
@@ -205,7 +205,7 @@ describe('ApiKeyGuard', () => {
 
     expect(await guard.canActivate(ctx)).toBe(true);
     expect(mockPrisma.user.create).toHaveBeenCalledWith({
-      data: { agentId: 'agent-1', externalId: 'NewUser' },
+      data: { accountId: 'acc-1', externalId: 'NewUser' },
     });
   });
 
@@ -214,7 +214,7 @@ describe('ApiKeyGuard', () => {
   it('should throw UnauthorizedException for deleted user', async () => {
     const apiKey = 'engram_del';
     const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
-    const agent = { id: 'agent-1', apiKeyHash, deletedAt: null };
+    const agent = { id: 'agent-1', accountId: 'acc-1', apiKeyHash, deletedAt: null };
     const user = { id: 'user-del', deletedAt: new Date() };
 
     mockPrisma.agent.findUnique.mockResolvedValue(agent);
@@ -233,10 +233,10 @@ describe('ApiKeyGuard', () => {
   it('should attach agent and user to request on success', async () => {
     const apiKey = 'engram_ok';
     const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
-    const agent = { id: 'agent-1', apiKeyHash, deletedAt: null };
+    const agent = { id: 'agent-1', accountId: 'acc-1', apiKeyHash, deletedAt: null };
     const user = {
       id: 'user-1',
-      agentId: 'agent-1',
+      accountId: 'acc-1',
       externalId: 'Beaux',
       deletedAt: null,
     };

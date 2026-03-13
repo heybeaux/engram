@@ -72,14 +72,21 @@ export class InboundEmailService {
         name: { equals: localPart, mode: 'insensitive' },
         deletedAt: null,
       },
-      include: { users: true },
     });
 
     if (!agent) return null;
 
+    // Users now belong to accounts; find the first user for this agent's account
+    const defaultUser = agent.accountId
+      ? await this.prisma.user.findFirst({
+          where: { accountId: agent.accountId },
+          select: { id: true },
+        })
+      : null;
+
     return {
       agentId: agent.id,
-      userId: agent.users[0]?.id ?? null,
+      userId: defaultUser?.id ?? null,
     };
   }
 

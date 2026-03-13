@@ -18,25 +18,31 @@ export class EntityProfileService {
    */
   async resolveAccountUserIds(accountId: string): Promise<string[]> {
     const users = await this.prisma.user.findMany({
-      where: { agent: { accountId, deletedAt: null } },
+      where: { accountId, deletedAt: null },
       select: { id: true },
     });
     return users.map((u) => u.id);
   }
 
   /**
-   * Get or create a default user for the agent (same pattern used elsewhere).
+   * Get or create a default user for the agent's account.
    */
   async getOrCreateUser(agentId: string): Promise<string> {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { accountId: true },
+    });
+    if (!agent?.accountId) throw new NotFoundException(`Agent not found: ${agentId}`);
+
     const existing = await this.prisma.user.findFirst({
-      where: { agentId, deletedAt: null },
+      where: { accountId: agent.accountId, deletedAt: null },
       select: { id: true },
     });
     if (existing) return existing.id;
 
     const created = await this.prisma.user.create({
       data: {
-        agentId,
+        accountId: agent.accountId,
         externalId: 'entity-profile-default',
         displayName: 'Entity Profiles',
       },

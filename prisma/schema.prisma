@@ -27,6 +27,7 @@ model Account {
   createdAt           DateTime          @default(now()) @map("created_at")
   updatedAt           DateTime          @updatedAt @map("updated_at")
   agents              Agent[]
+  users               User[]
   uxFeedback          UxFeedback[]
   cloudLink           CloudLink?
   instanceSyncKeys    InstanceSyncKey[]
@@ -55,7 +56,6 @@ model Agent {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
   deletedAt      DateTime?      @map("deleted_at")
-  users          User[]
   webhooks       Webhook[]
   account        Account?       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   syncAgentMaps  SyncAgentMap[]
@@ -63,12 +63,15 @@ model Agent {
   @@map("agents")
 }
 
-/// User represents an end-user whose memories are being stored
+/// User represents an end-user whose memories are being stored.
+/// Users belong to accounts (not agents) so the same human is one record
+/// regardless of which agent is calling. X-AM-User-ID resolves against accountId.
 model User {
   id          String     @id @default(cuid())
   externalId  String     @map("external_id")
   displayName String?    @map("display_name")
-  agentId     String     @map("agent_id")
+  accountId   String     @map("account_id")
+  isDefault   Boolean    @default(false) @map("is_default")
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
   deletedAt   DateTime?  @map("deleted_at")
@@ -76,7 +79,7 @@ model User {
   memories    Memory[]
   projects    Project[]
   sessions    Session[]
-  agent       Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  account     Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   // Semantic Memory Graph relations
   graphEntities      GraphEntity[]
@@ -85,7 +88,7 @@ model User {
   syncUserMaps       SyncUserMap[]
   entityProfiles     EntityProfile[]
 
-  @@unique([agentId, externalId])
+  @@unique([accountId, externalId])
   @@map("users")
 }
 

@@ -341,7 +341,7 @@ export class WakingCycleService {
 
     // Find the first user belonging to this account
     const user = await this.prisma.user.findFirst({
-      where: { agent: { accountId } },
+      where: { accountId },
     });
     if (!user) {
       this.logger.warn(

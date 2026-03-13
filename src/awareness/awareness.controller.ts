@@ -47,7 +47,7 @@ export class AwarenessController {
 
     // Scope insights to the requesting account
     const accountUsers = await this.prisma.user.findMany({
-      where: { agent: { accountId: agent.accountId }, deletedAt: null },
+      where: { accountId: agent.accountId, deletedAt: null },
       select: { id: true },
     });
     const accountUserIds = accountUsers.map((u) => u.id);

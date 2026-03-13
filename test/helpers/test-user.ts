@@ -73,19 +73,19 @@ export async function createTestUser(
     // Delete in reverse FK order
     await prisma.memoryChainLink
       .deleteMany({
-        where: { source: { user: { agentId: agent.id } } },
+        where: { source: { user: { accountId: account.id } } },
       })
       .catch(() => {});
     await prisma.memoryExtraction
       .deleteMany({
-        where: { memory: { user: { agentId: agent.id } } },
+        where: { memory: { user: { accountId: account.id } } },
       })
       .catch(() => {});
     await prisma.memory
-      .deleteMany({ where: { user: { agentId: agent.id } } })
+      .deleteMany({ where: { user: { accountId: account.id } } })
       .catch(() => {});
     await prisma.user
-      .deleteMany({ where: { agentId: agent.id } })
+      .deleteMany({ where: { accountId: account.id } })
       .catch(() => {});
     await prisma.agent.deleteMany({ where: { id: agent.id } }).catch(() => {});
     await prisma.account

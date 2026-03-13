@@ -86,8 +86,9 @@ describe('InboundEmailService', () => {
       (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
         id: 'agent-1',
         name: 'rook',
-        users: [{ id: 'user-1' }],
+        accountId: 'acc-1',
       });
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ id: 'user-1' });
 
       const result = await service.resolveAgent('rook@mail.openengram.ai');
 
@@ -97,7 +98,6 @@ describe('InboundEmailService', () => {
           name: { equals: 'rook', mode: 'insensitive' },
           deletedAt: null,
         },
-        include: { users: true },
       });
     });
 
@@ -112,8 +112,9 @@ describe('InboundEmailService', () => {
       (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
         id: 'agent-2',
         name: 'solo',
-        users: [],
+        accountId: 'acc-2',
       });
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
 
       const result = await service.resolveAgent('solo@mail.openengram.ai');
       expect(result).toEqual({ agentId: 'agent-2', userId: null });
@@ -140,8 +141,9 @@ describe('InboundEmailService', () => {
       (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
         id: 'agent-1',
         name: 'rook',
-        users: [{ id: 'user-1' }],
+        accountId: 'acc-1',
       });
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ id: 'user-1' });
       (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
 
       const result = await service.handleInboundEmail(sampleData, 'evt-1');
@@ -244,8 +246,9 @@ describe('InboundEmailService', () => {
       (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
         id: 'agent-1',
         name: 'rook',
-        users: [{ id: 'user-1' }],
+        accountId: 'acc-1',
       });
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue({ id: 'user-1' });
       (memoryService.remember as jest.Mock).mockRejectedValue(
         new Error('Memory creation failed'),
       );
@@ -273,8 +276,9 @@ describe('InboundEmailService', () => {
       (prisma.agent.findFirst as jest.Mock).mockResolvedValue({
         id: 'agent-1',
         name: 'rook',
-        users: [],
+        accountId: 'acc-1',
       });
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
       (prisma.inboundEmail.update as jest.Mock).mockResolvedValue({});
 
       await service.handleInboundEmail(sampleData, 'evt-nouser');

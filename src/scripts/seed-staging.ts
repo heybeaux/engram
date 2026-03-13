@@ -208,7 +208,7 @@ async function seed(prisma: PrismaClient) {
         id: userId,
         externalId: `fixture_${name}`,
         displayName: name.charAt(0).toUpperCase() + name.slice(1),
-        agentId,
+        accountId,
       },
     });
 

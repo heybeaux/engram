@@ -160,7 +160,7 @@ describe('MemoryGraphService', () => {
   it('should include agent memories when includeAgent is true', async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
-      agentId: 'agent-1',
+      accountId: 'account-1',
     });
     mockPrisma.user.findFirst.mockResolvedValue({ id: 'agent-user-1' });
     mockPrisma.memory.findMany.mockResolvedValue([

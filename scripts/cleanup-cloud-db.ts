@@ -59,10 +59,10 @@ async function main() {
   console.log('\n=== Step 2: Delete junk users ===');
   const junkUsers = await prisma.user.findMany({
     where: { externalId: { in: JUNK_USER_EXTERNAL_IDS }, deletedAt: null },
-    select: { id: true, externalId: true, agentId: true },
+    select: { id: true, externalId: true, accountId: true },
   });
   for (const u of junkUsers) {
-    console.log(`  Junk user: ${u.externalId} (${u.id}) agent=${u.agentId}`);
+    console.log(`  Junk user: ${u.externalId} (${u.id}) account=${u.accountId}`);
   }
   if (!DRY_RUN && junkUsers.length > 0) {
     // Check if any have memories first
@@ -80,10 +80,10 @@ async function main() {
   console.log('\n=== Step 3: Delete junk agents ===');
   const agentsToDelete = await prisma.agent.findMany({
     where: { id: { in: DELETE_AGENT_IDS } },
-    select: { id: true, name: true },
+    select: { id: true, name: true, accountId: true },
   });
   for (const a of agentsToDelete) {
-    const userCount = await prisma.user.count({ where: { agentId: a.id } });
+    const userCount = a.accountId ? await prisma.user.count({ where: { accountId: a.accountId } }) : 0;
     console.log(`  Agent: "${a.name}" (${a.id}) — ${userCount} users (will cascade)`);
   }
   if (!DRY_RUN) {
@@ -126,11 +126,11 @@ async function main() {
   console.log('\n=== Final state ===');
   const remainingAgents = await prisma.agent.findMany({
     where: { deletedAt: null },
-    select: { id: true, name: true },
+    select: { id: true, name: true, accountId: true },
   });
   console.log(`  Agents: ${remainingAgents.length}`);
   for (const a of remainingAgents) {
-    const uc = await prisma.user.count({ where: { agentId: a.id } });
+    const uc = a.accountId ? await prisma.user.count({ where: { accountId: a.accountId } }) : 0;
     const mc = await prisma.memory.count({ where: { agentId: a.id } });
     console.log(`    ${a.name} (${a.id}): ${uc} users, ${mc} memories`);
   }

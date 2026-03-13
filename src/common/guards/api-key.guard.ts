@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { createHash, createHmac } from 'crypto';
+import { createHash } from 'crypto';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
@@ -32,27 +32,18 @@ export class ApiKeyGuard implements CanActivate {
       // LAN access — try to resolve agent context if key provided
       const localApiKey = request.headers['x-am-api-key'];
       const localUserId = request.headers['x-am-user-id'];
-      if (localApiKey && localUserId) {
+      if (localApiKey) {
         try {
           const localApiKeyHash = this.hashApiKey(localApiKey);
           const agent = await this.prisma.agent.findUnique({
             where: { apiKeyHash: localApiKeyHash },
           });
-          if (agent && !agent.deletedAt) {
-            let user = await this.prisma.user.findUnique({
-              where: {
-                agentId_externalId: {
-                  agentId: agent.id,
-                  externalId: localUserId,
-                },
-              },
-            });
-            if (!user) {
-              user = await this.prisma.user.create({
-                data: { agentId: agent.id, externalId: localUserId },
-              });
-            }
-            if (!user.deletedAt) {
+          if (agent && !agent.deletedAt && agent.accountId) {
+            const user = await this.findOrCreateUser(
+              agent.accountId,
+              localUserId || null,
+            );
+            if (!user?.deletedAt) {
               request.agent = agent;
               request.user = user;
               request.accountId = agent.accountId;
@@ -85,14 +76,20 @@ export class ApiKeyGuard implements CanActivate {
             if (defaultAgent) {
               request.agent = defaultAgent;
               const defaultUser = await this.prisma.user.findFirst({
-                where: { agentId: defaultAgent.id, deletedAt: null },
+                where: { accountId: defaultAccount.id, isDefault: true, deletedAt: null },
                 orderBy: { createdAt: 'asc' },
               });
               if (defaultUser) {
                 request.user = defaultUser;
                 request.userId = defaultUser.id;
               } else {
-                request.user = null;
+                // Fall back to any user for this account
+                const anyUser = await this.prisma.user.findFirst({
+                  where: { accountId: defaultAccount.id, deletedAt: null },
+                  orderBy: { createdAt: 'asc' },
+                });
+                request.user = anyUser ?? null;
+                if (anyUser) request.userId = anyUser.id;
               }
             } else {
               request.agent = null;
@@ -151,20 +148,16 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
-    const userId = request.headers['x-am-user-id'];
+    const externalId = request.headers['x-am-user-id'] as string | undefined;
 
     if (!apiKey) {
       throw new UnauthorizedException('Missing X-AM-API-Key header');
     }
 
-    // Default user ID to "default" if not provided — simplifies integrations
-    // (Custom GPTs, simple scripts) where multi-user isn't needed
-    const resolvedUserId = userId || 'default';
-
     // Hash the API key for lookup
     const apiKeyHash = this.hashApiKey(apiKey);
 
-    // Validate agent exists
+    // Validate agent exists (Key → Agent → agent.accountId)
     const agent = await this.prisma.agent.findUnique({
       where: { apiKeyHash },
     });
@@ -173,35 +166,57 @@ export class ApiKeyGuard implements CanActivate {
       throw new UnauthorizedException('Invalid API key');
     }
 
-    // Find or create user
-    let user = await this.prisma.user.findUnique({
-      where: {
-        agentId_externalId: {
-          agentId: agent.id,
-          externalId: resolvedUserId,
-        },
-      },
-    });
-
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          agentId: agent.id,
-          externalId: resolvedUserId,
-        },
-      });
+    if (!agent.accountId) {
+      throw new UnauthorizedException('Agent has no associated account');
     }
+
+    // Find or create user scoped to the account, not the agent
+    const user = await this.findOrCreateUser(agent.accountId, externalId ?? null);
 
     if (user.deletedAt) {
       throw new UnauthorizedException('User has been deleted');
     }
 
     // Attach to request for use in controllers
+    // Memory writes MUST use request.agent.id for agentId (server-authoritative)
     request.agent = agent;
     request.user = user;
     request.accountId = agent.accountId;
 
     return true;
+  }
+
+  /**
+   * Find or create a User scoped to an account.
+   *
+   * - If externalId provided: findOrCreate({ accountId, externalId })
+   * - If no externalId:       findFirst({ accountId, isDefault: true }) || create default
+   */
+  private async findOrCreateUser(accountId: string, externalId: string | null) {
+    if (externalId) {
+      // Attempt findUnique first (happy path)
+      let user = await this.prisma.user.findUnique({
+        where: { accountId_externalId: { accountId, externalId } },
+      });
+      if (!user) {
+        user = await this.prisma.user.create({
+          data: { accountId, externalId },
+        });
+      }
+      return user;
+    }
+
+    // No externalId — use/create the isDefault user for this account
+    let user = await this.prisma.user.findFirst({
+      where: { accountId, isDefault: true, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: { accountId, externalId: 'default', isDefault: true },
+      });
+    }
+    return user;
   }
 
   /**

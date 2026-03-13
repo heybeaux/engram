@@ -17,6 +17,7 @@ const mockTx = {
 };
 
 const mockPrisma = {
+  agent: { findUnique: jest.fn() },
   user: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
   entityProfile: {
     findFirst: jest.fn(),
@@ -88,7 +89,7 @@ describe('EntityProfileService', () => {
       const result = await service.resolveAccountUserIds(ACCOUNT_ID);
       expect(result).toEqual(USER_IDS);
       expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
-        where: { agent: { accountId: ACCOUNT_ID, deletedAt: null } },
+        where: { accountId: ACCOUNT_ID, deletedAt: null },
         select: { id: true },
       });
     });
@@ -106,6 +107,7 @@ describe('EntityProfileService', () => {
 
   describe('getOrCreateUser', () => {
     it('should return existing user ID', async () => {
+      mockPrisma.agent.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
       mockPrisma.user.findFirst.mockResolvedValue({ id: 'user-1' });
       const result = await service.getOrCreateUser(AGENT_ID);
       expect(result).toBe('user-1');
@@ -113,6 +115,7 @@ describe('EntityProfileService', () => {
     });
 
     it('should create a user when none exists', async () => {
+      mockPrisma.agent.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
       mockPrisma.user.findFirst.mockResolvedValue(null);
       mockPrisma.user.create.mockResolvedValue({ id: 'user-new' });
 
@@ -120,7 +123,7 @@ describe('EntityProfileService', () => {
       expect(result).toBe('user-new');
       expect(mockPrisma.user.create).toHaveBeenCalledWith({
         data: {
-          agentId: AGENT_ID,
+          accountId: ACCOUNT_ID,
           externalId: 'entity-profile-default',
           displayName: 'Entity Profiles',
         },
@@ -134,6 +137,7 @@ describe('EntityProfileService', () => {
 
   describe('create', () => {
     beforeEach(() => {
+      mockPrisma.agent.findUnique.mockResolvedValue({ accountId: ACCOUNT_ID });
       mockPrisma.user.findFirst.mockResolvedValue({ id: 'user-1' });
       mockTx.entityProfile.create.mockResolvedValue(baseProfile);
       mockTx.entityProfile.findUnique.mockResolvedValue({

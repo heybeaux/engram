@@ -113,6 +113,36 @@ export class QueryMemoryDto {
   @ValidateNested()
   @Type(() => AnticipatoryOptionsDto)
   anticipatory?: AnticipatoryOptionsDto;
+
+  // v1.7: Agent-scoped recall filter (identity consolidation)
+  // When set, restricts recalled memories to those created by this specific agent.
+  // Useful when the caller wants only its own memories, not cross-agent shared memories.
+  @ApiPropertyOptional({
+    description:
+      'Filter recalled memories by the agent that created them. ' +
+      'When omitted all memories for the user are considered.',
+    example: 'cld_agent_abc123',
+  })
+  @IsOptional()
+  @IsString()
+  filterAgentId?: string;
+
+  // v1.7: Boost factor for memories created by the requesting agent (identity consolidation)
+  // A value > 1.0 surfaces same-agent memories higher in results.
+  // E.g. 1.5 = 50% score boost for memories attributed to the caller.
+  @ApiPropertyOptional({
+    description:
+      'Score multiplier applied to memories created by the requesting agent. ' +
+      'Default 1.0 (no boost). Values between 1.0 and 3.0 are recommended.',
+    example: 1.5,
+    minimum: 1.0,
+    maximum: 5.0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1.0)
+  @Max(5.0)
+  agentBoost?: number;
 }
 
 export class LoadContextDto {

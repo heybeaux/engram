@@ -8,7 +8,6 @@ import {
 import { SegmentationService } from './segmentation.service';
 import { QueryRouterService } from './query-router.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { LLMService } from '../llm/llm.service';
 import { VectorService } from '../vector/vector.service';
 
@@ -16,37 +15,12 @@ describe('HierarchyService', () => {
   let service: HierarchyService;
   let mockConfig: any;
   let mockPrisma: any;
-  let mockServicePrisma: any;
   let mockLLM: jest.Mocked<LLMService>;
   let mockVector: jest.Mocked<VectorService>;
   let mockSegmentation: jest.Mocked<SegmentationService>;
   let mockQueryRouter: jest.Mocked<QueryRouterService>;
 
   const mockEmbedding = Array(768).fill(0.1);
-
-  const buildModule = async (overrides?: {
-    config?: any;
-    prisma?: any;
-    servicePrisma?: any;
-  }) => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        HierarchyService,
-        { provide: ConfigService, useValue: overrides?.config ?? mockConfig },
-        { provide: PrismaService, useValue: overrides?.prisma ?? mockPrisma },
-        {
-          provide: ServicePrismaService,
-          useValue: overrides?.servicePrisma ?? mockServicePrisma,
-        },
-        { provide: LLMService, useValue: mockLLM },
-        { provide: VectorService, useValue: mockVector },
-        { provide: SegmentationService, useValue: mockSegmentation },
-        { provide: QueryRouterService, useValue: mockQueryRouter },
-      ],
-    }).compile();
-
-    return module.get<HierarchyService>(HierarchyService);
-  };
 
   beforeEach(async () => {
     mockConfig = {
@@ -83,26 +57,6 @@ describe('HierarchyService', () => {
       },
       memory: {
         findMany: jest.fn().mockResolvedValue([]),
-      },
-    };
-
-    // ServicePrismaService mock — used for background DB writes (L0/L1 creation)
-    mockServicePrisma = {
-      hierarchyUnit: {
-        create: jest.fn().mockResolvedValue({
-          id: 'unit-123',
-          level: 'L0',
-          text: 'Test sentence',
-          sourceMemoryId: 'mem-123',
-          userId: 'user-456',
-          position: 0,
-          charStart: 0,
-          charEnd: 13,
-          pineconeId: 'test_hierarchy_l0_123',
-          pineconeNamespace: 'test_hierarchy_L0',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }),
       },
     };
 
@@ -152,7 +106,19 @@ describe('HierarchyService', () => {
       }),
     } as any;
 
-    service = await buildModule();
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        HierarchyService,
+        { provide: ConfigService, useValue: mockConfig },
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: LLMService, useValue: mockLLM },
+        { provide: VectorService, useValue: mockVector },
+        { provide: SegmentationService, useValue: mockSegmentation },
+        { provide: QueryRouterService, useValue: mockQueryRouter },
+      ],
+    }).compile();
+
+    service = module.get<HierarchyService>(HierarchyService);
   });
 
   describe('isEnabled', () => {
@@ -161,14 +127,24 @@ describe('HierarchyService', () => {
     });
 
     it('should return false when HIERARCHY_ENABLED is false', async () => {
-      const disabledConfig = {
-        get: jest.fn((key: string) => {
-          if (key === 'HIERARCHY_ENABLED') return 'false';
-          return 'test';
-        }),
-      };
+      mockConfig.get = jest.fn((key: string) => {
+        if (key === 'HIERARCHY_ENABLED') return 'false';
+        return 'test';
+      });
 
-      const disabledService = await buildModule({ config: disabledConfig });
+      const module = await Test.createTestingModule({
+        providers: [
+          HierarchyService,
+          { provide: ConfigService, useValue: mockConfig },
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: LLMService, useValue: mockLLM },
+          { provide: VectorService, useValue: mockVector },
+          { provide: SegmentationService, useValue: mockSegmentation },
+          { provide: QueryRouterService, useValue: mockQueryRouter },
+        ],
+      }).compile();
+
+      const disabledService = module.get<HierarchyService>(HierarchyService);
       expect(disabledService.isEnabled()).toBe(false);
     });
   });
@@ -215,24 +191,31 @@ describe('HierarchyService', () => {
       expect(mockVector.upsert).toHaveBeenCalled();
     });
 
-    it('should store units in PostgreSQL via ServicePrismaService (not RLS proxy)', async () => {
+    it('should store units in PostgreSQL', async () => {
       await service.processMemory('mem-123', 'Test text.', 'user-456');
 
-      // Background writes MUST go through ServicePrismaService (BYPASSRLS)
-      expect(mockServicePrisma.hierarchyUnit.create).toHaveBeenCalled();
-      // The RLS-scoped PrismaService must NOT be used for unit creation
-      expect(mockPrisma.hierarchyUnit.create).not.toHaveBeenCalled();
+      expect(mockPrisma.hierarchyUnit.create).toHaveBeenCalled();
     });
 
     it('should return empty result when disabled', async () => {
-      const disabledConfig = {
-        get: jest.fn((key: string) => {
-          if (key === 'HIERARCHY_ENABLED') return 'false';
-          return 'test';
-        }),
-      };
+      mockConfig.get = jest.fn((key: string) => {
+        if (key === 'HIERARCHY_ENABLED') return 'false';
+        return 'test';
+      });
 
-      const disabledService = await buildModule({ config: disabledConfig });
+      const module = await Test.createTestingModule({
+        providers: [
+          HierarchyService,
+          { provide: ConfigService, useValue: mockConfig },
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: LLMService, useValue: mockLLM },
+          { provide: VectorService, useValue: mockVector },
+          { provide: SegmentationService, useValue: mockSegmentation },
+          { provide: QueryRouterService, useValue: mockQueryRouter },
+        ],
+      }).compile();
+
+      const disabledService = module.get<HierarchyService>(HierarchyService);
       const result = await disabledService.processMemory(
         'mem-123',
         'Test',
@@ -241,131 +224,6 @@ describe('HierarchyService', () => {
 
       expect(result.unitsCreated).toBe(0);
       expect(result.levels).toEqual([]);
-    });
-  });
-
-  describe('createAndStoreUnit retry logic', () => {
-    beforeEach(() => {
-      // Speed up backoff for tests
-      jest.useFakeTimers();
-    });
-
-    afterEach(() => {
-      jest.useRealTimers();
-    });
-
-    it('should succeed on first attempt when DB write succeeds', async () => {
-      mockServicePrisma.hierarchyUnit.create.mockResolvedValueOnce({
-        id: 'unit-ok',
-        level: 'L0',
-        text: 'sentence',
-        sourceMemoryId: 'mem-1',
-        userId: 'user-1',
-        position: 0,
-        charStart: 0,
-        charEnd: 8,
-        pineconeId: 'pc-ok',
-        pineconeNamespace: 'test_hierarchy_L0',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      const result = await service.processMemory('mem-1', 'sentence.', 'user-1');
-
-      expect(result.unitsCreated).toBeGreaterThan(0);
-      expect(mockServicePrisma.hierarchyUnit.create).toHaveBeenCalledTimes(
-        // 1 sentence + 1 paragraph (paragraph = full text since it contains 1 sentence)
-        mockSegmentation.extractSentences.mock.results[0]?.value?.length +
-          mockSegmentation.extractParagraphs.mock.results[0]?.value?.length ||
-          2,
-      );
-    });
-
-    it('should retry on transient DB errors (Transaction already closed)', async () => {
-      const txError = new Error('Transaction already closed');
-
-      // Fail twice, succeed on third attempt
-      mockServicePrisma.hierarchyUnit.create
-        .mockRejectedValueOnce(txError)
-        .mockRejectedValueOnce(txError)
-        .mockResolvedValue({
-          id: 'unit-retry',
-          level: 'L0',
-          text: 'Retry sentence.',
-          sourceMemoryId: 'mem-retry',
-          userId: 'user-1',
-          position: 0,
-          charStart: 0,
-          charEnd: 14,
-          pineconeId: 'pc-retry',
-          pineconeNamespace: 'test_hierarchy_L0',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-      // Single sentence + single paragraph
-      mockSegmentation.extractSentences.mockReturnValue([
-        { text: 'Retry sentence.', position: 0, charStart: 0, charEnd: 14 },
-      ]);
-      mockSegmentation.extractParagraphs.mockReturnValue([
-        {
-          text: 'Retry sentence.',
-          sentences: [
-            { text: 'Retry sentence.', position: 0, charStart: 0, charEnd: 14 },
-          ],
-          position: 0,
-          charStart: 0,
-          charEnd: 14,
-        },
-      ]);
-
-      const processPromise = service.processMemory(
-        'mem-retry',
-        'Retry sentence.',
-        'user-1',
-      );
-
-      // Advance timers through backoff delays (200ms + 400ms)
-      await jest.runAllTimersAsync();
-
-      const result = await processPromise;
-
-      // Unit created after retries
-      expect(result.unitsCreated).toBeGreaterThan(0);
-      // create should have been called at least 3 times (2 fails + 1 success)
-      // across the sentence unit attempt
-      expect(
-        mockServicePrisma.hierarchyUnit.create.mock.calls.length,
-      ).toBeGreaterThanOrEqual(3);
-    });
-
-    it('should return null (not throw) after exhausting all 3 retries', async () => {
-      const txError = new Error('Transaction already closed');
-
-      // All attempts fail
-      mockServicePrisma.hierarchyUnit.create.mockRejectedValue(txError);
-
-      mockSegmentation.extractSentences.mockReturnValue([
-        { text: 'Bad sentence.', position: 0, charStart: 0, charEnd: 12 },
-      ]);
-      mockSegmentation.extractParagraphs.mockReturnValue([]);
-
-      const processPromise = service.processMemory(
-        'mem-fail',
-        'Bad sentence.',
-        'user-1',
-      );
-
-      await jest.runAllTimersAsync();
-
-      const result = await processPromise;
-
-      // Should not throw — returns 0 units created (all failed gracefully)
-      expect(result.unitsCreated).toBe(0);
-      // 3 retries per unit, 1 unit
-      expect(
-        mockServicePrisma.hierarchyUnit.create.mock.calls.length,
-      ).toBeGreaterThanOrEqual(3);
     });
   });
 

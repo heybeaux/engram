@@ -62,7 +62,7 @@ interface UserWithCounts {
   id: string;
   externalId: string;
   displayName: string | null;
-  agentId: string;
+  accountId: string;
   createdAt: Date;
   _count: { memories: number };
 }
@@ -84,7 +84,7 @@ function isTestUser(u: UserWithCounts): boolean {
 async function findDuplicates(users: UserWithCounts[]) {
   const groups = new Map<string, UserWithCounts[]>();
   for (const u of users) {
-    const key = `${u.agentId}::${u.externalId}`;
+    const key = `${u.accountId}::${u.externalId}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(u);
   }
