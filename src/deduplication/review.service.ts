@@ -54,7 +54,7 @@ export class ReviewService {
    */
   private async resolveAllUserIds(userId: string): Promise<string[]> {
     // If it's already a CUID, look up its externalId first
-    let externalId: string | null = null;
+    let externalId: string | null;
     if (userId.startsWith('cm')) {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },

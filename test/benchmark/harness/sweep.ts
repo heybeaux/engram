@@ -10,11 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { GOLD_QUERIES } from '../../fixtures/queries/gold-queries';
-import {
-  scoreQuery,
-  buildReport,
-  checkThresholds,
-} from '../scoring';
+import { scoreQuery, buildReport, checkThresholds } from '../scoring';
 import type { QueryScore } from '../scoring';
 import { runScoringConfig, cosineSim } from './simulate';
 import type { ScoringConfig } from './simulate';
@@ -47,7 +43,9 @@ type CosineScores = { [queryId: string]: { [memoryId: string]: number } };
 function loadJson<T>(filename: string): T {
   const filePath = path.join(HARNESS_DIR, filename);
   if (!fs.existsSync(filePath)) {
-    throw new Error(`Missing file: ${filePath}\nRun: pnpm benchmark:precompute first`);
+    throw new Error(
+      `Missing file: ${filePath}\nRun: pnpm benchmark:precompute first`,
+    );
   }
   return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
 }
@@ -107,7 +105,7 @@ function evaluateConfig(
     const recallAt20 =
       shouldTop20.length > 0 ? top20Hits.length / shouldTop20.length : 1.0;
 
-    let mrr = 0;
+    let mrr: number;
     if (goldQuery.must_top5.length > 0) {
       const allIds = [...new Set([...topIds, ...top20])];
       const reciprocalRanks = goldQuery.must_top5.map((id) => {
@@ -138,7 +136,10 @@ function evaluateConfig(
         user: goldQuery.user,
         expectedTop5: goldQuery.must_top5,
         expectedTop20: shouldTop20,
-        actualIds: [...topIds, ...top20.filter((id) => !topIds.includes(id))].slice(0, 20),
+        actualIds: [
+          ...topIds,
+          ...top20.filter((id) => !topIds.includes(id)),
+        ].slice(0, 20),
         mustAbsentViolations,
         top5Hits,
         top20Hits,
@@ -156,8 +157,7 @@ function evaluateConfig(
   const isolationScore =
     allScores.filter((s) => s.isolationPassed).length / allScores.length;
 
-  const passed =
-    precisionAt5 >= 0.7 && zeroHits === 0 && isolationScore >= 1.0;
+  const passed = precisionAt5 >= 0.7 && zeroHits === 0 && isolationScore >= 1.0;
 
   return { config, precisionAt5, zeroHits, isolationScore, passed };
 }
@@ -177,7 +177,8 @@ function main() {
   const preRerankKs = [40, 80, 120, 160];
   const importanceFinalWeights = [0.0, 0.1, 0.15, 0.2];
 
-  const totalConfigs = cosineWeights.length * preRerankKs.length * importanceFinalWeights.length;
+  const totalConfigs =
+    cosineWeights.length * preRerankKs.length * importanceFinalWeights.length;
   console.log(`\nSweeping ${totalConfigs} configurations...`);
 
   const allResults: SweepResult[] = [];
@@ -197,7 +198,9 @@ function main() {
         count++;
 
         if (count % 10 === 0) {
-          process.stdout.write(`  ${count}/${totalConfigs} configs evaluated\r`);
+          process.stdout.write(
+            `  ${count}/${totalConfigs} configs evaluated\r`,
+          );
         }
       }
     }
@@ -213,10 +216,10 @@ function main() {
   console.log(
     `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
   );
-  console.log(`SWEEP RESULTS — ${passing.length}/${totalConfigs} configs pass all thresholds`);
   console.log(
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `SWEEP RESULTS — ${passing.length}/${totalConfigs} configs pass all thresholds`,
   );
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
   if (passing.length === 0) {
     console.log('\nNo configs passed all thresholds.');
@@ -244,8 +247,12 @@ function main() {
     const best = passing[0];
     console.log(`   cosineWeight:         ${best.config.cosineWeight}`);
     console.log(`   preRerankK:           ${best.config.preRerankK}`);
-    console.log(`   importanceFinalWeight: ${best.config.importanceFinalWeight}`);
-    console.log(`   P@5:                  ${(best.precisionAt5 * 100).toFixed(1)}%`);
+    console.log(
+      `   importanceFinalWeight: ${best.config.importanceFinalWeight}`,
+    );
+    console.log(
+      `   P@5:                  ${(best.precisionAt5 * 100).toFixed(1)}%`,
+    );
   }
 
   console.log();

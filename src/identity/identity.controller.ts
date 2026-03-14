@@ -133,7 +133,7 @@ export class IdentityController {
         try {
           trustSummary = await this.trustProfileService.getProfile(agent.id);
         } catch {
-          trustSummary = null;
+          // trustSummary remains null from initialization
         }
 
         // Memory count and last active
@@ -232,7 +232,7 @@ export class IdentityController {
     try {
       trustSummary = await this.trustProfileService.getProfile(agent.id);
     } catch {
-      trustSummary = null;
+      // trustSummary remains null from initialization
     }
 
     return {

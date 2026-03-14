@@ -59,7 +59,7 @@ export class HealthController {
       dbLatencyMs = Date.now() - dbStart;
       dbStatus = 'up';
     } catch {
-      dbStatus = 'down';
+      // dbStatus remains 'down' from initialization
     }
 
     // 2. engram-embed health (cached)
