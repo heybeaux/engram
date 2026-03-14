@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { EntityProfileService } from './entity-profile.service';
+import { AttachmentPipelineService } from './attachment-pipeline.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttributeType, EntityType } from '@prisma/client';
 
@@ -16,8 +17,16 @@ const mockTx = {
   },
 };
 
+const mockAttachmentPipeline = {
+  attachMemory: jest.fn(),
+  onMemoryCreated: jest.fn(),
+  attachBatch: jest.fn(),
+  scanRecentUnattached: jest.fn(),
+};
+
 const mockPrisma = {
   user: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
+  memory: { findMany: jest.fn() },
   entityProfile: {
     findFirst: jest.fn(),
     findMany: jest.fn(),
@@ -37,7 +46,9 @@ const mockPrisma = {
     upsert: jest.fn(),
     delete: jest.fn(),
   },
-  $transaction: jest.fn((fn) => (typeof fn === 'function' ? fn(mockTx) : Promise.all(fn))),
+  $transaction: jest.fn((fn) =>
+    typeof fn === 'function' ? fn(mockTx) : Promise.all(fn),
+  ),
 };
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -72,6 +83,7 @@ describe('EntityProfileService', () => {
       providers: [
         EntityProfileService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: AttachmentPipelineService, useValue: mockAttachmentPipeline },
       ],
     }).compile();
 
@@ -84,7 +96,9 @@ describe('EntityProfileService', () => {
 
   describe('resolveAccountUserIds', () => {
     it('should return user IDs for account', async () => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
       const result = await service.resolveAccountUserIds(ACCOUNT_ID);
       expect(result).toEqual(USER_IDS);
       expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
@@ -148,7 +162,12 @@ describe('EntityProfileService', () => {
         type: EntityType.PERSON,
         description: 'A developer',
         attributes: [
-          { key: 'role', value: 'developer', valueType: AttributeType.STRING, category: 'work' },
+          {
+            key: 'role',
+            value: 'developer',
+            valueType: AttributeType.STRING,
+            category: 'work',
+          },
         ],
       };
 
@@ -210,7 +229,9 @@ describe('EntityProfileService', () => {
 
   describe('list', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
     });
 
     it('should paginate results', async () => {
@@ -233,12 +254,19 @@ describe('EntityProfileService', () => {
     it('should apply search filter across name, alias, description', async () => {
       mockPrisma.$transaction.mockResolvedValue([[baseProfile], 1]);
 
-      const result = await service.list(ACCOUNT_ID, { search: 'ali', page: 1, limit: 25 });
+      const result = await service.list(ACCOUNT_ID, {
+        search: 'ali',
+        page: 1,
+        limit: 25,
+      });
       expect(result.profiles).toHaveLength(1);
     });
 
     it('should return correct pagination metadata', async () => {
-      mockPrisma.$transaction.mockResolvedValue([[baseProfile, baseProfile], 50]);
+      mockPrisma.$transaction.mockResolvedValue([
+        [baseProfile, baseProfile],
+        50,
+      ]);
 
       const result = await service.list(ACCOUNT_ID, { page: 2, limit: 10 });
       expect(result.page).toBe(2);
@@ -253,7 +281,9 @@ describe('EntityProfileService', () => {
 
   describe('getById', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
     });
 
     it('should return a profile when found', async () => {
@@ -291,7 +321,9 @@ describe('EntityProfileService', () => {
 
   describe('update', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
       mockPrisma.entityProfile.findFirst.mockResolvedValue(baseProfile);
     });
 
@@ -316,7 +348,11 @@ describe('EntityProfileService', () => {
     });
 
     it('should update normalizedName when name changes', async () => {
-      mockPrisma.entityProfile.update.mockResolvedValue({ ...baseProfile, name: 'Alicia', attributes: [] });
+      mockPrisma.entityProfile.update.mockResolvedValue({
+        ...baseProfile,
+        name: 'Alicia',
+        attributes: [],
+      });
 
       await service.update(ACCOUNT_ID, 'profile-1', { name: 'Alicia' });
 
@@ -341,7 +377,9 @@ describe('EntityProfileService', () => {
 
   describe('softDelete', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
       mockPrisma.entityProfile.findFirst.mockResolvedValue(baseProfile);
     });
 
@@ -361,7 +399,9 @@ describe('EntityProfileService', () => {
 
     it('should throw when profile not found', async () => {
       mockPrisma.entityProfile.findFirst.mockResolvedValue(null);
-      await expect(service.softDelete(ACCOUNT_ID, 'bad-id')).rejects.toThrow(NotFoundException);
+      await expect(service.softDelete(ACCOUNT_ID, 'bad-id')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -371,7 +411,9 @@ describe('EntityProfileService', () => {
 
   describe('addAttribute', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
       mockPrisma.entityProfile.findFirst.mockResolvedValue(baseProfile);
     });
 
@@ -430,28 +472,47 @@ describe('EntityProfileService', () => {
 
   describe('updateAttribute', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
       mockPrisma.entityProfile.findFirst.mockResolvedValue(baseProfile);
     });
 
     it('should update an attribute', async () => {
-      const existingAttr = { id: 'attr-1', profileId: 'profile-1', key: 'role', value: 'old' };
+      const existingAttr = {
+        id: 'attr-1',
+        profileId: 'profile-1',
+        key: 'role',
+        value: 'old',
+      };
       mockPrisma.entityAttribute.findFirst.mockResolvedValue(existingAttr);
-      mockPrisma.entityAttribute.update.mockResolvedValue({ ...existingAttr, value: 'new' });
-
-      const result = await service.updateAttribute(ACCOUNT_ID, 'profile-1', 'attr-1', {
+      mockPrisma.entityAttribute.update.mockResolvedValue({
+        ...existingAttr,
         value: 'new',
       });
+
+      const result = await service.updateAttribute(
+        ACCOUNT_ID,
+        'profile-1',
+        'attr-1',
+        {
+          value: 'new',
+        },
+      );
       expect(result.value).toBe('new');
     });
 
     it('should throw NotFoundException when attribute not found on profile', async () => {
       mockPrisma.entityAttribute.findFirst.mockResolvedValue(null);
       await expect(
-        service.updateAttribute(ACCOUNT_ID, 'profile-1', 'bad-attr', { value: 'x' }),
+        service.updateAttribute(ACCOUNT_ID, 'profile-1', 'bad-attr', {
+          value: 'x',
+        }),
       ).rejects.toThrow(NotFoundException);
       await expect(
-        service.updateAttribute(ACCOUNT_ID, 'profile-1', 'bad-attr', { value: 'x' }),
+        service.updateAttribute(ACCOUNT_ID, 'profile-1', 'bad-attr', {
+          value: 'x',
+        }),
       ).rejects.toThrow('Attribute bad-attr not found on profile profile-1');
     });
   });
@@ -462,12 +523,17 @@ describe('EntityProfileService', () => {
 
   describe('removeAttribute', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
       mockPrisma.entityProfile.findFirst.mockResolvedValue(baseProfile);
     });
 
     it('should delete the attribute', async () => {
-      mockPrisma.entityAttribute.findFirst.mockResolvedValue({ id: 'attr-1', profileId: 'profile-1' });
+      mockPrisma.entityAttribute.findFirst.mockResolvedValue({
+        id: 'attr-1',
+        profileId: 'profile-1',
+      });
       mockPrisma.entityAttribute.delete.mockResolvedValue({ id: 'attr-1' });
 
       await service.removeAttribute(ACCOUNT_ID, 'profile-1', 'attr-1');
@@ -490,18 +556,31 @@ describe('EntityProfileService', () => {
 
   describe('attachMemory', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
       mockPrisma.entityProfile.findFirst.mockResolvedValue(baseProfile);
     });
 
     it('should upsert a memory attachment', async () => {
-      const upserted = { profileId: 'profile-1', memoryId: 'mem-1', relevanceScore: 0.9 };
+      const upserted = {
+        profileId: 'profile-1',
+        memoryId: 'mem-1',
+        relevanceScore: 0.9,
+      };
       mockPrisma.entityProfileMemory.upsert.mockResolvedValue(upserted);
 
-      const result = await service.attachMemory(ACCOUNT_ID, 'profile-1', 'mem-1', 0.9);
+      const result = await service.attachMemory(
+        ACCOUNT_ID,
+        'profile-1',
+        'mem-1',
+        0.9,
+      );
       expect(result).toEqual(upserted);
       expect(mockPrisma.entityProfileMemory.upsert).toHaveBeenCalledWith({
-        where: { profileId_memoryId: { profileId: 'profile-1', memoryId: 'mem-1' } },
+        where: {
+          profileId_memoryId: { profileId: 'profile-1', memoryId: 'mem-1' },
+        },
         create: expect.objectContaining({
           profileId: 'profile-1',
           memoryId: 'mem-1',
@@ -530,7 +609,9 @@ describe('EntityProfileService', () => {
 
   describe('detachMemory', () => {
     beforeEach(() => {
-      mockPrisma.user.findMany.mockResolvedValue(USER_IDS.map((id) => ({ id })));
+      mockPrisma.user.findMany.mockResolvedValue(
+        USER_IDS.map((id) => ({ id })),
+      );
       mockPrisma.entityProfile.findFirst.mockResolvedValue(baseProfile);
     });
 
@@ -538,7 +619,9 @@ describe('EntityProfileService', () => {
       mockPrisma.entityProfileMemory.delete.mockResolvedValue({});
       await service.detachMemory(ACCOUNT_ID, 'profile-1', 'mem-1');
       expect(mockPrisma.entityProfileMemory.delete).toHaveBeenCalledWith({
-        where: { profileId_memoryId: { profileId: 'profile-1', memoryId: 'mem-1' } },
+        where: {
+          profileId_memoryId: { profileId: 'profile-1', memoryId: 'mem-1' },
+        },
       });
     });
 
@@ -547,6 +630,61 @@ describe('EntityProfileService', () => {
       await expect(
         service.detachMemory(ACCOUNT_ID, 'bad-id', 'mem-1'),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // =========================================================================
+  // backfillAttachments
+  // =========================================================================
+
+  describe('backfillAttachments', () => {
+    beforeEach(() => {
+      mockPrisma.memory.findMany.mockReset();
+      mockAttachmentPipeline.attachMemory.mockReset();
+    });
+
+    it('should process memories in batches and return stats', async () => {
+      mockPrisma.memory.findMany
+        .mockResolvedValueOnce([{ id: 'mem-1' }, { id: 'mem-2' }]);
+
+      mockAttachmentPipeline.attachMemory
+        .mockResolvedValueOnce({ memoryId: 'mem-1', attached: [{ profileId: 'p1' }], skipped: 0 })
+        .mockResolvedValueOnce({ memoryId: 'mem-2', attached: [], skipped: 1 });
+
+      const stats = await service.backfillAttachments('user-1');
+
+      expect(stats.processed).toBe(2);
+      expect(stats.attached).toBe(1);
+      expect(stats.skipped).toBe(1);
+      expect(stats.errors).toBe(0);
+      expect(mockAttachmentPipeline.attachMemory).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle attachment errors gracefully', async () => {
+      mockPrisma.memory.findMany
+        .mockResolvedValueOnce([{ id: 'mem-1' }]);
+
+      mockAttachmentPipeline.attachMemory.mockRejectedValueOnce(
+        new Error('DB error'),
+      );
+
+      const stats = await service.backfillAttachments('user-1');
+
+      expect(stats.processed).toBe(1);
+      expect(stats.errors).toBe(1);
+      expect(stats.attached).toBe(0);
+    });
+
+    it('should return zero stats when no memories to process', async () => {
+      mockPrisma.memory.findMany.mockResolvedValueOnce([]);
+
+      const stats = await service.backfillAttachments('user-1');
+
+      expect(stats.processed).toBe(0);
+      expect(stats.attached).toBe(0);
+      expect(stats.skipped).toBe(0);
+      expect(stats.errors).toBe(0);
+      expect(mockAttachmentPipeline.attachMemory).not.toHaveBeenCalled();
     });
   });
 });

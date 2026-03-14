@@ -20,6 +20,7 @@ describe('EntityProfileController', () => {
     attachMemory: jest.fn(),
     detachMemory: jest.fn(),
     getOrCreateUser: jest.fn(),
+    backfillAttachments: jest.fn(),
     prisma: {
       entityProfileMemory: {
         findMany: jest.fn(),
@@ -105,7 +106,10 @@ describe('EntityProfileController', () => {
 
   describe('remove', () => {
     it('should call service.softDelete', async () => {
-      mockService.softDelete.mockResolvedValue({ id: 'p1', deletedAt: new Date() });
+      mockService.softDelete.mockResolvedValue({
+        id: 'p1',
+        deletedAt: new Date(),
+      });
       await controller.remove(mockAgent, 'p1');
       expect(mockService.softDelete).toHaveBeenCalledWith('account-1', 'p1');
     });
@@ -116,16 +120,28 @@ describe('EntityProfileController', () => {
       const dto = { key: 'email', value: 'matt@example.com' };
       mockService.addAttribute.mockResolvedValue({ id: 'a1', ...dto });
       await controller.addAttribute(mockAgent, 'p1', dto as any);
-      expect(mockService.addAttribute).toHaveBeenCalledWith('account-1', 'p1', dto);
+      expect(mockService.addAttribute).toHaveBeenCalledWith(
+        'account-1',
+        'p1',
+        dto,
+      );
     });
   });
 
   describe('updateAttribute', () => {
     it('should call service.updateAttribute', async () => {
       const dto = { value: 'new@example.com' };
-      mockService.updateAttribute.mockResolvedValue({ id: 'a1', value: 'new@example.com' });
+      mockService.updateAttribute.mockResolvedValue({
+        id: 'a1',
+        value: 'new@example.com',
+      });
       await controller.updateAttribute(mockAgent, 'p1', 'a1', dto);
-      expect(mockService.updateAttribute).toHaveBeenCalledWith('account-1', 'p1', 'a1', dto);
+      expect(mockService.updateAttribute).toHaveBeenCalledWith(
+        'account-1',
+        'p1',
+        'a1',
+        dto,
+      );
     });
   });
 
@@ -133,7 +149,11 @@ describe('EntityProfileController', () => {
     it('should call service.removeAttribute', async () => {
       mockService.removeAttribute.mockResolvedValue({ id: 'a1' });
       await controller.removeAttribute(mockAgent, 'p1', 'a1');
-      expect(mockService.removeAttribute).toHaveBeenCalledWith('account-1', 'p1', 'a1');
+      expect(mockService.removeAttribute).toHaveBeenCalledWith(
+        'account-1',
+        'p1',
+        'a1',
+      );
     });
   });
 
@@ -145,7 +165,10 @@ describe('EntityProfileController', () => {
         relevanceScore: 0.9,
       });
       expect(mockService.attachMemory).toHaveBeenCalledWith(
-        'account-1', 'p1', 'm1', 0.9,
+        'account-1',
+        'p1',
+        'm1',
+        0.9,
       );
     });
   });
@@ -154,7 +177,11 @@ describe('EntityProfileController', () => {
     it('should call service.detachMemory', async () => {
       mockService.detachMemory.mockResolvedValue({ id: 'pm1' });
       await controller.detachMemorySimple(mockAgent, 'p1', 'm1');
-      expect(mockService.detachMemory).toHaveBeenCalledWith('account-1', 'p1', 'm1');
+      expect(mockService.detachMemory).toHaveBeenCalledWith(
+        'account-1',
+        'p1',
+        'm1',
+      );
     });
   });
 
@@ -163,7 +190,10 @@ describe('EntityProfileController', () => {
       mockService.attachMemory.mockResolvedValue({ id: 'pm1' });
       await controller.attach(mockAgent, 'p1', { memoryId: 'm1' });
       expect(mockService.attachMemory).toHaveBeenCalledWith(
-        'account-1', 'p1', 'm1', 1.0,
+        'account-1',
+        'p1',
+        'm1',
+        1.0,
       );
     });
   });
@@ -172,7 +202,11 @@ describe('EntityProfileController', () => {
     it('should call service.detachMemory', async () => {
       mockService.detachMemory.mockResolvedValue({ id: 'pm1' });
       await controller.detach(mockAgent, 'p1', { memoryId: 'm1' });
-      expect(mockService.detachMemory).toHaveBeenCalledWith('account-1', 'p1', 'm1');
+      expect(mockService.detachMemory).toHaveBeenCalledWith(
+        'account-1',
+        'p1',
+        'm1',
+      );
     });
   });
 
@@ -187,8 +221,30 @@ describe('EntityProfileController', () => {
       });
       const result = await controller.scan(mockAgent, '10');
       expect(mockService.getOrCreateUser).toHaveBeenCalledWith('agent-1');
-      expect(mockPipeline.scanRecentUnattached).toHaveBeenCalledWith('user-1', 10);
+      expect(mockPipeline.scanRecentUnattached).toHaveBeenCalledWith(
+        'user-1',
+        10,
+      );
       expect(result.processed).toBe(5);
+    });
+  });
+
+  describe('backfill', () => {
+    it('should start a background backfill job and return jobId', async () => {
+      mockService.getOrCreateUser.mockResolvedValue('user-1');
+      mockService.backfillAttachments = jest.fn().mockResolvedValue({
+        processed: 10,
+        attached: 5,
+        skipped: 3,
+        errors: 2,
+      });
+
+      const result = await controller.backfill(mockAgent);
+
+      expect(mockService.getOrCreateUser).toHaveBeenCalledWith('agent-1');
+      expect(result).toHaveProperty('jobId');
+      expect(result).toHaveProperty('message');
+      expect(result.message).toContain('Backfill job started');
     });
   });
 
@@ -196,7 +252,13 @@ describe('EntityProfileController', () => {
     it('should return attached memories with pagination', async () => {
       mockService.getById.mockResolvedValue({ id: 'p1' });
       mockService.prisma.entityProfileMemory.findMany.mockResolvedValue([
-        { id: 'pm1', profileId: 'p1', memoryId: 'm1', relevanceScore: 0.9, memory: { id: 'm1', raw: 'text' } },
+        {
+          id: 'pm1',
+          profileId: 'p1',
+          memoryId: 'm1',
+          relevanceScore: 0.9,
+          memory: { id: 'm1', raw: 'text' },
+        },
       ]);
       mockService.prisma.entityProfileMemory.count.mockResolvedValue(1);
 

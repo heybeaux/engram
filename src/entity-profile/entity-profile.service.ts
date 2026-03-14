@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -6,10 +6,23 @@ import { CreateAttributeDto } from './dto/create-attribute.dto';
 import { UpdateAttributeDto } from './dto/update-attribute.dto';
 import { ListProfilesDto } from './dto/list-profiles.dto';
 import { AttributeType } from '@prisma/client';
+import { AttachmentPipelineService } from './attachment-pipeline.service';
+
+export interface BackfillStats {
+  processed: number;
+  attached: number;
+  skipped: number;
+  errors: number;
+}
 
 @Injectable()
 export class EntityProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(EntityProfileService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attachmentPipeline: AttachmentPipelineService,
+  ) {}
 
   // ── helpers ──────────────────────────────────────────────────────────
 
@@ -233,11 +246,7 @@ export class EntityProfileService {
     });
   }
 
-  async removeAttribute(
-    accountId: string,
-    profileId: string,
-    attrId: string,
-  ) {
+  async removeAttribute(accountId: string, profileId: string, attrId: string) {
     await this.getById(accountId, profileId);
 
     const attr = await this.prisma.entityAttribute.findFirst({
@@ -273,14 +282,76 @@ export class EntityProfileService {
     });
   }
 
-  async detachMemory(
-    accountId: string,
-    profileId: string,
-    memoryId: string,
-  ) {
+  async detachMemory(accountId: string, profileId: string, memoryId: string) {
     await this.getById(accountId, profileId);
     return this.prisma.entityProfileMemory.delete({
       where: { profileId_memoryId: { profileId, memoryId } },
     });
+  }
+
+  // ── Backfill ──────────────────────────────────────────────────────────
+
+  async backfillAttachments(userId: string): Promise<BackfillStats> {
+    const BATCH_SIZE = 50;
+    const stats: BackfillStats = {
+      processed: 0,
+      attached: 0,
+      skipped: 0,
+      errors: 0,
+    };
+
+    let cursor: string | undefined;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      // Fetch a batch of non-deleted memories that have no profile attachments
+      const memories = await this.prisma.memory.findMany({
+        where: {
+          userId,
+          deletedAt: null,
+          entityProfiles: { none: {} },
+        },
+        orderBy: { createdAt: 'asc' },
+        take: BATCH_SIZE,
+        ...(cursor
+          ? { skip: 1, cursor: { id: cursor } }
+          : {}),
+        select: { id: true },
+      });
+
+      if (memories.length === 0) break;
+
+      for (const memory of memories) {
+        try {
+          const result = await this.attachmentPipeline.attachMemory(
+            memory.id,
+            userId,
+          );
+          stats.processed++;
+          stats.attached += result.attached.length;
+          stats.skipped += result.skipped;
+        } catch (err) {
+          stats.processed++;
+          stats.errors++;
+          this.logger.warn(
+            `Backfill: failed to attach memory ${memory.id}: ${(err as Error).message}`,
+          );
+        }
+      }
+
+      this.logger.log(
+        `Backfill progress for user ${userId}: processed=${stats.processed}, attached=${stats.attached}, errors=${stats.errors}`,
+      );
+
+      cursor = memories[memories.length - 1].id;
+
+      // If we got fewer than BATCH_SIZE, we've exhausted the results
+      if (memories.length < BATCH_SIZE) break;
+    }
+
+    this.logger.log(
+      `Backfill complete for user ${userId}: ${JSON.stringify(stats)}`,
+    );
+    return stats;
   }
 }

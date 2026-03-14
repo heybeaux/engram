@@ -33,6 +33,7 @@ import { AnticipatoryModule } from '../anticipatory/anticipatory.module';
 import { GraphModule } from '../graph/graph.module';
 import { QueueModule } from '../queue/queue.module';
 import { ServicePrismaModule } from '../prisma/service-prisma.module';
+import { EntityProfileModule } from '../entity-profile/entity-profile.module';
 import { GraphRecallService } from './graph-recall.service';
 import { EmbeddingQueueProducer } from './embedding-queue.producer';
 import { EmbeddingQueueProcessor } from './embedding-queue.processor';
@@ -65,6 +66,7 @@ const bullExports = hasRedis ? [EmbeddingQueueProducer] : [];
     GraphModule,
     QueueModule,
     ServicePrismaModule,
+    EntityProfileModule,
     ...bullImports,
   ],
   controllers: [MemoryController],

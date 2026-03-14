@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,11 +28,14 @@ import { UpdateAttributeDto } from './dto/update-attribute.dto';
 import { ListProfilesDto } from './dto/list-profiles.dto';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { Agent } from '../common/decorators/user-id.decorator';
+import { randomUUID } from 'crypto';
 
 @ApiTags('Entity Profiles')
 @UseGuards(ApiKeyOrJwtGuard)
 @Controller('v1/entity-profiles')
 export class EntityProfileController {
+  private readonly logger = new Logger(EntityProfileController.name);
+
   constructor(
     private readonly service: EntityProfileService,
     private readonly pipeline: AttachmentPipelineService,
@@ -56,7 +60,10 @@ export class EntityProfileController {
   @Get(':id')
   @ApiOperation({ summary: 'Get entity profile detail' })
   @ApiParam({ name: 'id', description: 'Profile UUID' })
-  @ApiResponse({ status: 200, description: 'Profile with attributes and counts.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile with attributes and counts.',
+  })
   @ApiResponse({ status: 404, description: 'Profile not found.' })
   async getById(@Agent() agent: any, @Param('id') id: string) {
     return this.service.getById(agent.accountId, id);
@@ -202,6 +209,38 @@ export class EntityProfileController {
     return this.service.detachMemory(agent.accountId, id, body.memoryId);
   }
 
+  @Post('backfill')
+  @ApiOperation({
+    summary: 'Backfill entity profile attachments for all existing memories',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Backfill job started. Processes in background.',
+  })
+  async backfill(@Agent() agent: any) {
+    const userId = await this.service.getOrCreateUser(agent.id);
+    const jobId = randomUUID();
+
+    // Fire-and-forget: run backfill in background
+    void this.service.backfillAttachments(userId).then(
+      (stats) => {
+        this.logger.log(
+          `Backfill job ${jobId} complete: ${JSON.stringify(stats)}`,
+        );
+      },
+      (err) => {
+        this.logger.error(
+          `Backfill job ${jobId} failed: ${(err as Error).message}`,
+        );
+      },
+    );
+
+    return {
+      jobId,
+      message: 'Backfill job started. Processing in background.',
+    };
+  }
+
   @Post('scan')
   @ApiOperation({
     summary: 'Trigger a scan of recent unattached memories for the agent',
@@ -212,10 +251,7 @@ export class EntityProfileController {
     description: 'Max memories to scan (default 50)',
   })
   @ApiResponse({ status: 201, description: 'Scan result.' })
-  async scan(
-    @Agent() agent: any,
-    @Query('limit') limit?: string,
-  ) {
+  async scan(@Agent() agent: any, @Query('limit') limit?: string) {
     const userId = await this.service.getOrCreateUser(agent.id);
     const scanLimit = limit ? parseInt(limit, 10) : 50;
     return this.pipeline.scanRecentUnattached(userId, scanLimit);

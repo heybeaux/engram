@@ -8,6 +8,7 @@ import {
 import { EmbeddingService } from './embedding.service';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { GraphExtractionService } from '../graph/services/graph-extraction.service';
+import { AttachmentPipelineService } from '../entity-profile/attachment-pipeline.service';
 import { parseFlexibleDate } from '../utils/date-parser';
 import {
   RELATED_SIMILARITY_THRESHOLD,
@@ -37,6 +38,7 @@ export class MemoryPipelineService {
     private embedding: EmbeddingService,
     @Optional() private hierarchyService?: HierarchyService,
     @Optional() private graphExtraction?: GraphExtractionService,
+    @Optional() private attachmentPipeline?: AttachmentPipelineService,
   ) {}
 
   /**
@@ -238,6 +240,16 @@ export class MemoryPipelineService {
       this.logger.debug('[Memory] Entities stored successfully for:', memoryId);
     } else {
       this.logger.debug('[Memory] No entities to store for:', memoryId);
+    }
+
+    // 4b. Attach to entity profiles (fire-and-forget)
+    if (this.attachmentPipeline) {
+      void this.attachmentPipeline.onMemoryCreated(memoryId, userId).catch((err) => {
+        this.logger.warn(
+          `[Memory] Entity profile attachment failed for ${memoryId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      });
     }
 
     // 5. Generate and store embedding (Phase 2 — resilient, HEY-345)
