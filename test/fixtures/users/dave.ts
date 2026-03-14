@@ -12,7 +12,7 @@ const CANARY = 'RLS_CANARY_DAVE_';
 
 function generateDaveMemories(): FixtureMemory[] {
   const memories: FixtureMemory[] = [];
-  let counter = 1;
+  let counter: number;
 
   // dave_today_001 and dave_today_002 have specific content so temporal queries can target them
   const todaySpecific: FixtureMemory[] = [

@@ -63,19 +63,14 @@ export interface BenchmarkReport {
 /**
  * Score a single query's results against its gold expectations.
  */
-export function scoreQuery(
-  query: GoldQuery,
-  resultIds: string[],
-): QueryScore {
+export function scoreQuery(query: GoldQuery, resultIds: string[]): QueryScore {
   const top5 = resultIds.slice(0, 5);
   const top20 = resultIds.slice(0, 20);
 
   // Precision@5: fraction of must_top5 items found in top 5
   const top5Hits = query.must_top5.filter((id) => top5.includes(id));
   const precisionAt5 =
-    query.must_top5.length > 0
-      ? top5Hits.length / query.must_top5.length
-      : 1.0;
+    query.must_top5.length > 0 ? top5Hits.length / query.must_top5.length : 1.0;
 
   // Recall@20: fraction of should_top20 items found in top 20
   const shouldTop20 = query.should_top20 ?? [];
@@ -84,15 +79,14 @@ export function scoreQuery(
     shouldTop20.length > 0 ? top20Hits.length / shouldTop20.length : 1.0;
 
   // MRR: mean reciprocal rank for must_top5 items
-  let mrr = 0;
+  let mrr: number;
   if (query.must_top5.length > 0) {
     const reciprocalRanks = query.must_top5.map((id) => {
       const rank = resultIds.indexOf(id);
       return rank >= 0 ? 1 / (rank + 1) : 0;
     });
     mrr =
-      reciprocalRanks.reduce((sum, rr) => sum + rr, 0) /
-      query.must_top5.length;
+      reciprocalRanks.reduce((sum, rr) => sum + rr, 0) / query.must_top5.length;
   } else {
     mrr = 1.0; // no must_top5 = perfect by default
   }
@@ -105,8 +99,7 @@ export function scoreQuery(
 
   // Overall pass: isolation + at least some hits if expected
   const passed =
-    isolationPassed &&
-    (query.must_top5.length === 0 || top5Hits.length > 0);
+    isolationPassed && (query.must_top5.length === 0 || top5Hits.length > 0);
 
   return {
     queryId: query.id,
@@ -132,9 +125,7 @@ export function scoreQuery(
 /**
  * Aggregate scores by category.
  */
-export function aggregateByCategory(
-  scores: QueryScore[],
-): CategoryScore[] {
+export function aggregateByCategory(scores: QueryScore[]): CategoryScore[] {
   const categories = new Map<string, QueryScore[]>();
   for (const score of scores) {
     const list = categories.get(score.category) ?? [];
@@ -224,9 +215,13 @@ export function formatReport(report: BenchmarkReport): string {
   const lines: string[] = [];
 
   lines.push('');
-  lines.push('╔══════════════════════════════════════════════════════════════╗');
+  lines.push(
+    '╔══════════════════════════════════════════════════════════════╗',
+  );
   lines.push('║              ENGRAM RECALL BENCHMARK REPORT                 ║');
-  lines.push('╚══════════════════════════════════════════════════════════════╝');
+  lines.push(
+    '╚══════════════════════════════════════════════════════════════╝',
+  );
   lines.push('');
   lines.push(`  Git SHA:    ${report.gitSha}`);
   lines.push(`  Branch:     ${report.branch}`);
@@ -283,7 +278,9 @@ export function formatReport(report: BenchmarkReport): string {
     lines.push(`❌ FAILED QUERIES (${report.failedQueryDetails.length}):`);
     lines.push('');
     for (const q of report.failedQueryDetails) {
-      lines.push(`  [${q.queryId}] "${q.details.query}" (user: ${q.details.user})`);
+      lines.push(
+        `  [${q.queryId}] "${q.details.query}" (user: ${q.details.user})`,
+      );
       if (!q.isolationPassed) {
         lines.push(
           `    ⛔ ISOLATION FAILURE: ${q.details.mustAbsentViolations.join(', ')}`,
@@ -302,7 +299,9 @@ export function formatReport(report: BenchmarkReport): string {
           `    📊 Precision@5: ${pct(q.precisionAt5)} — hit: [${q.details.top5Hits.join(', ')}], missed: [${q.details.expectedTop5.filter((id) => !q.details.top5Hits.includes(id)).join(', ')}]`,
         );
       }
-      lines.push(`    📋 Actual top 5: [${q.details.actualIds.slice(0, 5).join(', ')}]`);
+      lines.push(
+        `    📋 Actual top 5: [${q.details.actualIds.slice(0, 5).join(', ')}]`,
+      );
       lines.push('');
     }
   }
