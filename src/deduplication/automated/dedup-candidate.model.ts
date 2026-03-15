@@ -28,5 +28,6 @@ export const AUTO_CONSOLIDATE_CONFIDENCE_HIGH = 0.9;
 /** Minimum confidence for OVERLAPPING auto-consolidation (low — queues below this) */
 export const AUTO_CONSOLIDATE_CONFIDENCE_LOW = 0.7;
 
-/** Look-back window for candidate detection (hours) */
-export const RECENT_WINDOW_HOURS = 2;
+/** Default look-back window for candidate detection (hours).
+ *  Override via DEDUP_DETECTION_WINDOW_HOURS env var. */
+export const DEFAULT_DETECTION_WINDOW_HOURS = 24;

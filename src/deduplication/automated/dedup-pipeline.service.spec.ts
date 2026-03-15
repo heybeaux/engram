@@ -53,17 +53,28 @@ describe('DedupPipelineService', () => {
     service = module.get<DedupPipelineService>(DedupPipelineService);
     jest.clearAllMocks();
 
-    // Re-wire mocks after clearAllMocks
+    // Re-wire mocks after clearAllMocks — default: one batch then empty
     mockDetection.detectCandidates.mockResolvedValue({ scanned: 10, created: 3, skipped: 0 });
-    mockClassification.processPendingCandidates.mockResolvedValue({ processed: 3, errors: 0 });
-    mockResolution.processClassifiedCandidates.mockResolvedValue({
-      processed: 3,
-      autoMerged: 2,
-      autoConsolidated: 0,
-      queued: 1,
-      skipped: 0,
-      errors: 0,
-    });
+    mockClassification.processPendingCandidates
+      .mockResolvedValueOnce({ processed: 3, errors: 0 })
+      .mockResolvedValue({ processed: 0, errors: 0 });
+    mockResolution.processClassifiedCandidates
+      .mockResolvedValueOnce({
+        processed: 3,
+        autoMerged: 2,
+        autoConsolidated: 0,
+        queued: 1,
+        skipped: 0,
+        errors: 0,
+      })
+      .mockResolvedValue({
+        processed: 0,
+        autoMerged: 0,
+        autoConsolidated: 0,
+        queued: 0,
+        skipped: 0,
+        errors: 0,
+      });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (mockConfig.get as jest.Mock).mockImplementation((_key: string): any => 'true');
     mockQueue.add.mockResolvedValue({ id: 'job-1' });
@@ -74,8 +85,8 @@ describe('DedupPipelineService', () => {
       const result = await service.runPipeline();
 
       expect(mockDetection.detectCandidates).toHaveBeenCalledTimes(1);
-      expect(mockClassification.processPendingCandidates).toHaveBeenCalledTimes(1);
-      expect(mockResolution.processClassifiedCandidates).toHaveBeenCalledTimes(1);
+      expect(mockClassification.processPendingCandidates).toHaveBeenCalled();
+      expect(mockResolution.processClassifiedCandidates).toHaveBeenCalled();
 
       expect(result.skipped).toBe(false);
       expect(result.detection.scanned).toBe(10);
@@ -105,6 +116,51 @@ describe('DedupPipelineService', () => {
       expect(result.startedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
       expect(result.finishedAt.getTime()).toBeGreaterThanOrEqual(result.startedAt.getTime());
       expect(result.finishedAt.getTime()).toBeLessThanOrEqual(after.getTime());
+    });
+
+    it('loops classification until all pending are processed', async () => {
+      // Reset and re-mock classification to control loop precisely
+      mockClassification.processPendingCandidates.mockReset();
+      mockClassification.processPendingCandidates
+        .mockResolvedValueOnce({ processed: 10, errors: 0 })
+        .mockResolvedValueOnce({ processed: 5, errors: 0 })
+        .mockResolvedValue({ processed: 0, errors: 0 });
+
+      const result = await service.runPipeline();
+
+      expect(mockClassification.processPendingCandidates).toHaveBeenCalledTimes(3);
+      expect(result.classification.processed).toBe(15);
+    });
+
+    it('loops resolution until all classified are processed', async () => {
+      // Reset and re-mock resolution to control loop precisely
+      mockResolution.processClassifiedCandidates.mockReset();
+      mockResolution.processClassifiedCandidates
+        .mockResolvedValueOnce({
+          processed: 20, autoMerged: 10, autoConsolidated: 3, queued: 5, skipped: 2, errors: 0,
+        })
+        .mockResolvedValue({
+          processed: 0, autoMerged: 0, autoConsolidated: 0, queued: 0, skipped: 0, errors: 0,
+        });
+
+      const result = await service.runPipeline();
+
+      expect(mockResolution.processClassifiedCandidates).toHaveBeenCalledTimes(2);
+      expect(result.resolution.autoMerged).toBe(10);
+      expect(result.resolution.autoConsolidated).toBe(3);
+    });
+
+    it('stops classification loop when only errors remain', async () => {
+      // Reset and re-mock
+      mockClassification.processPendingCandidates.mockReset();
+      mockClassification.processPendingCandidates
+        .mockResolvedValueOnce({ processed: 0, errors: 10 })
+        .mockResolvedValueOnce({ processed: 0, errors: 10 })
+        .mockResolvedValue({ processed: 0, errors: 0 });
+
+      const result = await service.runPipeline();
+
+      expect(result.classification.errors).toBe(20);
     });
   });
 

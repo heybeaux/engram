@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import {
   DetectionMethod,
   COSINE_THRESHOLD,
   LEVENSHTEIN_THRESHOLD,
-  RECENT_WINDOW_HOURS,
+  DEFAULT_DETECTION_WINDOW_HOURS,
 } from './dedup-candidate.model';
 
 export interface DetectionStats {
@@ -24,15 +25,25 @@ export interface DetectionStats {
 @Injectable()
 export class CandidateDetectionService {
   private readonly logger = new Logger(CandidateDetectionService.name);
+  private readonly windowHours: number;
 
-  constructor(private readonly prisma: ServicePrismaService) {}
+  constructor(
+    private readonly prisma: ServicePrismaService,
+    private readonly config: ConfigService,
+  ) {
+    this.windowHours = parseInt(
+      this.config.get<string>('DEDUP_DETECTION_WINDOW_HOURS') ??
+        String(DEFAULT_DETECTION_WINDOW_HOURS),
+      10,
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
 
   async detectCandidates(): Promise<DetectionStats> {
-    const since = new Date(Date.now() - RECENT_WINDOW_HOURS * 60 * 60 * 1000);
+    const since = new Date(Date.now() - this.windowHours * 60 * 60 * 1000);
 
     // Fetch recent memories — embedding is Unsupported("vector") so we query it via raw SQL
     const recentMemories = await this.prisma.memory.findMany({
@@ -56,7 +67,7 @@ export class CandidateDetectionService {
     const hasEmbedding = new Set(embeddingRows.map((r) => r.id));
 
     this.logger.log(
-      `[CandidateDetection] Scanning ${recentMemories.length} memories from last ${RECENT_WINDOW_HOURS}h`,
+      `[CandidateDetection] Scanning ${recentMemories.length} memories from last ${this.windowHours}h`,
     );
 
     let created = 0;

@@ -30,7 +30,7 @@ export interface PipelineRunResult {
  *
  * Environment variables:
  *   DEDUP_PIPELINE_ENABLED         — set to "false" to disable (default: true)
- *   DEDUP_DETECTION_WINDOW_HOURS   — hours to look back for new memories (default: 2)
+ *   DEDUP_DETECTION_WINDOW_HOURS   — hours to look back for new memories (default: 24)
  *   DEDUP_AUTO_RESOLVE_THRESHOLD   — confidence threshold for auto-resolve (default: 0.7)
  *
  * Cron: daily at 04:00 (staggered 1h after Dream Cycle at 03:00)
@@ -110,16 +110,34 @@ export class DedupPipelineService implements OnModuleInit {
       `[DedupPipeline] Phase 1 complete — scanned: ${detection.scanned}, created: ${detection.created}, skipped: ${detection.skipped}`,
     );
 
-    // Phase 2 — LLM Classification
+    // Phase 2 — LLM Classification (loop to drain backlog)
     this.logger.log('[DedupPipeline] Phase 2: LLM Classification');
-    const classification = await this.classification.processPendingCandidates();
+    const classification = { processed: 0, errors: 0 };
+    const MAX_CLASSIFICATION_ITERATIONS = 50;
+    for (let i = 0; i < MAX_CLASSIFICATION_ITERATIONS; i++) {
+      const batch = await this.classification.processPendingCandidates();
+      classification.processed += batch.processed;
+      classification.errors += batch.errors;
+      if (batch.processed === 0 && batch.errors === 0) break;
+    }
     this.logger.log(
       `[DedupPipeline] Phase 2 complete — processed: ${classification.processed}, errors: ${classification.errors}`,
     );
 
-    // Phase 3 — Auto-Resolution
+    // Phase 3 — Auto-Resolution (loop to drain backlog)
     this.logger.log('[DedupPipeline] Phase 3: Auto-Resolution');
-    const resolution = await this.resolution.processClassifiedCandidates();
+    const resolution = { processed: 0, autoMerged: 0, autoConsolidated: 0, queued: 0, skipped: 0, errors: 0 };
+    const MAX_RESOLUTION_ITERATIONS = 50;
+    for (let i = 0; i < MAX_RESOLUTION_ITERATIONS; i++) {
+      const batch = await this.resolution.processClassifiedCandidates();
+      resolution.processed += batch.processed;
+      resolution.autoMerged += batch.autoMerged;
+      resolution.autoConsolidated += batch.autoConsolidated;
+      resolution.queued += batch.queued;
+      resolution.skipped += batch.skipped;
+      resolution.errors += batch.errors;
+      if (batch.processed === 0 && batch.errors === 0) break;
+    }
     this.logger.log(
       `[DedupPipeline] Phase 3 complete — merged: ${resolution.autoMerged}, consolidated: ${resolution.autoConsolidated}, queued: ${resolution.queued}`,
     );

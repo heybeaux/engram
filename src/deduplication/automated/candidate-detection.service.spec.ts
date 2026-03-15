@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { CandidateDetectionService } from './candidate-detection.service';
 import { ServicePrismaService } from '../../prisma/service-prisma.service';
+import { DEFAULT_DETECTION_WINDOW_HOURS } from './dedup-candidate.model';
 
 const mockMemories = [
   { id: 'mem-1', raw: 'User prefers dark mode in all apps' },
@@ -19,6 +21,10 @@ const mockPrisma = {
   $queryRawUnsafe: jest.fn(),
 };
 
+const mockConfig = {
+  get: jest.fn().mockReturnValue(undefined),
+};
+
 describe('CandidateDetectionService', () => {
   let service: CandidateDetectionService;
 
@@ -27,11 +33,32 @@ describe('CandidateDetectionService', () => {
       providers: [
         CandidateDetectionService,
         { provide: ServicePrismaService, useValue: mockPrisma },
+        { provide: ConfigService, useValue: mockConfig },
       ],
     }).compile();
 
     service = module.get<CandidateDetectionService>(CandidateDetectionService);
     jest.clearAllMocks();
+  });
+
+  describe('detection window configuration', () => {
+    it('defaults to DEFAULT_DETECTION_WINDOW_HOURS when env var not set', () => {
+      expect((service as any).windowHours).toBe(DEFAULT_DETECTION_WINDOW_HOURS);
+    });
+
+    it('reads DEDUP_DETECTION_WINDOW_HOURS from config', async () => {
+      const customConfig = { get: jest.fn().mockReturnValue('48') };
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          CandidateDetectionService,
+          { provide: ServicePrismaService, useValue: mockPrisma },
+          { provide: ConfigService, useValue: customConfig },
+        ],
+      }).compile();
+
+      const svc = module.get<CandidateDetectionService>(CandidateDetectionService);
+      expect((svc as any).windowHours).toBe(48);
+    });
   });
 
   describe('levenshteinSimilarity', () => {
