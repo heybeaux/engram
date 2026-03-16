@@ -78,6 +78,21 @@ describe('HealthMetricsService', () => {
     expect(mockPrisma.systemMetric.upsert).toHaveBeenCalledTimes(5);
   });
 
+  it('handleScheduledRefresh() calls computeAndPersist', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([{ pct: 97.5 }])
+      .mockResolvedValueOnce([{ pct: 3.2 }])
+      .mockResolvedValueOnce([{ pct: 28.4 }])
+      .mockResolvedValueOnce([]);
+    await service.handleScheduledRefresh();
+    expect(mockPrisma.systemMetric.upsert).toHaveBeenCalledTimes(5);
+  });
+
+  it('handleScheduledRefresh() swallows errors', async () => {
+    mockPrisma.memory.count.mockRejectedValueOnce(new Error('DB down'));
+    await expect(service.handleScheduledRefresh()).resolves.toBeUndefined();
+  });
+
   it('getDreamCycleSla() handles missing table gracefully', async () => {
     mockPrisma.$queryRaw
       .mockResolvedValueOnce([{ pct: 97.5 }])

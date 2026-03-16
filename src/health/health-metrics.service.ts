@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { ServicePrismaService } from '../prisma/service-prisma.service';
 
 export interface MemoryHealthMetric {
@@ -97,6 +98,18 @@ export class HealthMetricsService {
     ];
 
     return { metrics, computedAt, totalMemories };
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleScheduledRefresh(): Promise<void> {
+    this.logger.log('Scheduled metrics refresh starting');
+    try {
+      await this.computeAndPersist();
+    } catch (err) {
+      this.logger.error(
+        `Scheduled metrics refresh failed: ${(err as Error).message}`,
+      );
+    }
   }
 
   async computeAndPersist(): Promise<MemoryHealthReport> {
