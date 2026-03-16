@@ -1,4 +1,6 @@
 import { CloudLinkService } from './cloud-link.service';
+import { CloudLinkAuthService } from './cloud-link-auth.service';
+import { CloudLinkMappingService } from './cloud-link-mapping.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { encrypt, decrypt } from '../common/encryption.util';
 
@@ -20,6 +22,8 @@ global.fetch = mockFetch as any;
 
 describe('CloudLinkService', () => {
   let service: CloudLinkService;
+  let authService: CloudLinkAuthService;
+  let mappingService: CloudLinkMappingService;
 
   beforeAll(() => {
     process.env.ENCRYPTION_KEY = 'test-key-min-32-chars-long-xxxxx';
@@ -31,7 +35,9 @@ describe('CloudLinkService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new CloudLinkService(mockPrisma as any);
+    authService = new CloudLinkAuthService(mockPrisma as any);
+    mappingService = new CloudLinkMappingService(mockPrisma as any);
+    service = new CloudLinkService(mockPrisma as any, authService, mappingService);
   });
 
   describe('linkCloud', () => {
