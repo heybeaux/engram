@@ -25,7 +25,7 @@ export class DedupClassificationService {
   private readonly BATCH_SIZE = 10;
 
   // Preferred cheap model; falls back to provider default if unavailable
-  private readonly CLASSIFICATION_MODEL = 'claude-haiku-4-5';
+  private readonly CLASSIFICATION_MODEL = 'gpt-4o-mini';
 
   constructor(
     private readonly prisma: ServicePrismaService,
