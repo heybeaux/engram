@@ -6,7 +6,7 @@ import { CloudLinkAuthService, CloudStatus } from './cloud-link-auth.service';
 import { CloudLinkMappingService } from './cloud-link-mapping.service';
 
 // Re-export for backward compatibility with other modules
-export { CloudStatus } from './cloud-link-auth.service';
+export type { CloudStatus } from './cloud-link-auth.service';
 
 @Injectable()
 export class CloudLinkService {
