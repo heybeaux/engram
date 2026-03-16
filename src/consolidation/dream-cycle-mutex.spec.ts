@@ -92,8 +92,6 @@ describe('DreamCycleService - Mutex', () => {
     service = new DreamCycleService(
       mockPrisma,
       mockConfig as any,
-      mockDedupStage as any,
-      mockStalenessStage as any,
       mockPendingStage as any,
       mockTieringStage as any,
       mockConsolidationStage as any,
