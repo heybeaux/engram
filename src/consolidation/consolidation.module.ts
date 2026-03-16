@@ -8,8 +8,6 @@ import { DreamCycleQueueProducer } from './dream-cycle-queue.producer';
 import { DreamCycleQueueProcessor } from './dream-cycle-queue.processor';
 import { GenerateContextService } from './generate-context.service';
 import {
-  DreamCycleDedupStage,
-  DreamCycleStalenessStage,
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
@@ -20,11 +18,9 @@ import {
 import { MemoryModule } from '../memory/memory.module';
 import { LLMModule } from '../llm/llm.module';
 import { ClusteringModule } from '../clustering/clustering.module';
-import { ImportanceScorerService } from '../memory/intelligence/importance-scorer.service';
 import { FogIndexModule } from '../fog-index/fog-index.module';
 import { AccountModule } from '../account/account.module';
 import { IdentityModule } from '../identity/identity.module';
-import { TemporalSamplingService } from './temporal-sampling.service';
 import { ServicePrismaModule } from '../prisma/service-prisma.module';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
 import { HealthMetricsService } from '../health/health-metrics.service';
@@ -64,8 +60,6 @@ const bullExports = hasRedis ? [DreamCycleQueueProducer] : [];
     DreamCycleService,
     DreamCycleSchedulerService,
     ...bullProviders,
-    DreamCycleDedupStage,
-    DreamCycleStalenessStage,
     DreamCyclePendingStage,
     DreamCyclePatternsStage,
     DreamCycleDriftStage,
@@ -73,8 +67,6 @@ const bullExports = hasRedis ? [DreamCycleQueueProducer] : [];
     DreamCycleTieringStage,
     DreamCycleConsolidationStage,
     GenerateContextService,
-    ImportanceScorerService,
-    TemporalSamplingService,
     DreamCycleRunTrackerService,
     HealthMetricsService,
   ],

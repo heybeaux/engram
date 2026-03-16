@@ -8,8 +8,6 @@ import { GenerateContextService } from './generate-context.service';
 import { ClusteringService } from '../clustering/clustering.service';
 import { FogIndexService } from '../fog-index/fog-index.service';
 import {
-  DreamCycleDedupStage,
-  DreamCycleStalenessStage,
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
@@ -26,8 +24,6 @@ import { HealthMetricsService } from '../health/health-metrics.service';
 const DREAM_CYCLE_LOCK_KEY = 294967;
 
 export type DreamCycleStage =
-  | 'dedup'
-  | 'staleness'
   | 'pending'
   | 'tiering'
   | 'patterns'
@@ -61,8 +57,6 @@ export interface DreamCycleResult {
 }
 
 const ALL_STAGES: DreamCycleStage[] = [
-  'dedup',
-  'staleness',
   'pending',
   'tiering',
   'patterns',
@@ -80,8 +74,6 @@ export class DreamCycleService {
   constructor(
     private prisma: ServicePrismaService,
     private config: ConfigService,
-    private dedupStage: DreamCycleDedupStage,
-    private stalenessStage: DreamCycleStalenessStage,
     private pendingStage: DreamCyclePendingStage,
     private tieringStage: DreamCycleTieringStage,
     private consolidationStage: DreamCycleConsolidationStage,
@@ -251,100 +243,6 @@ export class DreamCycleService {
     this.emitSafe('dream.started', new DreamStartedEvent());
 
     try {
-      // Stage 1: Semantic dedup
-      if (stages.includes('dedup')) {
-        this.log('Stage 1: Semantic dedup scan');
-        const dedupStart = new Date();
-        const dedupRecord = await this.tracker.startStage(
-          runId,
-          'dedup',
-          totalMemories,
-        );
-        try {
-          const dedupResult = await this.dedupStage.run(
-            userId,
-            dryRun,
-            maxMemories,
-          );
-          assertSanityGate('dedup', dedupResult.scanned, totalMemories);
-          await this.tracker.completeStage(
-            dedupRecord.id,
-            dedupResult.scanned,
-            dedupStart,
-          );
-          duplicatesMerged = dedupResult.merged;
-          llmCallsUsed += dedupResult.llmCalls;
-          stageDetails.dedup = dedupResult;
-          this.log('Stage 1 complete', dedupResult);
-        } catch (err) {
-          if ((err as Error).message?.includes('sanity gate FAILED')) {
-            await this.tracker.abortStage(
-              dedupRecord.id,
-              0,
-              totalMemories,
-              (err as Error).message,
-              dedupStart,
-            );
-          } else {
-            await this.tracker.errorStage(
-              dedupRecord.id,
-              err as Error,
-              dedupStart,
-            );
-          }
-          const msg = `Dedup stage failed: ${err instanceof Error ? err.message : String(err)}`;
-          errors.push(msg);
-          this.log(msg, undefined, 'error');
-        }
-      }
-
-      // Stage 2: Staleness pruning
-      if (stages.includes('staleness')) {
-        this.log('Stage 2: Staleness pruning');
-        const stalenessStart = new Date();
-        const stalenessRecord = await this.tracker.startStage(
-          runId,
-          'staleness',
-          totalMemories,
-        );
-        try {
-          const pruneResult = await this.stalenessStage.run(userId, dryRun);
-          assertSanityGate(
-            'staleness',
-            pruneResult.scoresRefreshed,
-            totalMemories,
-          );
-          await this.tracker.completeStage(
-            stalenessRecord.id,
-            pruneResult.scoresRefreshed,
-            stalenessStart,
-          );
-          memoriesArchived = pruneResult.archived;
-          scoresRefreshed = pruneResult.scoresRefreshed;
-          stageDetails.staleness = pruneResult;
-          this.log('Stage 2 complete', pruneResult);
-        } catch (err) {
-          if ((err as Error).message?.includes('sanity gate FAILED')) {
-            await this.tracker.abortStage(
-              stalenessRecord.id,
-              0,
-              totalMemories,
-              (err as Error).message,
-              stalenessStart,
-            );
-          } else {
-            await this.tracker.errorStage(
-              stalenessRecord.id,
-              err as Error,
-              stalenessStart,
-            );
-          }
-          const msg = `Staleness stage failed: ${err instanceof Error ? err.message : String(err)}`;
-          errors.push(msg);
-          this.log(msg, undefined, 'error');
-        }
-      }
-
       // Stage 2.5: PENDING merge resolution
       if (stages.includes('pending') && llmCallsUsed < this.maxLlmCalls) {
         this.log('Stage 2.5: PENDING merge resolution');

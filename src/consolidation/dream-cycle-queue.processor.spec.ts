@@ -13,15 +13,6 @@ jest.mock('../prisma/service-prisma.service', () => ({
 jest.mock('./dream-cycle-run-tracker.service', () => ({
   DreamCycleRunTrackerService: jest.fn(),
 }));
-jest.mock('./dream-cycle-sanity-gate', () => ({
-  assertSanityGate: jest.fn(),
-}));
-jest.mock('./stages/dream-cycle-dedup.stage', () => ({
-  DreamCycleDedupStage: jest.fn(),
-}));
-jest.mock('./stages/dream-cycle-staleness.stage', () => ({
-  DreamCycleStalenessStage: jest.fn(),
-}));
 jest.mock('./stages/dream-cycle-pending.stage', () => ({
   DreamCyclePendingStage: jest.fn(),
 }));
@@ -49,14 +40,11 @@ jest.mock('@nestjs/bullmq', () => ({
 import { Job } from 'bullmq';
 import { DreamCycleQueueProcessor } from './dream-cycle-queue.processor';
 import { DREAM_CYCLE_JOBS } from './dream-cycle.queue';
-import { assertSanityGate } from './dream-cycle-sanity-gate';
 
 describe('DreamCycleQueueProcessor', () => {
   let processor: DreamCycleQueueProcessor;
   let prisma: any;
   let tracker: any;
-  let dedupStage: any;
-  let stalenessStage: any;
   let pendingStage: any;
   let tieringStage: any;
   let patternsStage: any;
@@ -89,8 +77,6 @@ describe('DreamCycleQueueProcessor', () => {
       errorStage: jest.fn().mockResolvedValue(undefined),
     };
 
-    dedupStage = { run: jest.fn() };
-    stalenessStage = { run: jest.fn() };
     pendingStage = { run: jest.fn() };
     tieringStage = { run: jest.fn() };
     patternsStage = { run: jest.fn() };
@@ -100,69 +86,12 @@ describe('DreamCycleQueueProcessor', () => {
     processor = new DreamCycleQueueProcessor(
       prisma,
       tracker,
-      dedupStage,
-      stalenessStage,
       pendingStage,
       tieringStage,
       patternsStage,
       driftStage,
       identityStage,
     );
-  });
-
-  // =========================================================================
-  // DEDUP stage
-  // =========================================================================
-  describe('DEDUP job', () => {
-    it('should run dedup stage and track completion', async () => {
-      dedupStage.run.mockResolvedValue({ scanned: 450, merged: 5 });
-      (assertSanityGate as jest.Mock).mockImplementation(() => {});
-
-      const result = await processor.process(makeJob(DREAM_CYCLE_JOBS.DEDUP));
-
-      expect(dedupStage.run).toHaveBeenCalledWith('user-1', false, 1000);
-      expect(tracker.startStage).toHaveBeenCalledWith(
-        'run-1',
-        DREAM_CYCLE_JOBS.DEDUP,
-        500,
-      );
-      expect(tracker.completeStage).toHaveBeenCalledWith(
-        'record-1',
-        450,
-        expect.any(Date),
-      );
-      expect(result).toEqual({ scanned: 450, merged: 5 });
-    });
-
-    it('should call assertSanityGate with correct args', async () => {
-      dedupStage.run.mockResolvedValue({ scanned: 450, merged: 0 });
-      (assertSanityGate as jest.Mock).mockImplementation(() => {});
-
-      await processor.process(makeJob(DREAM_CYCLE_JOBS.DEDUP));
-
-      expect(assertSanityGate).toHaveBeenCalledWith('dedup', 450, 500);
-    });
-  });
-
-  // =========================================================================
-  // STALENESS stage
-  // =========================================================================
-  describe('STALENESS job', () => {
-    it('should run staleness stage and track archived count', async () => {
-      stalenessStage.run.mockResolvedValue({ archived: 12 });
-
-      const result = await processor.process(
-        makeJob(DREAM_CYCLE_JOBS.STALENESS),
-      );
-
-      expect(stalenessStage.run).toHaveBeenCalledWith('user-1', false);
-      expect(tracker.completeStage).toHaveBeenCalledWith(
-        'record-1',
-        12,
-        expect.any(Date),
-      );
-      expect(result).toEqual({ archived: 12 });
-    });
   });
 
   // =========================================================================
@@ -322,11 +251,10 @@ describe('DreamCycleQueueProcessor', () => {
   // =========================================================================
   describe('error handling', () => {
     it('should call errorStage on generic errors and rethrow', async () => {
-      dedupStage.run.mockRejectedValue(new Error('DB connection lost'));
-      (assertSanityGate as jest.Mock).mockImplementation(() => {});
+      pendingStage.run.mockRejectedValue(new Error('DB connection lost'));
 
       await expect(
-        processor.process(makeJob(DREAM_CYCLE_JOBS.DEDUP)),
+        processor.process(makeJob(DREAM_CYCLE_JOBS.PENDING)),
       ).rejects.toThrow('DB connection lost');
 
       expect(tracker.errorStage).toHaveBeenCalledWith(
@@ -336,31 +264,11 @@ describe('DreamCycleQueueProcessor', () => {
       );
     });
 
-    it('should call abortStage on sanity gate failures', async () => {
-      const sanityError = new Error('sanity gate FAILED: dedup scanned 0/500');
-      dedupStage.run.mockResolvedValue({ scanned: 0, merged: 0 });
-      (assertSanityGate as jest.Mock).mockImplementation(() => {
-        throw sanityError;
-      });
-
-      await expect(
-        processor.process(makeJob(DREAM_CYCLE_JOBS.DEDUP)),
-      ).rejects.toThrow();
-
-      expect(tracker.abortStage).toHaveBeenCalledWith(
-        'record-1',
-        0,
-        500,
-        sanityError.message,
-        expect.any(Date),
-      );
-    });
-
     it('should not call abortStage for non-sanity errors', async () => {
-      stalenessStage.run.mockRejectedValue(new Error('timeout'));
+      tieringStage.run.mockRejectedValue(new Error('timeout'));
 
       await expect(
-        processor.process(makeJob(DREAM_CYCLE_JOBS.STALENESS)),
+        processor.process(makeJob(DREAM_CYCLE_JOBS.TIERING)),
       ).rejects.toThrow('timeout');
 
       expect(tracker.abortStage).not.toHaveBeenCalled();

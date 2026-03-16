@@ -7,10 +7,7 @@ import {
   DreamCycleJobData,
 } from './dream-cycle.queue';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
-import { assertSanityGate } from './dream-cycle-sanity-gate';
 import { ServicePrismaService } from '../prisma/service-prisma.service';
-import { DreamCycleDedupStage } from './stages/dream-cycle-dedup.stage';
-import { DreamCycleStalenessStage } from './stages/dream-cycle-staleness.stage';
 import { DreamCyclePendingStage } from './stages/dream-cycle-pending.stage';
 import { DreamCycleTieringStage } from './stages/dream-cycle-tiering.stage';
 import { DreamCyclePatternsStage } from './stages/dream-cycle-patterns.stage';
@@ -24,8 +21,6 @@ export class DreamCycleQueueProcessor extends WorkerHost {
   constructor(
     private readonly prisma: ServicePrismaService,
     private readonly tracker: DreamCycleRunTrackerService,
-    private readonly dedupStage: DreamCycleDedupStage,
-    private readonly stalenessStage: DreamCycleStalenessStage,
     private readonly pendingStage: DreamCyclePendingStage,
     private readonly tieringStage: DreamCycleTieringStage,
     private readonly patternsStage: DreamCyclePatternsStage,
@@ -36,7 +31,7 @@ export class DreamCycleQueueProcessor extends WorkerHost {
   }
 
   async process(job: Job<DreamCycleJobData>): Promise<any> {
-    const { runId, userId, dryRun, maxLlmCalls, maxMemories } = job.data;
+    const { runId, userId, dryRun, maxLlmCalls } = job.data;
     const stageStart = new Date();
     const totalMemories = await this.prisma.memory.count({
       where: { deletedAt: null, userId },
@@ -53,17 +48,6 @@ export class DreamCycleQueueProcessor extends WorkerHost {
 
     try {
       switch (job.name) {
-        case DREAM_CYCLE_JOBS.DEDUP: {
-          const r = await this.dedupStage.run(userId, dryRun, maxMemories);
-          assertSanityGate('dedup', r.scanned, totalMemories);
-          await this.tracker.completeStage(record.id, r.scanned, stageStart);
-          return r;
-        }
-        case DREAM_CYCLE_JOBS.STALENESS: {
-          const r = await this.stalenessStage.run(userId, dryRun);
-          await this.tracker.completeStage(record.id, r.archived, stageStart);
-          return r;
-        }
         case DREAM_CYCLE_JOBS.PENDING: {
           const r = await this.pendingStage.run(userId, dryRun);
           await this.tracker.completeStage(

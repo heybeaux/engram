@@ -7,8 +7,6 @@ import { EmbeddingService } from '../memory/embedding.service';
 import { LLMService } from '../llm/llm.service';
 import { ConfigService } from '@nestjs/config';
 import {
-  DreamCycleDedupStage,
-  DreamCycleStalenessStage,
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
@@ -69,16 +67,6 @@ const mockConfig = {
   }),
 };
 
-const mockDedupStage = {
-  run: jest
-    .fn()
-    .mockResolvedValue({ merged: 0, flagged: 0, scanned: 0, llmCalls: 0 }),
-};
-const mockStalenessStage = {
-  run: jest
-    .fn()
-    .mockResolvedValue({ archived: 0, scoresRefreshed: 0, candidates: 0 }),
-};
 const mockPendingStage = {
   run: jest.fn().mockResolvedValue({
     processed: 0,
@@ -137,17 +125,6 @@ describe('DreamCycleService', () => {
     jest.clearAllMocks();
 
     // Reset stage mocks to default success
-    mockDedupStage.run.mockResolvedValue({
-      merged: 0,
-      flagged: 0,
-      scanned: 0,
-      llmCalls: 0,
-    });
-    mockStalenessStage.run.mockResolvedValue({
-      archived: 0,
-      scoresRefreshed: 0,
-      candidates: 0,
-    });
     mockPendingStage.run.mockResolvedValue({
       processed: 0,
       autoMerged: 0,
@@ -188,8 +165,6 @@ describe('DreamCycleService', () => {
         { provide: EmbeddingService, useValue: mockEmbedding },
         { provide: LLMService, useValue: mockLlm },
         { provide: ConfigService, useValue: mockConfig },
-        { provide: DreamCycleDedupStage, useValue: mockDedupStage },
-        { provide: DreamCycleStalenessStage, useValue: mockStalenessStage },
         { provide: DreamCyclePendingStage, useValue: mockPendingStage },
         { provide: DreamCyclePatternsStage, useValue: mockPatternsStage },
         { provide: DreamCycleDriftStage, useValue: mockDriftStage },
@@ -378,8 +353,8 @@ describe('DreamCycleService', () => {
         userId: 'test-user',
       });
       expect(result.status).toBe('COMPLETED');
-      // Dedup not called since not in stages
-      expect(mockDedupStage.run).not.toHaveBeenCalled();
+      // Pending not called since not in stages
+      expect(mockPendingStage.run).not.toHaveBeenCalled();
     });
   });
 
@@ -395,8 +370,8 @@ describe('DreamCycleService', () => {
       mockPrisma.dreamCycleReport.create.mockResolvedValue({ id: 'report-1' });
       mockPrisma.consolidationJob.create.mockResolvedValue({ id: 'job-1' });
 
-      // Dedup stage fails
-      mockDedupStage.run.mockRejectedValueOnce(new Error('Dedup DB error'));
+      // Pending stage fails
+      mockPendingStage.run.mockRejectedValueOnce(new Error('Pending DB error'));
 
       // Report stage
       mockPrisma.memory.count.mockResolvedValue(10);
@@ -411,7 +386,7 @@ describe('DreamCycleService', () => {
       const result = await service.run({ userId: 'test-user' });
       expect(result.status).toBe('COMPLETED');
       expect(result.errors).toContainEqual(
-        expect.stringContaining('Dedup stage failed'),
+        expect.stringContaining('Pending stage failed'),
       );
     });
   });

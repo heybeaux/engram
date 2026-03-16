@@ -69,20 +69,6 @@ export class DreamCycleQueueProducer {
                       queueName: DREAM_CYCLE_QUEUE,
                       data: jobData,
                       opts: defaultOpts,
-                      children: [
-                        {
-                          name: DREAM_CYCLE_JOBS.DEDUP,
-                          queueName: DREAM_CYCLE_QUEUE,
-                          data: jobData,
-                          opts: defaultOpts,
-                        },
-                        {
-                          name: DREAM_CYCLE_JOBS.STALENESS,
-                          queueName: DREAM_CYCLE_QUEUE,
-                          data: jobData,
-                          opts: defaultOpts,
-                        },
-                      ],
                     },
                   ],
                 },

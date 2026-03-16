@@ -1,8 +1,6 @@
 export const DREAM_CYCLE_QUEUE = 'dream-cycle';
 
 export const DREAM_CYCLE_JOBS = {
-  DEDUP: 'dream-cycle:dedup',
-  STALENESS: 'dream-cycle:staleness',
   PENDING: 'dream-cycle:pending',
   TIERING: 'dream-cycle:tiering',
   PATTERNS: 'dream-cycle:patterns',
