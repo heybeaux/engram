@@ -56,7 +56,9 @@ describe('CandidateDetectionService', () => {
         ],
       }).compile();
 
-      const svc = module.get<CandidateDetectionService>(CandidateDetectionService);
+      const svc = module.get<CandidateDetectionService>(
+        CandidateDetectionService,
+      );
       expect((svc as any).windowHours).toBe(48);
     });
   });
@@ -103,15 +105,30 @@ describe('CandidateDetectionService', () => {
   });
 
   describe('detectCandidates', () => {
+    const testUserId = 'user-1';
+
     it('returns zero stats when no recent memories', async () => {
       mockPrisma.memory.findMany.mockResolvedValue([]);
       mockPrisma.$queryRaw.mockResolvedValue([]);
 
-      const stats = await service.detectCandidates();
+      const stats = await service.detectCandidates(testUserId);
 
       expect(stats.scanned).toBe(0);
       expect(stats.created).toBe(0);
       expect(stats.skipped).toBe(0);
+    });
+
+    it('scopes initial query by userId', async () => {
+      mockPrisma.memory.findMany.mockResolvedValue([]);
+      mockPrisma.$queryRaw.mockResolvedValue([]);
+
+      await service.detectCandidates(testUserId);
+
+      expect(mockPrisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: testUserId }),
+        }),
+      );
     });
 
     it('processes memories and attempts text comparison', async () => {
@@ -133,7 +150,7 @@ describe('CandidateDetectionService', () => {
 
       mockPrisma.dedupCandidate.upsert.mockResolvedValue({});
 
-      const stats = await service.detectCandidates();
+      const stats = await service.detectCandidates(testUserId);
       expect(stats.scanned).toBe(3);
     });
 
@@ -148,7 +165,7 @@ describe('CandidateDetectionService', () => {
         .spyOn(service as any, 'detectVectorNeighbours')
         .mockResolvedValue({ created: 0, skipped: 0 });
 
-      await service.detectCandidates();
+      await service.detectCandidates(testUserId);
 
       expect(vectorSpy).not.toHaveBeenCalled();
     });
@@ -164,7 +181,7 @@ describe('CandidateDetectionService', () => {
       mockPrisma.$queryRaw.mockResolvedValue([]);
       mockPrisma.dedupCandidate.upsert.mockResolvedValue({});
 
-      const stats = await service.detectCandidates();
+      const stats = await service.detectCandidates(testUserId);
       expect(stats.created).toBeGreaterThan(0);
     });
   });

@@ -42,24 +42,25 @@ export class CandidateDetectionService {
   // Public API
   // ---------------------------------------------------------------------------
 
-  async detectCandidates(): Promise<DetectionStats> {
+  async detectCandidates(userId: string): Promise<DetectionStats> {
     const since = new Date(Date.now() - this.windowHours * 60 * 60 * 1000);
 
-    // Fetch recent memories — embedding is Unsupported("vector") so we query it via raw SQL
+    // Fetch recent memories scoped to this user only (security: prevent cross-account candidate creation)
     const recentMemories = await this.prisma.memory.findMany({
-      where: { createdAt: { gte: since }, deletedAt: null },
+      where: { createdAt: { gte: since }, deletedAt: null, userId },
       select: { id: true, raw: true },
     });
 
     // Also get which of these have a non-null embedding (embeddingStatus = COMPLETED)
     const withEmbedding = new Set(recentMemories.map((m) => m.id));
 
-    // Fetch embedding-eligible ids (those with embeddingStatus COMPLETED)
+    // Fetch embedding-eligible ids (those with embeddingStatus COMPLETED) — scoped by userId
     const embeddingRows: Array<{ id: string }> = await this.prisma.$queryRaw`
       SELECT id FROM memories
       WHERE id = ANY(${recentMemories.map((m) => m.id)}::text[])
         AND embedding IS NOT NULL
         AND deleted_at IS NULL
+        AND user_id = ${userId}
     `;
     const hasEmbedding = new Set(embeddingRows.map((r) => r.id));
 
@@ -80,7 +81,12 @@ export class CandidateDetectionService {
       }
 
       // Phase B — text Levenshtein against recent window
-      const textStats = await this.detectTextNeighbours(mem.id, mem.raw, since);
+      const textStats = await this.detectTextNeighbours(
+        mem.id,
+        mem.raw,
+        since,
+        userId,
+      );
       created += textStats.created;
       skipped += textStats.skipped;
     }
@@ -135,7 +141,7 @@ export class CandidateDetectionService {
     let skipped = 0;
 
     try {
-      // Use the memory's own embedding (stored as pgvector) to find neighbours
+      // ENG-34: scope neighbours to same user to prevent cross-account contamination
       const neighbors: Array<{ id: string; similarity: number }> = await this
         .prisma.$queryRaw`
           SELECT n.id, 1 - (n.embedding <=> src.embedding) AS similarity
@@ -144,6 +150,7 @@ export class CandidateDetectionService {
             ON n.id != src.id
             AND n.deleted_at IS NULL
             AND n.embedding IS NOT NULL
+            AND n.user_id = src.user_id
           WHERE src.id = ${memoryId}
             AND 1 - (n.embedding <=> src.embedding) > ${COSINE_THRESHOLD}
           ORDER BY similarity DESC
@@ -174,16 +181,19 @@ export class CandidateDetectionService {
     memoryId: string,
     raw: string,
     since: Date,
+    userId: string,
     limit = 100,
   ): Promise<{ created: number; skipped: number }> {
     let created = 0;
     let skipped = 0;
 
+    // ENG-34: scope text neighbours to same user to prevent cross-account contamination
     const others = await this.prisma.memory.findMany({
       where: {
         id: { not: memoryId },
         deletedAt: null,
         createdAt: { gte: since },
+        userId,
       },
       select: { id: true, raw: true },
       take: limit,

@@ -81,7 +81,9 @@ export class DreamCycleRunTrackerService {
     });
   }
 
-  async getTotalMemoryCount(): Promise<number> {
-    return this.prisma.memory.count({ where: { deletedAt: null } });
+  async getTotalMemoryCount(userId?: string): Promise<number> {
+    return this.prisma.memory.count({
+      where: { deletedAt: null, ...(userId ? { userId } : {}) },
+    });
   }
 }

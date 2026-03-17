@@ -144,30 +144,42 @@ export class DreamCycleService {
     // Auto-discover users if no userId specified and no DEFAULT_USER_ID configured
     if (!options.userId && !this.config.get('DEFAULT_USER_ID')) {
       this.log(
-        'No userId or DEFAULT_USER_ID configured — auto-discovering users',
+        'No userId or DEFAULT_USER_ID configured — auto-discovering users per account',
       );
-      const users = await this.prisma.memory.findMany({
-        where: { deletedAt: null },
-        select: { userId: true },
-        distinct: ['userId'],
+
+      // ENG-34: Discover accounts first, then iterate users per account
+      // to guarantee cross-account isolation in background processing.
+      const accounts = await this.prisma.account.findMany({
+        select: { id: true },
       });
 
-      if (users.length === 0) {
-        throw new Error('No users found with active memories');
+      if (accounts.length === 0) {
+        throw new Error('No accounts found');
       }
 
-      this.log(`Found ${users.length} distinct users`, {
-        userIds: users.map((u) => u.userId),
-      });
-
       const allResults: DreamCycleResult[] = [];
-      for (const user of users) {
-        this.log(`Running Dream Cycle for user: ${user.userId}`);
-        const result = await this.runInternal({
-          ...options,
-          userId: user.userId,
+      for (const account of accounts) {
+        const users = await this.prisma.user.findMany({
+          where: { accountId: account.id, deletedAt: null },
+          select: { id: true },
         });
-        allResults.push(result);
+
+        this.log(
+          `Account ${account.id}: found ${users.length} users`,
+        );
+
+        for (const user of users) {
+          this.log(`Running Dream Cycle for user: ${user.id} (account: ${account.id})`);
+          const result = await this.runInternal({
+            ...options,
+            userId: user.id,
+          });
+          allResults.push(result);
+        }
+      }
+
+      if (allResults.length === 0) {
+        throw new Error('No users found with active accounts');
       }
 
       const combined: DreamCycleResult = {
@@ -204,7 +216,7 @@ export class DreamCycleService {
     const userId =
       options.userId || this.config.get<string>('DEFAULT_USER_ID') || 'default';
     const runId = `dc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const totalMemories = await this.tracker.getTotalMemoryCount();
+    const totalMemories = await this.tracker.getTotalMemoryCount(userId);
     const startTime = Date.now();
     const stageDetails: Record<string, any> = {};
     const errors: string[] = [];

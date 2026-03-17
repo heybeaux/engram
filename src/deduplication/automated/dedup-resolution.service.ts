@@ -62,9 +62,14 @@ export class DedupResolutionService {
   // Public API
   // ---------------------------------------------------------------------------
 
-  async processClassifiedCandidates(): Promise<ResolutionStats> {
+  async processClassifiedCandidates(userId?: string): Promise<ResolutionStats> {
+    // ENG-34: scope to a specific user when provided to prevent cross-account processing
     const candidates = await this.prisma.dedupCandidate.findMany({
-      where: { status: 'CLASSIFIED', classification: { not: null } },
+      where: {
+        status: 'CLASSIFIED',
+        classification: { not: null },
+        ...(userId ? { memory1: { userId } } : {}),
+      },
       include: {
         memory1: {
           select: {

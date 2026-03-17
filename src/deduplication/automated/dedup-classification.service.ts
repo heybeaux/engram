@@ -36,12 +36,16 @@ export class DedupClassificationService {
   // Public API
   // ---------------------------------------------------------------------------
 
-  async processPendingCandidates(): Promise<{
+  async processPendingCandidates(userId?: string): Promise<{
     processed: number;
     errors: number;
   }> {
+    // ENG-34: scope to a specific user when provided to prevent cross-account processing
     const candidates = await this.prisma.dedupCandidate.findMany({
-      where: { status: 'PENDING' },
+      where: {
+        status: 'PENDING',
+        ...(userId ? { memory1: { userId } } : {}),
+      },
       include: {
         memory1: {
           select: {

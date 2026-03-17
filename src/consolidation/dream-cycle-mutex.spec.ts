@@ -7,6 +7,12 @@ describe('DreamCycleService - Mutex', () => {
   beforeEach(() => {
     mockPrisma = {
       $queryRawUnsafe: jest.fn(),
+      account: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'acct-1' }]),
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+      },
       dreamCycleReport: {
         create: jest.fn().mockResolvedValue({ id: 'report-1' }),
         update: jest.fn().mockResolvedValue({}),
@@ -160,9 +166,9 @@ describe('DreamCycleService - Mutex', () => {
         .mockResolvedValueOnce([{ pg_try_advisory_lock: true }])
         .mockResolvedValueOnce([{}]); // releaseLock
 
-      // No userId, no DEFAULT_USER_ID → triggers auto-discover
-      // Make memory.findMany throw to cause failure
-      mockPrisma.memory.findMany.mockRejectedValueOnce(new Error('DB down'));
+      // No userId, no DEFAULT_USER_ID → triggers auto-discover via account.findMany
+      // Make account.findMany throw to cause failure
+      mockPrisma.account.findMany.mockRejectedValueOnce(new Error('DB down'));
 
       await expect(service.run({})).rejects.toThrow('DB down');
 

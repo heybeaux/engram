@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import {
   CandidateDetectionService,
   DetectionStats,
@@ -47,6 +48,7 @@ export class DedupPipelineService implements OnModuleInit {
 
   constructor(
     private readonly config: ConfigService,
+    private readonly prisma: ServicePrismaService,
     private readonly detection: CandidateDetectionService,
     private readonly classification: DedupClassificationService,
     private readonly resolution: DedupResolutionService,
@@ -84,7 +86,8 @@ export class DedupPipelineService implements OnModuleInit {
 
   /**
    * Run the full 3-phase pipeline synchronously.
-   * Returns a summary of all phases.
+   * ENG-34: Discovers all accounts → users and runs each phase per-user
+   * to guarantee cross-account isolation in background processing.
    */
   async runPipeline(): Promise<PipelineRunResult> {
     const startedAt = new Date();
@@ -111,41 +114,73 @@ export class DedupPipelineService implements OnModuleInit {
 
     this.logger.log('[DedupPipeline] Starting full pipeline run');
 
-    // Phase 1 — Candidate Detection
-    this.logger.log('[DedupPipeline] Phase 1: Candidate Detection');
-    const detection = await this.detection.detectCandidates();
+    // ENG-34: Discover accounts → users for per-user isolation
+    const accounts = await this.prisma.account.findMany({
+      select: { id: true },
+    });
+
+    const detection: DetectionStats = { scanned: 0, created: 0, skipped: 0 };
+    const classification = { processed: 0, errors: 0 };
+    const resolution: ResolutionStats = {
+      processed: 0,
+      autoMerged: 0,
+      autoConsolidated: 0,
+      queued: 0,
+      skipped: 0,
+      errors: 0,
+    };
+
+    for (const account of accounts) {
+      const users = await this.prisma.user.findMany({
+        where: { accountId: account.id, deletedAt: null },
+        select: { id: true },
+      });
+
+      for (const user of users) {
+        this.logger.log(
+          `[DedupPipeline] Processing user ${user.id} (account: ${account.id})`,
+        );
+
+        // Phase 1 — Candidate Detection (per user)
+        const userDetection = await this.detection.detectCandidates(user.id);
+        detection.scanned += userDetection.scanned;
+        detection.created += userDetection.created;
+        detection.skipped += userDetection.skipped;
+
+        // Phase 2 — LLM Classification (per user)
+        const MAX_CLASSIFICATION_ITERATIONS = 50;
+        for (let i = 0; i < MAX_CLASSIFICATION_ITERATIONS; i++) {
+          const batch = await this.classification.processPendingCandidates(
+            user.id,
+          );
+          classification.processed += batch.processed;
+          classification.errors += batch.errors;
+          if (batch.processed === 0 && batch.errors === 0) break;
+        }
+
+        // Phase 3 — Auto-Resolution (per user)
+        const MAX_RESOLUTION_ITERATIONS = 50;
+        for (let i = 0; i < MAX_RESOLUTION_ITERATIONS; i++) {
+          const batch = await this.resolution.processClassifiedCandidates(
+            user.id,
+          );
+          resolution.processed += batch.processed;
+          resolution.autoMerged += batch.autoMerged;
+          resolution.autoConsolidated += batch.autoConsolidated;
+          resolution.queued += batch.queued;
+          resolution.skipped += batch.skipped;
+          resolution.errors += batch.errors;
+          if (batch.processed === 0 && batch.errors === 0) break;
+        }
+      }
+    }
+
     this.logger.log(
       `[DedupPipeline] Phase 1 complete — scanned: ${detection.scanned}, created: ${detection.created}, skipped: ${detection.skipped}`,
     );
-
-    // Phase 2 — LLM Classification (loop to drain backlog)
-    this.logger.log('[DedupPipeline] Phase 2: LLM Classification');
-    const classification = { processed: 0, errors: 0 };
-    const MAX_CLASSIFICATION_ITERATIONS = 50;
-    for (let i = 0; i < MAX_CLASSIFICATION_ITERATIONS; i++) {
-      const batch = await this.classification.processPendingCandidates();
-      classification.processed += batch.processed;
-      classification.errors += batch.errors;
-      if (batch.processed === 0 && batch.errors === 0) break;
-    }
     this.logger.log(
       `[DedupPipeline] Phase 2 complete — processed: ${classification.processed}, errors: ${classification.errors}`,
     );
-
-    // Phase 3 — Auto-Resolution (loop to drain backlog)
-    this.logger.log('[DedupPipeline] Phase 3: Auto-Resolution');
-    const resolution = { processed: 0, autoMerged: 0, autoConsolidated: 0, queued: 0, skipped: 0, errors: 0 };
-    const MAX_RESOLUTION_ITERATIONS = 50;
-    for (let i = 0; i < MAX_RESOLUTION_ITERATIONS; i++) {
-      const batch = await this.resolution.processClassifiedCandidates();
-      resolution.processed += batch.processed;
-      resolution.autoMerged += batch.autoMerged;
-      resolution.autoConsolidated += batch.autoConsolidated;
-      resolution.queued += batch.queued;
-      resolution.skipped += batch.skipped;
-      resolution.errors += batch.errors;
-      if (batch.processed === 0 && batch.errors === 0) break;
-    }
     this.logger.log(
       `[DedupPipeline] Phase 3 complete — merged: ${resolution.autoMerged}, consolidated: ${resolution.autoConsolidated}, queued: ${resolution.queued}`,
     );
@@ -173,9 +208,9 @@ export class DedupPipelineService implements OnModuleInit {
   async enqueueDetection(): Promise<void> {
     if (!this.detectionQueue) {
       this.logger.warn(
-        '[DedupPipeline] BullMQ queue not available (no Redis) — running detection synchronously',
+        '[DedupPipeline] BullMQ queue not available (no Redis) — running pipeline synchronously',
       );
-      await this.detection.detectCandidates();
+      await this.runPipeline();
       return;
     }
     await this.detectionQueue.add(
