@@ -56,6 +56,7 @@ export class DreamCyclePatternsStage {
       const memories = await this.prisma.memory.findMany({
         where: {
           id: { in: [detail.canonicalId, ...detail.duplicateIds] },
+          userId,
           deletedAt: null,
         },
         select: { id: true, raw: true },

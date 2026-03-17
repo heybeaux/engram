@@ -185,6 +185,32 @@ describe('DreamCyclePatternsStage', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Account isolation — userId scoping
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('account isolation (userId scoping)', () => {
+    it('includes userId in cluster memory lookup to prevent cross-account leakage', async () => {
+      mockConsolidation.promoteRecurringPatterns.mockResolvedValue({
+        clustersFound: 1,
+        details: [makeClusterDetail()],
+      });
+      mockPrisma.memory.findMany.mockResolvedValue(
+        makeMemories(['mem-1', 'mem-2', 'mem-3']),
+      );
+      mockPrisma.memory.findFirst.mockResolvedValue(null);
+      mockLLM.json.mockResolvedValue({ summary: 'Pattern', confidence: 0.8 });
+
+      await stage.run('user-1', true, 5);
+
+      // The findMany for cluster memories must include userId
+      expect(mockPrisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: 'user-1' }),
+        }),
+      );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // Low confidence — no pattern
   // ──────────────────────────────────────────────────────────────────────────
   describe('when LLM confidence is below threshold', () => {

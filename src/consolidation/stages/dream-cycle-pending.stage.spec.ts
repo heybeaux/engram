@@ -378,7 +378,7 @@ describe('DreamCyclePendingStage', () => {
       // lastDreamedAt should still be updated for tracking
       expect(mockPrisma.memory.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: { in: ['mem-a', 'mem-b'] }, deletedAt: null },
+          where: { id: { in: ['mem-a', 'mem-b'] }, userId: 'user-1', deletedAt: null },
           data: { lastDreamedAt: expect.any(Date) },
         }),
       );
@@ -395,6 +395,68 @@ describe('DreamCyclePendingStage', () => {
       const result = await stage.run('user-1', false);
 
       expect(result.errors).toBe(1);
+    });
+  });
+
+  describe('run() — account isolation (userId scoping)', () => {
+    it('should include userId in performMerge memory query', async () => {
+      const candidate = makeCandidate({ similarity: 0.95, userId: 'user-1' });
+      mockPrisma.mergeCandidate.findMany.mockResolvedValue([candidate]);
+      mockPrisma.memory.findMany.mockResolvedValue([
+        makeMemory({ id: 'mem-a', effectiveScore: 0.8 }),
+        makeMemory({ id: 'mem-b', effectiveScore: 0.6 }),
+      ]);
+
+      await stage.run('user-1', false);
+
+      // performMerge should scope memory lookup by userId
+      expect(mockPrisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: 'user-1' }),
+        }),
+      );
+    });
+
+    it('should include userId in LLM merge decision memory query', async () => {
+      const candidate = makeCandidate({ similarity: 0.85, userId: 'user-1' });
+      mockPrisma.mergeCandidate.findMany.mockResolvedValue([candidate]);
+      mockPrisma.memory.findMany.mockResolvedValue([
+        makeMemory({ id: 'mem-a' }),
+        makeMemory({ id: 'mem-b' }),
+      ]);
+      mockLLM.json.mockResolvedValue({
+        shouldMerge: false,
+        confidence: 0.9,
+        reason: 'diff',
+      });
+
+      await stage.run('user-1', false, 5);
+
+      // llmMergeDecision should scope memory lookup by userId
+      const findManyCalls = mockPrisma.memory.findMany.mock.calls;
+      const llmCall = findManyCalls.find(
+        (call: any) =>
+          call[0]?.where?.id?.in &&
+          call[0]?.select?.safetyCritical !== undefined,
+      );
+      expect(llmCall?.[0]?.where).toHaveProperty('userId', 'user-1');
+    });
+
+    it('should include userId in updateMemoriesLastDreamedAt', async () => {
+      const candidate = makeCandidate({ similarity: 0.95 });
+      mockPrisma.mergeCandidate.findMany.mockResolvedValue([candidate]);
+      mockPrisma.memory.findMany.mockResolvedValue([
+        makeMemory({ id: 'mem-a', effectiveScore: 0.8 }),
+        makeMemory({ id: 'mem-b', effectiveScore: 0.6 }),
+      ]);
+
+      await stage.run('user-1', false);
+
+      expect(mockPrisma.memory.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: 'user-1' }),
+        }),
+      );
     });
   });
 

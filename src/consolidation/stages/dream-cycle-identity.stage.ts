@@ -115,7 +115,7 @@ export class DreamCycleIdentityStage {
 
     // 5. Mark source memories as processed by dream cycle
     await this.prisma.memory.updateMany({
-      where: { id: { in: memories.map((m) => m.id) } },
+      where: { id: { in: memories.map((m) => m.id) }, userId },
       data: { lastDreamCycleAt: new Date() },
     });
 

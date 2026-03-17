@@ -170,6 +170,36 @@ describe('DreamCycleConsolidationStage', () => {
       expect(embeddingService.embed).toHaveBeenCalledTimes(1);
     });
 
+    it('should include userId in archive updateMany to prevent cross-account leakage', async () => {
+      const vec = makeVec(1);
+      const vecStr = `[${vec.join(',')}]`;
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
+        { id: '1', content: 'mem1', embedding: vecStr },
+        { id: '2', content: 'mem2', embedding: vecStr },
+        { id: '3', content: 'mem3', embedding: vecStr },
+      ]);
+
+      let capturedUpdateMany: any;
+      (prisma.$transaction as jest.Mock).mockImplementation(async (fn) => {
+        const tx = {
+          memory: {
+            create: jest.fn().mockResolvedValue({ id: 'new-1' }),
+            updateMany: jest.fn().mockImplementation((args) => {
+              capturedUpdateMany = args;
+              return { count: 3 };
+            }),
+          },
+          $executeRaw: jest.fn(),
+        };
+        return fn(tx);
+      });
+
+      await stage.run('user1', false);
+
+      // The archive updateMany must include userId for account isolation
+      expect(capturedUpdateMany.where).toHaveProperty('userId', 'user1');
+    });
+
     it('should respect max consolidations cap', async () => {
       // Create enough memories for multiple clusters by using different vectors
       const vecs = Array.from({ length: 15 }, (_, i) => {

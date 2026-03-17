@@ -95,7 +95,7 @@ export class DreamCyclePendingStage {
               'MERGED',
               'Auto-merged: similarity >= 0.90',
             );
-            await this.updateMemoriesLastDreamedAt(candidate.memoryIds);
+            await this.updateMemoriesLastDreamedAt(candidate.memoryIds, userId);
           }
           autoMerged++;
         } else if (candidate.similarity < 0.82) {
@@ -109,7 +109,7 @@ export class DreamCyclePendingStage {
               'REJECTED',
               'Auto-rejected: similarity < 0.82',
             );
-            await this.updateMemoriesLastDreamedAt(candidate.memoryIds);
+            await this.updateMemoriesLastDreamedAt(candidate.memoryIds, userId);
           }
           autoRejected++;
         } else if (maxLlmCalls && llmCalls < maxLlmCalls) {
@@ -130,7 +130,7 @@ export class DreamCyclePendingStage {
                 'MERGED',
                 'LLM approved merge',
               );
-              await this.updateMemoriesLastDreamedAt(candidate.memoryIds);
+              await this.updateMemoriesLastDreamedAt(candidate.memoryIds, userId);
             }
             llmMerged++;
           } else {
@@ -141,7 +141,7 @@ export class DreamCyclePendingStage {
                 'REJECTED',
                 'LLM declined merge',
               );
-              await this.updateMemoriesLastDreamedAt(candidate.memoryIds);
+              await this.updateMemoriesLastDreamedAt(candidate.memoryIds, userId);
             }
             llmRejected++;
           }
@@ -160,7 +160,7 @@ export class DreamCyclePendingStage {
         // Ensure lastDreamedAt is updated even on error (for tracking purposes)
         if (!dryRun) {
           try {
-            await this.updateMemoriesLastDreamedAt(candidate.memoryIds);
+            await this.updateMemoriesLastDreamedAt(candidate.memoryIds, userId);
           } catch (updateErr) {
             this.logger.error(
               `Failed to update lastDreamedAt for candidate ${candidate.id}: ${updateErr}`,
@@ -199,6 +199,7 @@ export class DreamCyclePendingStage {
     const memories = await this.prisma.memory.findMany({
       where: {
         id: { in: candidate.memoryIds },
+        userId: candidate.userId,
         deletedAt: null,
       },
       select: {
@@ -281,12 +282,14 @@ export class DreamCyclePendingStage {
 
   private async updateMemoriesLastDreamedAt(
     memoryIds: string[],
+    userId: string,
   ): Promise<void> {
     if (memoryIds.length === 0) return;
 
     const updatedCount = await this.prisma.memory.updateMany({
       where: {
         id: { in: memoryIds },
+        userId,
         deletedAt: null,
       },
       data: {
@@ -300,6 +303,7 @@ export class DreamCyclePendingStage {
   }
 
   private async llmMergeDecision(candidate: {
+    userId: string;
     memoryIds: string[];
     similarity: number;
   }): Promise<boolean> {
@@ -308,6 +312,7 @@ export class DreamCyclePendingStage {
       const memories = await this.prisma.memory.findMany({
         where: {
           id: { in: candidate.memoryIds },
+          userId: candidate.userId,
           deletedAt: null,
         },
         select: {

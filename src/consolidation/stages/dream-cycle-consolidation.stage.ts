@@ -232,7 +232,7 @@ Write a single consolidated memory that captures all the information above.`;
       // Link originals to the consolidated memory and archive them
       const originalIds = cluster.map((m) => m.id);
       await tx.memory.updateMany({
-        where: { id: { in: originalIds } },
+        where: { id: { in: originalIds }, userId },
         data: {
           consolidatedInto: newMemory.id,
           consolidated: true,
