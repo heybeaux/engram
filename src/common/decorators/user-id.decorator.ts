@@ -11,7 +11,7 @@ import {
 export const UserId = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): string => {
     const request = ctx.switchToHttp().getRequest();
-    const userId = request.user?.id;
+    const userId = request.user?.id ?? request.userId;
     if (!userId) {
       throw new UnauthorizedException(
         'User ID is required but was not resolved from the request',

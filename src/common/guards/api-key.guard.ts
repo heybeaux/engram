@@ -149,6 +149,21 @@ export class ApiKeyGuard implements CanActivate {
         orderBy: { createdAt: 'asc' },
       });
       request.agent = defaultAgent;
+      // Resolve default user for controllers that need @UserId()
+      const defaultUser = await this.prisma.user.findFirst({
+        where: { accountId: instanceKey.accountId, isDefault: true, deletedAt: null },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (defaultUser) {
+        request.user = defaultUser;
+        request.userId = defaultUser.id;
+      } else {
+        const createdUser = await this.prisma.user.create({
+          data: { accountId: instanceKey.accountId, externalId: 'default', isDefault: true },
+        });
+        request.user = createdUser;
+        request.userId = createdUser.id;
+      }
       return true;
     }
 
