@@ -78,6 +78,7 @@ describe('MemoryController', () => {
           discovered: 0,
         }),
       } as any,
+      { logQuery: jest.fn().mockResolvedValue('query-id') } as any, // retrievalSignals
     );
   });
 
@@ -114,7 +115,8 @@ describe('MemoryController', () => {
       memoryService.recall.mockResolvedValue(expected as any);
 
       const req = { isInstanceKey: false };
-      const result = await controller.recall(userId, dto, req);
+      const res = { setHeader: jest.fn() } as any;
+      const result = await controller.recall(userId, dto, req, res);
 
       expect(result).toEqual(expected);
       expect(memoryService.recall).toHaveBeenCalledWith(userId, dto);
