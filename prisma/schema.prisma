@@ -2192,3 +2192,92 @@ model HealthMetricSnapshot {
   @@index([accountId, metricName, createdAt(sort: Desc)])
   @@map("health_metric_snapshots")
 }
+
+// ============================================================================
+// ADAPTIVE RETRIEVAL SYSTEM (ENG-35)
+// ============================================================================
+
+enum RetrievalSignalType {
+  RESULT_CONSUMED
+  RESULT_IGNORED
+  QUERY_REFORMULATED
+  RESULT_CITED
+  NULL_RESULT
+  EXPLICIT_HIT
+  EXPLICIT_MISS
+  EXPLICIT_IRRELEVANT
+  EXPLICIT_PARTIAL
+  SESSION_CONTINUATION
+}
+
+enum QueryType {
+  FACTUAL
+  SEMANTIC
+  TEMPORAL
+}
+
+/// AWM signal event log — append-only, partitioned by account
+model RetrievalSignal {
+  id         String              @id @default(cuid())
+  accountId  String              @map("account_id")
+  queryId    String              @map("query_id")
+  memoryId   String?             @map("memory_id")
+  signalType RetrievalSignalType @map("signal_type")
+  weight     Float
+  strategyId String?             @map("strategy_id")
+  rank       Int?
+  propensity Float?
+  metadata   Json?
+  createdAt  DateTime            @default(now()) @map("created_at")
+  expiresAt  DateTime            @map("expires_at")
+
+  @@index([accountId, createdAt])
+  @@index([queryId])
+  @@index([memoryId])
+  @@map("retrieval_signals")
+}
+
+/// Query execution log for signal attribution and latency tracking
+model RetrievalLog {
+  id            String    @id @default(cuid())
+  accountId     String    @map("account_id")
+  queryText     String    @map("query_text")
+  queryType     QueryType? @map("query_type")
+  strategyConfig Json?    @map("strategy_config")
+  resultCount   Int       @default(0) @map("result_count")
+  latencyMs     Int       @map("latency_ms")
+  armId         String?   @map("arm_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([accountId, createdAt])
+  @@map("retrieval_logs")
+}
+
+/// Per-account retrieval strategy profile
+model RetrievalStrategyProfile {
+  id                    String    @id @default(cuid())
+  accountId             String    @unique @map("account_id")
+
+  // RRF parameters
+  rrfK                  Float     @default(60) @map("rrf_k")
+  vectorWeight          Float     @default(0.6) @map("vector_weight")
+  bm25Weight            Float     @default(0.4) @map("bm25_weight")
+
+  // Extended parameters
+  temporalDecayEnabled  Boolean   @default(false) @map("temporal_decay_enabled")
+
+  // Strategy metadata
+  confidenceScore       Float     @default(0.0) @map("confidence_score")
+  signalCount           Int       @default(0) @map("signal_count")
+  embeddingModelVersion String?   @map("embedding_model_version")
+  lastOptimizedAt       DateTime? @map("last_optimized_at")
+
+  // Version tracking for rollback
+  version               Int       @default(1)
+  previousParams        Json?     @map("previous_params")
+
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("retrieval_strategy_profiles")
+}

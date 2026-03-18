@@ -38,6 +38,7 @@ import { GraphRecallService } from './graph-recall.service';
 import { EmbeddingQueueProducer } from './embedding-queue.producer';
 import { EmbeddingQueueProcessor } from './embedding-queue.processor';
 import { EMBEDDING_QUEUE } from './embedding.queue';
+import { RetrievalSignalsModule } from '../retrieval-signals/retrieval-signals.module';
 
 const hasRedis = !!(
   process.env.REDIS_URL ||
@@ -67,6 +68,7 @@ const bullExports = hasRedis ? [EmbeddingQueueProducer] : [];
     QueueModule,
     ServicePrismaModule,
     EntityProfileModule,
+    RetrievalSignalsModule,
     ...bullImports,
   ],
   controllers: [MemoryController],

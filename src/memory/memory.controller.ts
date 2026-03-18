@@ -62,6 +62,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QueueService } from '../queue/queue.service';
 import { MemoryJobQueueService } from './memory-job-queue.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
+import { RetrievalSignalsService } from '../retrieval-signals/retrieval-signals.service';
 
 @ApiTags('memories')
 @Controller('v1')
@@ -76,6 +77,7 @@ export class MemoryController {
     private readonly queueService: QueueService,
     private readonly memoryJobQueue: MemoryJobQueueService,
     private readonly memoryPipeline: MemoryPipelineService,
+    private readonly retrievalSignals: RetrievalSignalsService,
   ) {}
 
   /**
@@ -341,10 +343,30 @@ export class MemoryController {
     @UserId() userId: string,
     @Body() dto: QueryMemoryDto,
     @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
     @Query('agentId') agentId?: string,
   ): Promise<QueryResult> {
     const accountUserIds = await this.resolveAccountUserIds(req, agentId);
-    return this.memoryService.recall(accountUserIds || userId, dto);
+    const result = await this.memoryService.recall(accountUserIds || userId, dto);
+
+    // ENG-35: Log retrieval query for adaptive retrieval signals
+    const accountId = req.accountId ?? req.agent?.accountId;
+    if (accountId) {
+      try {
+        const queryId = await this.retrievalSignals.logQuery({
+          accountId,
+          queryText: dto.query,
+          strategyConfig: { vectorWeight: 0.6, bm25Weight: 0.4, rrfK: 60 },
+          resultCount: result.memories.length,
+          latencyMs: result.latencyMs,
+        });
+        res.set('X-Query-Id', queryId);
+      } catch {
+        // Signal logging must never break retrieval
+      }
+    }
+
+    return result;
   }
 
   /**
