@@ -11,6 +11,7 @@ export interface SemanticMatch {
 export class EntitySemanticService {
   private readonly logger = new Logger(EntitySemanticService.name);
   private readonly embedUrl: string;
+  private readonly embedModel: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -19,6 +20,10 @@ export class EntitySemanticService {
     this.embedUrl = this.configService.get<string>(
       'LOCAL_EMBED_URL',
       'http://localhost:8080',
+    );
+    this.embedModel = this.configService.get<string>(
+      'LOCAL_EMBED_MODEL',
+      this.configService.get<string>('OPENAI_EMBED_MODEL', ''),
     );
   }
 
@@ -100,7 +105,7 @@ export class EntitySemanticService {
     const response = await fetch(`${this.embedUrl}/v1/embeddings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: text }),
+      body: JSON.stringify({ input: text, ...(this.embedModel ? { model: this.embedModel } : {}) }),
     });
 
     if (!response.ok) {

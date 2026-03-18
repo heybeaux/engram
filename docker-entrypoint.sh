@@ -24,4 +24,4 @@ const p = new PrismaClient();
 npx prisma migrate deploy 2>&1 || echo "WARNING: Migration failed. Continuing startup..."
 
 echo "Starting Engram..."
-exec node dist/src/main.js
+exec node dist/main.js
