@@ -7,6 +7,10 @@ import { MemoryQueryService } from './memory-query.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { MemoryGraphService } from './memory-graph.service';
 import { MemoryExportService } from './memory-export.service';
+import { MemoryQueryRankingService } from './memory-query-ranking.service';
+import { MemoryQueryContextService } from './memory-query-context.service';
+import { MemoryWriteService } from './memory-write.service';
+import { MemoryLifecycleService } from './memory-lifecycle.service';
 import { ExtractionService } from './extraction.service';
 import { EmbeddingService } from './embedding.service';
 import { ImportanceService } from './importance.service';
@@ -76,6 +80,10 @@ const bullExports = hasRedis ? [EmbeddingQueueProducer] : [];
     MemoryService,
     MemoryDedupService,
     MemoryQueryService,
+    MemoryQueryRankingService,
+    MemoryQueryContextService,
+    MemoryWriteService,
+    MemoryLifecycleService,
     MemoryPipelineService,
     MemoryGraphService,
     MemoryExportService,

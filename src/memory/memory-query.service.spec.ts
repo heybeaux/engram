@@ -1,4 +1,6 @@
 import { MemoryQueryService } from './memory-query.service';
+import { MemoryQueryRankingService } from './memory-query-ranking.service';
+import { MemoryQueryContextService } from './memory-query-context.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
 import { TemporalParserService } from './temporal/temporal-parser.service';
@@ -16,6 +18,8 @@ describe('MemoryQueryService', () => {
   let multiQueryService: jest.Mocked<MultiQueryService>;
   let memoryPoolService: jest.Mocked<MemoryPoolService>;
   let memoryAccessLogService: jest.Mocked<MemoryAccessLogService>;
+  let rankingService: MemoryQueryRankingService;
+  let contextService: MemoryQueryContextService;
 
   const userId = 'user-123';
   const mockEmbedding = [0.1, 0.2, 0.3];
@@ -62,13 +66,27 @@ describe('MemoryQueryService', () => {
 
     const recallWeightService = {
       recallWeight: jest.fn().mockReturnValue(1.0),
+      applyUsageWeighting: jest
+        .fn()
+        .mockImplementation((mems: any[]) => Promise.resolve(mems)),
     } as any as RecallWeightService;
+
+    // Create sub-services with shared deps
+    rankingService = new MemoryQueryRankingService(
+      prisma,
+      embedding,
+      recallWeightService,
+    );
+
+    contextService = new MemoryQueryContextService(prisma);
 
     service = new MemoryQueryService(
       prisma,
       embedding,
       temporalParser,
       recallWeightService,
+      rankingService,
+      contextService,
       multiQueryService,
       memoryPoolService,
       memoryAccessLogService,
@@ -200,9 +218,20 @@ describe('MemoryQueryService', () => {
 
   describe('shouldUseMultiQuery', () => {
     it('should return false when multiQueryService is not available', () => {
-      const svc = new MemoryQueryService(prisma, embedding, temporalParser, {
-        applyWeights: jest.fn((m) => m),
-      } as any);
+      const recallWeightService = {
+        recallWeight: jest.fn().mockReturnValue(1.0),
+        applyUsageWeighting: jest
+          .fn()
+          .mockImplementation((m: any) => Promise.resolve(m)),
+      } as any as RecallWeightService;
+      const svc = new MemoryQueryService(
+        prisma,
+        embedding,
+        temporalParser,
+        recallWeightService,
+        rankingService,
+        contextService,
+      );
       expect(svc.shouldUseMultiQuery({} as any)).toBe(false);
     });
 
@@ -237,16 +266,21 @@ describe('MemoryQueryService', () => {
           .mockImplementation((mems: any[]) => Promise.resolve(mems)),
       } as unknown as RecallWeightService;
 
+      // Create ranking service WITH reranker
+      const rankingSvcWithReranker = new MemoryQueryRankingService(
+        prisma,
+        embedding,
+        recallWeightService,
+        mockRerankService,
+      );
+
       const serviceWithReranker = new MemoryQueryService(
         prisma,
         embedding,
         temporalParser,
         recallWeightService,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        mockRerankService,
+        rankingSvcWithReranker,
+        contextService,
       );
 
       temporalParser.parse.mockReturnValue({
@@ -298,16 +332,20 @@ describe('MemoryQueryService', () => {
           .mockImplementation((mems: any[]) => Promise.resolve(mems)),
       } as unknown as RecallWeightService;
 
+      const rankingSvcWithReranker = new MemoryQueryRankingService(
+        prisma,
+        embedding,
+        recallWeightService,
+        mockRerankService,
+      );
+
       const serviceWithReranker = new MemoryQueryService(
         prisma,
         embedding,
         temporalParser,
         recallWeightService,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        mockRerankService,
+        rankingSvcWithReranker,
+        contextService,
       );
 
       // No temporal intent — parser returns original query as semanticQuery
