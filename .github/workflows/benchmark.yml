@@ -1,0 +1,311 @@
+name: Recall Benchmark
+
+on:
+  pull_request:
+    branches: [staging, production]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  benchmark:
+    name: Recall Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: engram_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: engram_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U engram_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://engram_test:test_password@localhost:5432/engram_test
+      DIRECT_URL: postgresql://engram_test:test_password@localhost:5432/engram_test
+      NODE_ENV: test
+      JWT_SECRET: test-jwt-secret-for-ci
+      EMBEDDING_PROVIDER: local
+      LOCAL_EMBED_URL: http://localhost:8080
+      LOCAL_EMBED_MODEL: bge-base-en-v1.5
+      VECTOR_SEARCH_MODEL: bge-base-en-v1.5
+      BENCHMARK_REAL_EMBEDDINGS: 'true'
+      DURABILITY_BOOST_ENABLED: 'true'
+      DURABLE_BOOST_MULTIPLIER: '1.3'
+      EPHEMERAL_PENALTY_MULTIPLIER: '0.85'
+      RERANK_ENABLED: 'true'
+      RERANK_URLS: 'http://localhost:8081,http://localhost:8082'
+      ENSEMBLE_ENABLED: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Setup database
+        run: |
+          npx prisma migrate deploy
+          npx prisma generate
+
+      - name: Start embedding server
+        run: |
+          docker run -d --name embed-server --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id BAAI/bge-base-en-v1.5 --port 8080 \
+            --auto-truncate --max-client-batch-size 32
+
+          echo "Waiting for embedding server to be ready..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Embedding server ready after ~${i}0 seconds"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "::error::Embedding server failed to start"
+              docker logs embed-server
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Start reranker servers
+        run: |
+          docker run -d --name reranker-1 --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id BAAI/bge-reranker-base --port 8081 \
+            --auto-truncate --max-client-batch-size 32
+          docker run -d --name reranker-2 --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id mixedbread-ai/mxbai-rerank-base-v1 --port 8082 \
+            --auto-truncate --max-client-batch-size 32
+          echo "Waiting for reranker servers..."
+          for port in 8081 8082; do
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:$port/health > /dev/null 2>&1; then
+                echo "Reranker port $port ready"; break
+              fi
+              [ "$i" -eq 30 ] && echo "Warning: reranker $port not ready, continuing anyway"
+              sleep 5
+            done
+          done
+
+      - name: Run benchmark
+        id: benchmark
+        run: |
+          pnpm benchmark 2>&1 | tee benchmark-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: test/benchmark/results/
+          retention-days: 90
+
+      - name: Post PR comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let output = '';
+            try {
+              output = fs.readFileSync('benchmark-output.txt', 'utf8');
+            } catch {
+              output = 'Benchmark did not produce output — check earlier steps for errors.';
+            }
+
+            // Extract the report section
+            const reportStart = output.indexOf('╔══');
+            const reportEnd = output.lastIndexOf('benchmark PASSED') !== -1
+              ? output.lastIndexOf('benchmark PASSED') + 20
+              : output.lastIndexOf('benchmark FAILED') + 20;
+
+            const report = reportStart >= 0
+              ? output.slice(reportStart, reportEnd > reportStart ? reportEnd : undefined)
+              : 'Report not found in output';
+
+            const passed = output.includes('PASSED');
+            const emoji = passed ? '✅' : '❌';
+
+            const body = `## ${emoji} Recall Benchmark Results
+
+            \`\`\`
+            ${report.slice(0, 60000)}
+            \`\`\`
+
+            <details>
+            <summary>Full output</summary>
+
+            \`\`\`
+            ${output.slice(0, 60000)}
+            \`\`\`
+            </details>
+
+            *Commit: ${context.sha.slice(0, 8)}*`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user?.login === 'github-actions[bot]' &&
+              c.body?.includes('Recall Benchmark Results')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Check thresholds
+        if: always()
+        run: |
+          if [ ! -f benchmark-output.txt ]; then
+            echo "::error::Benchmark output file not found — benchmark step likely failed"
+            exit 1
+          fi
+          if grep -q "THRESHOLDS NOT MET" benchmark-output.txt; then
+            echo "::error::Benchmark thresholds not met"
+            exit 1
+          fi
+
+  recall-benchmark-dream:
+    name: Recall Benchmark (Post-Dream-Cycle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: engram_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: engram_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U engram_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://engram_test:test_password@localhost:5432/engram_test
+      DIRECT_URL: postgresql://engram_test:test_password@localhost:5432/engram_test
+      NODE_ENV: test
+      JWT_SECRET: test-jwt-secret-for-ci
+      EMBEDDING_PROVIDER: local
+      LOCAL_EMBED_URL: http://localhost:8080
+      LOCAL_EMBED_MODEL: bge-base-en-v1.5
+      VECTOR_SEARCH_MODEL: bge-base-en-v1.5
+      BENCHMARK_REAL_EMBEDDINGS: 'true'
+      DURABILITY_BOOST_ENABLED: 'true'
+      DURABLE_BOOST_MULTIPLIER: '1.3'
+      EPHEMERAL_PENALTY_MULTIPLIER: '0.85'
+      RERANK_ENABLED: 'true'
+      RERANK_URLS: 'http://localhost:8081,http://localhost:8082'
+      ENSEMBLE_ENABLED: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Setup database
+        run: |
+          npx prisma migrate deploy
+          npx prisma generate
+
+      - name: Start embedding server
+        run: |
+          docker run -d --name embed-server --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id BAAI/bge-base-en-v1.5 --port 8080 \
+            --auto-truncate --max-client-batch-size 32
+
+          echo "Waiting for embedding server to be ready..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Embedding server ready after ~${i}0 seconds"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "::error::Embedding server failed to start"
+              docker logs embed-server
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Start reranker servers
+        run: |
+          docker run -d --name reranker-1 --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id BAAI/bge-reranker-base --port 8081 \
+            --auto-truncate --max-client-batch-size 32
+          docker run -d --name reranker-2 --network host \
+            ghcr.io/huggingface/text-embeddings-inference:cpu-1.6 \
+            --model-id mixedbread-ai/mxbai-rerank-base-v1 --port 8082 \
+            --auto-truncate --max-client-batch-size 32
+          echo "Waiting for reranker servers..."
+          for port in 8081 8082; do
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:$port/health > /dev/null 2>&1; then
+                echo "Reranker port $port ready"; break
+              fi
+              [ "$i" -eq 30 ] && echo "Warning: reranker $port not ready, continuing anyway"
+              sleep 5
+            done
+          done
+
+      - name: Run post-dream-cycle benchmark
+        continue-on-error: false
+        run: |
+          npx jest --config ./test/jest-e2e.json --testPathPatterns=recall-benchmark-dream --runInBand --forceExit
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-dream-${{ github.sha }}
+          path: test/benchmark/results/
+          retention-days: 90
