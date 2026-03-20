@@ -211,6 +211,11 @@ const goldMemories: FixtureMemory[] = [
     tags: ['emotion', 'joy', 'family'],
     created_at: subDays(4),
     metadata: { emotion: 'joy' },
+    hypeQuestions: [
+      'What makes me happy?',
+      'When did I have a perfect day?',
+      'What brings me joy in life?',
+    ],
   },
   {
     fixture_id: 'alice_grief_001',
@@ -222,6 +227,11 @@ const goldMemories: FixtureMemory[] = [
     tags: ['emotion', 'grief', 'family'],
     created_at: subMonths(4),
     metadata: { emotion: 'grief' },
+    hypeQuestions: [
+      'When have I felt grief or loss?',
+      'Do I miss anyone in my family?',
+      'What makes me sad?',
+    ],
   },
   {
     fixture_id: 'alice_stress_001',
@@ -233,6 +243,11 @@ const goldMemories: FixtureMemory[] = [
     tags: ['emotion', 'stress', 'overwhelm'],
     created_at: subDays(1),
     metadata: { emotion: 'stress' },
+    hypeQuestions: [
+      'When have I felt stressed or overwhelmed?',
+      'What causes me to lose focus?',
+      'Have I been burned out recently?',
+    ],
   },
 
   // ── Additional emotional memories ─────────────────────────────
@@ -247,6 +262,11 @@ const goldMemories: FixtureMemory[] = [
     tags: ['emotion', 'worry', 'finance'],
     created_at: subDays(6),
     metadata: { emotion: 'worry' },
+    hypeQuestions: [
+      'What am I worried about?',
+      'What causes me anxiety about finances?',
+      'Am I stressed about money?',
+    ],
   },
   {
     fixture_id: 'alice_frustration_001',
@@ -258,6 +278,11 @@ const goldMemories: FixtureMemory[] = [
     tags: ['emotion', 'frustration', 'work'],
     created_at: subDays(3),
     metadata: { emotion: 'frustration' },
+    hypeQuestions: [
+      'What frustrates me at work?',
+      'Have I had issues with CI or testing?',
+      'When have I been annoyed recently?',
+    ],
   },
   {
     fixture_id: 'alice_pride_001',
@@ -269,6 +294,11 @@ const goldMemories: FixtureMemory[] = [
     tags: ['emotion', 'pride', 'career'],
     created_at: subMonths(2),
     metadata: { emotion: 'pride' },
+    hypeQuestions: [
+      'What am I most proud of?',
+      'Have I been promoted recently?',
+      'What are my career achievements?',
+    ],
   },
   {
     fixture_id: 'alice_anxiety_001',
@@ -291,6 +321,11 @@ const goldMemories: FixtureMemory[] = [
     tags: ['emotion', 'mixed', 'family', 'finance'],
     created_at: subDays(9),
     metadata: { emotion: 'mixed' },
+    hypeQuestions: [
+      'When have I had mixed feelings?',
+      'What conflicting emotions have I experienced?',
+      'Am I torn about any decisions?',
+    ],
   },
   {
     fixture_id: 'alice_emotion_change_001',
@@ -313,6 +348,11 @@ const goldMemories: FixtureMemory[] = [
     tags: ['emotion', 'calm', 'wellness'],
     created_at: subDays(4),
     metadata: { emotion: 'calm' },
+    hypeQuestions: [
+      'How do I calm down or relax?',
+      'Do I meditate?',
+      'What helps me feel at peace?',
+    ],
   },
 
   // ── Temporal test memories ────────────────────────────────────

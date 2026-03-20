@@ -158,7 +158,7 @@ export class PgVectorProvider implements VectorProvider {
         FROM memories m
         JOIN memory_embeddings me ON me.memory_id = m.id
         ${poolJoinClause}
-        WHERE me.model_id = $2
+        WHERE (me.model_id = $2 OR me.model_id LIKE 'hype-%')
           AND ${memoryWhereClause}
           AND me.embedding IS NOT NULL
         ORDER BY me.embedding <=> $1::vector

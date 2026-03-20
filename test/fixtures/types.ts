@@ -27,6 +27,8 @@ export interface FixtureMemory {
   metadata?: Record<string, unknown>;
   /** Whether this memory should appear in recall results (default true) */
   searchable?: boolean;
+  /** Pre-generated HyPE hypothetical queries for CI (bypasses LLM requirement) */
+  hypeQuestions?: string[];
 }
 
 export interface FixtureUser {

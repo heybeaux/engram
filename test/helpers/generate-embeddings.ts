@@ -13,6 +13,8 @@ import { Logger } from '@nestjs/common';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { EmbeddingService } from '../../src/embedding/embedding.service';
 import type { SeedCorpusResult } from './seed-corpus';
+import { ALL_USERS } from '../fixtures';
+import type { FixtureMemory } from '../fixtures';
 
 const logger = new Logger('GenerateEmbeddings');
 
@@ -125,5 +127,65 @@ export async function generateCorpusEmbeddings(
 
   logger.log(
     `✓ All ${memories.length} memories embedded (model: ${modelName}, dims: ${dimensions})`,
+  );
+
+  // Generate HyPE embeddings for fixtures that have pre-baked hypothetical questions
+  await generateHypeEmbeddings(prisma, embeddingService, corpus);
+}
+
+/**
+ * Generate and store HyPE (Hypothetical Prompt Embeddings) for fixture memories
+ * that have pre-baked hypeQuestions. This bypasses the LLM requirement in CI.
+ *
+ * Matches HypeService.embedAndStore model_id format: "hype-0", "hype-1", "hype-2".
+ */
+async function generateHypeEmbeddings(
+  prisma: PrismaService,
+  embeddingService: EmbeddingService,
+  corpus: SeedCorpusResult,
+): Promise<void> {
+  // Build a map of fixture_id → hypeQuestions from all fixture users
+  const hypeMap = new Map<string, string[]>();
+  for (const user of ALL_USERS) {
+    for (const mem of user.memories) {
+      if (mem.hypeQuestions?.length) {
+        hypeMap.set(mem.fixture_id, mem.hypeQuestions);
+      }
+    }
+  }
+
+  if (hypeMap.size === 0) return;
+
+  const dimensions = embeddingService.getDimensions();
+  let totalEmbedded = 0;
+
+  for (const [fixtureId, questions] of hypeMap) {
+    // Embed all hype questions for this memory in one batch
+    const embeddings = await embeddingService.embed(questions);
+
+    for (let i = 0; i < questions.length; i++) {
+      const modelId = `hype-${i}`;
+      const embeddingStr = `[${embeddings[i].join(',')}]`;
+
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO memory_embeddings (id, memory_id, model_id, dimensions, embedding, created_at, updated_at)
+         VALUES (
+           concat('hype_', substr(md5(random()::text), 1, 20)),
+           $1, $2, $3, $4::vector, NOW(), NOW()
+         )
+         ON CONFLICT (memory_id, model_id)
+         DO UPDATE SET embedding = $4::vector, updated_at = NOW()`,
+        fixtureId,
+        modelId,
+        dimensions,
+        embeddingStr,
+      );
+    }
+
+    totalEmbedded += questions.length;
+  }
+
+  logger.log(
+    `✓ ${totalEmbedded} HyPE embeddings generated for ${hypeMap.size} memories`,
   );
 }
