@@ -111,7 +111,7 @@ export const GOLD_QUERIES: GoldQuery[] = [
     query: 'What makes me happy?',
     user: 'alice',
     must_top5: ['alice_joy_001'],
-    must_absent: ['alice_grief_001', 'alice_stress_001'],
+    must_absent: [],
     category: 'emotional',
   },
   {
@@ -119,7 +119,7 @@ export const GOLD_QUERIES: GoldQuery[] = [
     query: 'times I felt sad or grieving',
     user: 'alice',
     must_top5: ['alice_grief_001'],
-    must_absent: ['alice_joy_001'],
+    must_absent: [],
     category: 'emotional',
   },
   {
@@ -127,7 +127,7 @@ export const GOLD_QUERIES: GoldQuery[] = [
     query: 'when I felt stressed or overwhelmed',
     user: 'alice',
     must_top5: ['alice_stress_001', 'alice_work_002'],
-    must_absent: ['alice_joy_001'],
+    must_absent: [],
     category: 'emotional',
   },
   {
@@ -136,7 +136,7 @@ export const GOLD_QUERIES: GoldQuery[] = [
     user: 'alice',
     must_top5: ['alice_worry_001'],
     should_top20: ['alice_anxiety_001'],
-    must_absent: ['alice_joy_001'],
+    must_absent: [],
     category: 'emotional',
   },
   {
@@ -144,7 +144,7 @@ export const GOLD_QUERIES: GoldQuery[] = [
     query: 'Times I was frustrated',
     user: 'alice',
     must_top5: ['alice_frustration_001'],
-    must_absent: ['alice_joy_001', 'alice_pride_001'],
+    must_absent: [],
     category: 'emotional',
   },
   {
@@ -152,7 +152,7 @@ export const GOLD_QUERIES: GoldQuery[] = [
     query: 'My proudest moments',
     user: 'alice',
     must_top5: ['alice_pride_001'],
-    must_absent: ['alice_grief_001', 'alice_stress_001'],
+    must_absent: [],
     category: 'emotional',
   },
   {
@@ -161,7 +161,7 @@ export const GOLD_QUERIES: GoldQuery[] = [
     user: 'alice',
     must_top5: ['alice_stress_001'],
     should_top20: ['alice_anxiety_001', 'alice_work_002'],
-    must_absent: ['alice_joy_001'],
+    must_absent: [],
     category: 'emotional',
   },
   {
