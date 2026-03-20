@@ -25,6 +25,8 @@ export interface FixtureMemory {
   created_at: Date;
   /** Optional metadata */
   metadata?: Record<string, unknown>;
+  /** Whether this memory should appear in recall results (default true) */
+  searchable?: boolean;
 }
 
 export interface FixtureUser {

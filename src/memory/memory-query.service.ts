@@ -6,12 +6,8 @@ import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import { MultiQueryService } from '../multi-query/multi-query.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
-import {
-  AnticipatoryService,
-} from '../anticipatory/anticipatory.service';
-import {
-  ResultExplanationDto,
-} from '../multi-query/dto/multi-query.dto';
+import { AnticipatoryService } from '../anticipatory/anticipatory.service';
+import { ResultExplanationDto } from '../multi-query/dto/multi-query.dto';
 import { Memory, SubjectType } from '@prisma/client';
 import {
   MemoryWithExtraction,
@@ -104,6 +100,7 @@ export class MemoryQueryService {
           userId: userIdFilter,
           deletedAt: null,
           supersededById: null,
+          searchable: { not: false },
           createdAt: {
             gte: parsed.temporalFilter!.start,
             lte: parsed.temporalFilter!.end,
@@ -186,6 +183,7 @@ export class MemoryQueryService {
              AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
              AND deleted_at IS NULL
              AND superseded_by_id IS NULL
+             AND searchable IS NOT FALSE
            ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
            LIMIT 100`,
           singleUserId,
@@ -228,6 +226,7 @@ export class MemoryQueryService {
                    AND (${ilikeConditions})
                    AND deleted_at IS NULL
                    AND superseded_by_id IS NULL
+                   AND searchable IS NOT FALSE
                  LIMIT 20`,
                 singleUserId,
                 ...ilikeParams,
@@ -266,6 +265,7 @@ export class MemoryQueryService {
           id: { in: memoryIds },
           deletedAt: null,
           supersededById: null,
+          searchable: { not: false },
           ...subjectTypeFilter,
           ...visibilityFilter,
         },
@@ -470,6 +470,7 @@ export class MemoryQueryService {
         id: { in: memoryIds },
         deletedAt: null,
         supersededById: null,
+        searchable: { not: false },
         ...subjectTypeFilter,
         ...visibilityFilterMQ,
       },

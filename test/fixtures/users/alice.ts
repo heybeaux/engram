@@ -553,6 +553,7 @@ function generateTemplateMemories(): FixtureMemory[] {
           tags: [topic, subs[s].split(' ')[0].toLowerCase()],
           created_at: subDays(counter % 365),
           metadata: {},
+          searchable: false,
         });
         counter++;
       }
@@ -572,6 +573,7 @@ function generateTemplateMemories(): FixtureMemory[] {
       tags: ['misc'],
       created_at: subDays(i % 730),
       metadata: {},
+      searchable: false,
     });
     counter++;
   }
