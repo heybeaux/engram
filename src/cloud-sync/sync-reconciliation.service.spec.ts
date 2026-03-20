@@ -5,6 +5,8 @@ import {
 } from './sync-reconciliation.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CloudLinkService } from '../cloud-link/cloud-link.service';
+import { CloudLinkAuthService } from '../cloud-link/cloud-link-auth.service';
+import { CloudLinkMappingService } from '../cloud-link/cloud-link-mapping.service';
 
 // Mock fetch globally
 const mockFetch = jest.fn();
@@ -316,6 +318,7 @@ describe('SyncReconciliationService', () => {
 describe('CloudLinkService - identity mapping', () => {
   let prisma: any;
   let linkService: CloudLinkService;
+  let mockMappingService: any;
 
   beforeEach(async () => {
     prisma = {
@@ -337,31 +340,35 @@ describe('CloudLinkService - identity mapping', () => {
       },
     };
 
-    // Mock the cloud API validation
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'cloud-acct',
-          email: 'rook@test.com',
-          plan: 'pro',
-        }),
-      })
-      // Mock sync key creation
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ key: 'esync_test' }),
-      })
-      // Mock cloud data check
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ memories: [{ cloudId: 'c1' }], hasMore: true }),
-      });
+    // Auth and sync key are now handled by mockAuthService above.
+    // Only need to mock the reconciliation cloud data check fetch.
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ memories: [{ cloudId: 'c1' }], hasMore: true }),
+    });
+
+    const mockAuthService = {
+      CLOUD_API_BASE: 'https://api.openengram.ai',
+      validateCloudApiKey: jest.fn().mockResolvedValue({
+        id: 'cloud-acct',
+        email: 'rook@test.com',
+        plan: 'pro',
+      }),
+      createSyncKey: jest.fn().mockResolvedValue('esync_test'),
+      getCloudStatus: jest.fn().mockResolvedValue({ linked: true, plan: 'pro' }),
+    };
+
+    mockMappingService = {
+      createAgentMapping: jest.fn().mockResolvedValue(undefined),
+      createUserMapping: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CloudLinkService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CloudLinkAuthService, useValue: mockAuthService },
+        { provide: CloudLinkMappingService, useValue: mockMappingService },
       ],
     }).compile();
 
@@ -382,21 +389,16 @@ describe('CloudLinkService - identity mapping', () => {
     });
 
     expect(result.linked).toBe(true);
-    expect(prisma.syncAgentMap.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          localAgentId: 'clawd-agent-001',
-          cloudAgentId: 'cmllz86ff',
-        }),
-      }),
+    expect(mockMappingService.createAgentMapping).toHaveBeenCalledWith(
+      expect.any(String), // instanceId (UUID)
+      'clawd-agent-001',
+      'cmllz86ff',
     );
-    expect(prisma.syncUserMap.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          localUserId: 'cmlo1r25i',
-          cloudUserId: 'cmllzv5cv',
-        }),
-      }),
+    expect(mockMappingService.createUserMapping).toHaveBeenCalledWith(
+      expect.any(String), // instanceId (UUID)
+      'cmlo1r25i',
+      'cmllzv5cv',
+      'rook-discord',
     );
     expect(result.reconciliationPreview).toBeDefined();
     expect(result.reconciliationPreview.bothSidesHaveData).toBe(true);

@@ -14,8 +14,7 @@
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../prisma/prisma.service';
-import { rlsContext } from '../prisma/rls-context';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { EnsembleService } from './ensemble.service';
 import { DriftDetectionService } from './drift-detection.service';
 import { CheckpointService } from './checkpoint.service';
@@ -60,7 +59,7 @@ export class NightlyReembedService implements OnModuleInit {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: ServicePrismaService,
     private readonly ensembleService: EnsembleService,
     private readonly driftService: DriftDetectionService,
     private readonly checkpointService: CheckpointService,
@@ -126,23 +125,20 @@ export class NightlyReembedService implements OnModuleInit {
     // Create job record BEFORE async work (RLS transaction may close after response)
     await this.createJobRecord(jobId, options.mode, models);
 
-    // Start job asynchronously, outside of any RLS transaction context.
-    // We use rlsContext.exit() to break out of the ALS store so the async
-    // job uses the real PrismaService instead of the (soon-closed) transaction client.
-    rlsContext.exit(() => {
-      setImmediate(() => {
-        this.executeReembedJob({
-          jobId,
-          mode: options.mode,
-          models,
-          batchSize: DEFAULT_BATCH_CONFIG.batchSize,
-          checkpointInterval: DEFAULT_BATCH_CONFIG.checkpointInterval,
-          dryRun: options.dryRun,
-          driftCheck: true,
-          skipCreateRecord: true,
-        }).catch((error) => {
-          this.logger.error(`Manual job ${jobId} failed: ${error}`);
-        });
+    // Start job asynchronously. ServicePrismaService bypasses RLS,
+    // so no need to escape the ALS store.
+    setImmediate(() => {
+      this.executeReembedJob({
+        jobId,
+        mode: options.mode,
+        models,
+        batchSize: DEFAULT_BATCH_CONFIG.batchSize,
+        checkpointInterval: DEFAULT_BATCH_CONFIG.checkpointInterval,
+        dryRun: options.dryRun,
+        driftCheck: true,
+        skipCreateRecord: true,
+      }).catch((error) => {
+        this.logger.error(`Manual job ${jobId} failed: ${error}`);
       });
     });
 

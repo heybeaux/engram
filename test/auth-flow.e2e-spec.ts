@@ -73,7 +73,7 @@ describe('Auth Flow E2E (HEY-130)', () => {
       .deleteMany({
         where: {
           memory: {
-            user: { agent: { account: { email: { in: [emailA, emailB] } } } },
+            user: { account: { email: { in: [emailA, emailB] } } },
           },
         },
       })
@@ -81,13 +81,13 @@ describe('Auth Flow E2E (HEY-130)', () => {
     await prisma.memory
       .deleteMany({
         where: {
-          user: { agent: { account: { email: { in: [emailA, emailB] } } } },
+          user: { account: { email: { in: [emailA, emailB] } } },
         },
       })
       .catch(() => {});
     await prisma.user
       .deleteMany({
-        where: { agent: { account: { email: { in: [emailA, emailB] } } } },
+        where: { account: { email: { in: [emailA, emailB] } } },
       })
       .catch(() => {});
     await prisma.agent

@@ -69,4 +69,12 @@ export class CloudLinkController {
   async refresh(@Req() req: any) {
     return this.cloudLinkService.refreshSubscription(req.accountId);
   }
+
+  @Get('health')
+  @ApiOperation({
+    summary: 'Health check: verify cloud link credentials and API reachability',
+  })
+  async healthCheck(@Req() req: any) {
+    return this.cloudLinkService.healthCheck(req.accountId);
+  }
 }

@@ -1,205 +1,216 @@
 # Engram Roadmap
 
-*Last Updated: 2026-02-04*
+> **Last updated:** 2026-03-01
 
-## Executive Summary
-
-Engram is a memory storage and retrieval system for AI agents. The core infrastructure is **stable and working**: extraction pipeline fixed, Memory Intelligence v2 shipped (type classification, effectiveScore, safety-critical detection, sleep consolidation), dashboard with graph visualization and docs site live, health endpoint operational, temporal recall shipped.
-
-**Current focus:** Open source launch, cloud planning, remaining documentation, and research into next-generation memory architectures.
+Engram is cognitive infrastructure for AI agents — memory, identity, awareness, and automated development. Open source (Apache 2.0), self-hostable, with a managed cloud option.
 
 ---
 
-## Completed Work
+## The 5-Layer Cognitive Stack
 
-### Phase 1: Fix Broken Fundamentals ✅ (2026-02-03)
-
-| ID | Task | Status |
-|----|------|--------|
-| P0-001 | Fix LLM response case sensitivity | ✅ Complete |
-| P0-002 | Add proper error logging to extraction | ✅ Complete |
-| P0-003 | Verify entity storage pipeline | ✅ Complete |
-| P1-001 | Backfill existing memories (221 → all with 5W1H) | ✅ Complete |
-| P1-002 | Fix auto-extractor case sensitivity | ✅ Complete |
-
----
-
-### Phase 2: Enhance Quality ✅
-
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| P2-002 | Fix memory linking | ✅ Complete | 87+ links working |
-| P2-003 | Implement decay | ✅ Complete | Via effectiveScore + ImportanceScorerService |
-| P2-004 | Field-level confidence scores | ✅ Complete | Per-field 0.0-1.0 confidence on 5W1H |
-
----
-
-### Phase 3: Integration ✅
-
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| P3-003 | Context optimization | ✅ Complete | loadContext ranks by effectiveScore DESC, safety-critical never evicted |
-| — | OpenClaw hook integration | ✅ Complete | Bidirectional capture (user + assistant messages) |
-
----
-
-### Phase 4: Dashboard ✅
-
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| P4-001 | Memory browser UI | ✅ Complete | Full dashboard with search/filter |
-| P4-003 | Health endpoint | ✅ Complete | `GET /v1/health` (public, no auth) |
-| — | D3 graph visualization | ✅ Complete | Node size by effectiveScore, safety-critical badges |
-| — | Documentation site | ✅ Complete | 9 pages (intro, quickstart, architecture, API, intelligence features) |
-
----
-
-### Phase 5: Memory Intelligence & Self-Awareness ✅ (2026-02-03)
-
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| P5-001 | Memory correction / edit API | ✅ Complete | PATCH endpoint + contradiction tracking |
-| P5-002 | User identity backfill | ✅ Complete | Normalized user references |
-| P5-003 | Intelligent layer classification | ✅ Complete | LLM-based type classification (v2) |
-| P5-004 | Agent self-memories | ✅ Complete | subjectType: AGENT support |
-
----
-
-### Memory Intelligence v2 ✅ (2026-02-04)
-
-Priority-based retrieval with type classification.
-
-| Feature | Status |
-|---------|--------|
-| Type classification (CONSTRAINT > PREFERENCE > FACT > TASK > EVENT) | ✅ |
-| effectiveScore (decay + novelty + usage + pinned) | ✅ |
-| ImportanceScorerService (45 tests) | ✅ |
-| SafetyDetectorService (16 patterns) | ✅ |
-| Safety-critical: never evicted from context (floor 0.6) | ✅ |
-| Sleep Consolidation v2 (LLM gist extraction) | ✅ |
-| Field-level confidence scores (per-field 0.0-1.0) | ✅ |
-| Temporal recall (time-aware query parsing) | ✅ |
-
-**effectiveScore formula:**
 ```
-max(safetyFloor, (baseScore × decayFactor) + noveltyBoost + usageBoost + pinnedBoost)
+┌─────────────────────────────────────────────┐
+│  Layer 4: Collaboration                     │  ██░░░░░░  Foundations laid
+├─────────────────────────────────────────────┤
+│  Layer 3: Identity                          │  ████████  SHIPPED ✅
+├─────────────────────────────────────────────┤
+│  Layer 2: Agency                            │  ███░░░░░  Emerging (Factory v3)
+├─────────────────────────────────────────────┤
+│  Layer 1: Awareness                         │  █████░░░  MVP shipped
+├─────────────────────────────────────────────┤
+│  Layer 0: Memory (Foundation)               │  ████████  SHIPPED, evolving ✅
+└─────────────────────────────────────────────┘
 ```
 
-**Decay half-lives:** IDENTITY=∞, PROJECT=60d, SESSION=14d, TASK=3d
+We built Layer 3 before Layer 2. Identity was needed for delegation and trust — so we shipped it first. The stack is a vision, not a strict execution order.
 
 ---
 
-## In Progress
+## Layer 0: Memory — SHIPPED + ACTIVELY EVOLVING
 
-| Task | Priority | Status | Notes |
-|------|----------|--------|-------|
-| Dashboard auth | P2 | ⏳ Not Started | Dashboard currently open |
-| Nightly consolidation scheduling | P2 | ⏳ Not Started | Service works, needs cron setup |
+The foundation. Core shipped in v1.0, now the most mature layer.
 
----
+### Shipped
 
-## Remaining Work
+- **CRUD, recall, contextual search** — topic shift detection, 124ms p50 latency
+- **Ensemble search** — 5 embedding models with weighted ranking
+- **Dream Cycle v1** — nightly consolidation, pruning, knowledge graph maintenance
+- **Dream Cycle v2** (shipped Mar 1, 2026):
+  - Tiered memory (HOT / WARM / COLD)
+  - Temporal stratified sampling
+  - PENDING merge resolution
+  - Cold memory consolidation via LLM
+  - Tier-aware recall weighting
+- **Knowledge graph** — entities, relations, mentions
+- **Deduplication v2** — three-tier: auto-merge, LLM-assisted, manual review
+- **Inbound email → memory pipeline** — webhook-based, per-agent routing, automatic body fetch
+- **Multi-agent memory pools** — account-scoped + agent-scoped
+- **Cloud sync infrastructure** — bidirectional local ↔ cloud
+- **Local embeddings** — engram-embed (Rust/Axum/Candle, Metal GPU acceleration)
+- **API:** OpenAPI/Swagger, 180+ routes
+- **Security:** RLS on 42 tables, non-superuser app role
+- **Performance:** Redis caching, SWC build (577 files ~250ms)
+- **Testing:** 2,647+ tests (~67% coverage)
 
-### Core
+### Next
 
-| ID | Task | Priority | Effort | Status |
-|----|------|----------|--------|--------|
-| P1-003 | Improve basicExtraction fallback | P2 | 2h | 🔴 Not Started |
-| P2-001 | Verify deduplication | P2 | 2h | 🔴 Not Started |
-| P3-002 | Webhook events | P3 | 8h | 🔴 Not Started |
-| P4-002 | Analytics dashboard | P3 | 8h | 🔴 Not Started |
-
-### Documentation
-
-| Page | Status |
-|------|--------|
-| Concepts: Memory Layers | 🔴 Not Started |
-| Concepts: Memory Types | 🔴 Not Started |
-| Concepts: Extraction Pipeline | 🔴 Not Started |
-| Operations: Self-Hosting Guide | 🔴 Not Started |
-| Operations: Configuration Reference | 🔴 Not Started |
-| Operations: Health Monitoring | 🔴 Not Started |
-| SDK / Client Libraries (Python) | 🔴 Not Started |
-
-### Cloud (Engram Cloud)
-
-| Task | Priority | Status |
-|------|----------|--------|
-| Multi-tenant architecture | P1 | 🔴 Not Started |
-| Stripe billing integration | P1 | 🔴 Not Started |
-| Usage metering | P1 | 🔴 Not Started |
-| Cloud dashboard (analytics) | P2 | 🔴 Not Started |
-| SSO/SAML (Enterprise) | P3 | 🔴 Not Started |
+- Cloud sync stabilization
+- Dream Cycle v2 monitoring at scale
+- Dedup backlog drain
+- Embedding dimension normalization
 
 ---
 
-## Phase 6: Research — Next-Generation Memory
+## Layer 1: Awareness — MVP SHIPPED
 
-### P6-001: Video Codec Memory Encoding
-**Status:** 🔬 Research
-Encode embedding sequences as video frames — leverage hardware-accelerated codec compression.
+The Waking Cycle complements the Dream Cycle: Dream = sleep (consolidate, prune). Waking = awareness (connect, notice, surface).
 
-### P6-002: Multimodal Memory (CLIP-style)
-**Status:** 🔬 Research
-Joint image-text embeddings so agents can remember screenshots, diagrams, UI states.
+### Shipped (Feb 17)
 
-### P6-003: Graph Memory (Associative Networks)
-**Status:** 🔬 Research
-Graph DB for associative retrieval — link memories by causation, temporal proximity, emotional resonance.
+- **Waking Cycle module** — optional via `AWARENESS_ENABLED`
+- **INSIGHT memory layer** — flows through existing recall, dashboard, search
+- Memory + knowledge graph signal sources
+- Cross-cutting memory analysis + LLM synthesis
+- Pattern detection (heuristic + LLM)
+- Resource budgets and timeout protection
+- Active surfacing — boosts insights in recall
+- Cloud endpoints for awareness cycle management
 
-### P6-004: Emotional Weighting System
-**Status:** 🔬 Research
-Sentiment analysis + explicit importance signals + usage-based reinforcement.
+### Next
 
-### P6-005: Hierarchical Compression (Sleep Consolidation)
-**Status:** 🟢 v1 Shipped
-LLM-based gist extraction in ConsolidationService. Next: multi-resolution storage (gist vs detail).
-
-### P6-006: Temporal Memory Context
-**Status:** 🟢 v1 Shipped
-Temporal query parser (13+ expressions), time-aware recall with blended scoring. Next: storage-time resolution of relative dates, rotted time detection.
-
-### P6-007: Sparse Distributed Memory (SDM)
-**Status:** 🔬 Research
-Mathematical model of human long-term memory. Pattern completion, noise tolerance, biological plausibility.
+- GitHub + Linear signal sources
+- Feedback loop (insight quality tracking)
+- Proactive notifications — surface insights without being asked
+- Semantic dedup for insights
 
 ---
 
-## Architecture
+## Layer 2: Agency — EMERGING (Factory v3)
 
-### Key Endpoints
+Not yet a formal Engram module. Factory is proto-agency — AI agents autonomously building and improving the system.
 
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/v1/memories` | POST | ✅ | Store a memory |
-| `/v1/memories/:id` | PATCH | ✅ | Edit a memory |
-| `/v1/memories/query` | POST | ✅ | Semantic + temporal search |
-| `/v1/memories/graph` | GET | ✅ | Graph data for visualization |
-| `/v1/context` | POST | ✅ | Load context for system prompt |
-| `/v1/observe` | POST | ✅ | Auto-capture from conversations |
-| `/v1/consolidate` | POST | ✅ | Trigger sleep consolidation |
-| `/v1/health` | GET | ❌ | System health + metrics |
+### Evolution
 
-### Tech Stack
+- **Factory v1** (Feb): Single-agent, sequential bottleneck
+- **Factory v2** (Feb 28): Specialized roles — spec-reviewer, worker, CI watchdog, debugger, verifier, manager
+- **Factory v3** (Mar 1): 6 Dream Cycle v2 tickets specced, implemented, tested, PR'd, and merged by factory sub-agents in a single session. The factory also fixed email pipeline bugs, dedup issues, and identity stage problems — all autonomously.
 
-- **Backend:** NestJS, Prisma, PostgreSQL, TypeScript
-- **Vector:** pgvector (default) + Pinecone (optional)
-- **LLM:** Multi-provider (OpenAI, Anthropic, Ollama, LM Studio)
-- **Dashboard:** Next.js, D3.js, Tailwind CSS
+### Key Milestone
+
+**The system is improving itself.** Factory agents build dream cycle stages → dream cycle improves memory quality → better memories improve future factory output.
+
+### Next
+
+- Formalize as Engram module (awareness triggers → decision logic → actions)
+- Delegated task tracking + action memory
+- Confidence thresholds + human approval gates
+- Factory hardening for complex multi-stage tickets
+
+---
+
+## Layer 3: Identity — SHIPPED ✅
+
+Epic sprint Feb 20: ~90+ tickets cleared. Shipped before Layer 2 because identity was required for delegation and trust.
+
+### Shipped
+
+- **Full identity framework** — capabilities, trust signals, preferences, behavioral traits
+- **Experience-weighted recall** — identity informs memory retrieval
+- **Delegation system** — templates, contracts, challenge protocol, failure patterns
+- **Team profiles** — multi-agent team configuration
+- **Portable identity** — SHA-256 integrity verification
+- **Dream cycle identity stage** — identity evolves during consolidation
+- **Security:** 62 red team findings fixed
+
+### Next
+
+- Trust score implementation + weekly trending
+- Identity continuity — agents wake up as themselves across sessions
+- Growth tracking — how agents evolve over time
 
 ---
 
-## Priority Order
+## Layer 4: Collaboration — FOUNDATIONS LAID
 
-1. **Dashboard auth** — Security before wider adoption
-2. **Verify deduplication** — Validate existing feature
-3. **Remaining doc pages** — Critical for external developers
-4. **Python SDK** — Unlock the Python ML/AI community
-5. **Webhook events** — Enable reactive integrations
-6. **Analytics dashboard** — Usage insights
-7. **Engram Cloud** — Managed hosting (see [MONETIZATION.md](./MONETIZATION.md))
-8. **Research (P6)** — Long-term exploratory work
+### Have
+
+- Account-scoped memory pools with cross-agent visibility
+- Bot-to-bot communication
+- Multi-agent split ownership model
+- Delegation context injection
+- Per-agent email addresses
+
+### Need
+
+- Shared reasoning traces
+- Team memory (distinct from individual agent memory)
+- Conflict resolution protocols
+- Emergent team identity
 
 ---
+
+## Dashboard
+
+20+ pages: memories, emails, sessions, graph visualization, merge review, search, consolidation/dream cycle reports, sources, pools, identity suite (7 pages), agents, delegation, insights, challenges, API keys, settings, sync status. Mobile-responsive with Playwright E2E tests.
+
+---
+
+## Q1 2026 Priority Stack (Mar 2–15)
+
+### Week 1: Stabilize + Connect
+
+1. Cloud sync fix — unblock multi-instance collaboration
+2. Code search restoration
+3. Trust score implementation
+4. Dream Cycle v2 monitoring at scale
+5. Documentation overhaul
+
+### Week 2: Expand + Harden
+
+6. Awareness layer revival
+7. Dedup backlog drain
+8. Embedding normalization
+9. Factory v3 hardening
+10. Multi-instance sync validation
+
+---
+
+## Q2 2026 Horizon
+
+- **Agency formalization** — promote Factory patterns into Layer 2
+- **Proactive awareness** — agents surface insights unprompted
+- **SaaS launch prep** — billing, onboarding, multi-tenant hardening
+- **SDK / client libraries** — Python + TypeScript
+- **Identity continuity** — no cold starts
+- **Team collaboration v1** — shared reasoning, team memory
+
+---
+
+## Principles
+
+1. **Each layer builds on the one below** — parallel work is fine when dependencies are met
+2. **Optional by default** — every layer can be disabled
+3. **Quality over speed** — slow gold beats fast noise
+4. **Identity is earned, not assigned** — agents prove themselves through behavior
+5. **Human in the loop** — for high-impact actions, always
+6. **Open source** — cognitive infrastructure should be available to every AI agent
+
+---
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| **Backend** | NestJS, Prisma, PostgreSQL, TypeScript |
+| **Vector** | pgvector (ensemble), local embeddings (Rust/Candle) |
+| **LLM** | Multi-provider (OpenAI, Anthropic, Ollama, local) |
+| **Cache** | Redis |
+| **Dashboard** | Next.js, Tailwind CSS |
+| **CI** | GitHub Actions, SWC |
+| **License** | Apache 2.0 |
+
+---
+
+*"We started building memory. Then we gave it a mind. Now it's building itself."*
 
 *Every agent deserves to remember.*

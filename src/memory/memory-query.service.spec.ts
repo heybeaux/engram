@@ -1,10 +1,14 @@
 import { MemoryQueryService } from './memory-query.service';
+import { MemoryQueryRankingService } from './memory-query-ranking.service';
+import { MemoryQueryContextService } from './memory-query-context.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
 import { TemporalParserService } from './temporal/temporal-parser.service';
 import { MultiQueryService } from '../multi-query/multi-query.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
+import { RecallWeightService } from './recall-weight.service';
+import { RerankService } from '../embedding/rerank.service';
 
 describe('MemoryQueryService', () => {
   let service: MemoryQueryService;
@@ -14,6 +18,8 @@ describe('MemoryQueryService', () => {
   let multiQueryService: jest.Mocked<MultiQueryService>;
   let memoryPoolService: jest.Mocked<MemoryPoolService>;
   let memoryAccessLogService: jest.Mocked<MemoryAccessLogService>;
+  let rankingService: MemoryQueryRankingService;
+  let contextService: MemoryQueryContextService;
 
   const userId = 'user-123';
   const mockEmbedding = [0.1, 0.2, 0.3];
@@ -58,10 +64,29 @@ describe('MemoryQueryService', () => {
       logRecalled: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    const recallWeightService = {
+      recallWeight: jest.fn().mockReturnValue(1.0),
+      applyUsageWeighting: jest
+        .fn()
+        .mockImplementation((mems: any[]) => Promise.resolve(mems)),
+    } as any as RecallWeightService;
+
+    // Create sub-services with shared deps
+    rankingService = new MemoryQueryRankingService(
+      prisma,
+      embedding,
+      recallWeightService,
+    );
+
+    contextService = new MemoryQueryContextService(prisma);
+
     service = new MemoryQueryService(
       prisma,
       embedding,
       temporalParser,
+      recallWeightService,
+      rankingService,
+      contextService,
       multiQueryService,
       memoryPoolService,
       memoryAccessLogService,
@@ -193,7 +218,20 @@ describe('MemoryQueryService', () => {
 
   describe('shouldUseMultiQuery', () => {
     it('should return false when multiQueryService is not available', () => {
-      const svc = new MemoryQueryService(prisma, embedding, temporalParser);
+      const recallWeightService = {
+        recallWeight: jest.fn().mockReturnValue(1.0),
+        applyUsageWeighting: jest
+          .fn()
+          .mockImplementation((m: any) => Promise.resolve(m)),
+      } as any as RecallWeightService;
+      const svc = new MemoryQueryService(
+        prisma,
+        embedding,
+        temporalParser,
+        recallWeightService,
+        rankingService,
+        contextService,
+      );
       expect(svc.shouldUseMultiQuery({} as any)).toBe(false);
     });
 
@@ -212,6 +250,136 @@ describe('MemoryQueryService', () => {
     it('should fall back to service isEnabled', () => {
       multiQueryService.isEnabled.mockReturnValue(true);
       expect(service.shouldUseMultiQuery({} as any)).toBe(true);
+    });
+  });
+
+  describe('temporal path — reranking query selection', () => {
+    it('should pass original query (with temporal expression) to reranker on temporal path', async () => {
+      const mockRerankService = {
+        rerank: jest.fn().mockResolvedValue([{ index: 0, score: 0.9 }]),
+      } as unknown as RerankService;
+
+      const recallWeightService = {
+        recallWeight: jest.fn().mockReturnValue(1.0),
+        applyUsageWeighting: jest
+          .fn()
+          .mockImplementation((mems: any[]) => Promise.resolve(mems)),
+      } as unknown as RecallWeightService;
+
+      // Create ranking service WITH reranker
+      const rankingSvcWithReranker = new MemoryQueryRankingService(
+        prisma,
+        embedding,
+        recallWeightService,
+        mockRerankService,
+      );
+
+      const serviceWithReranker = new MemoryQueryService(
+        prisma,
+        embedding,
+        temporalParser,
+        recallWeightService,
+        rankingSvcWithReranker,
+        contextService,
+      );
+
+      temporalParser.parse.mockReturnValue({
+        semanticQuery: 'What did I work on?',
+        temporalFilter: {
+          expression: 'last week',
+          start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+          end: new Date(),
+        },
+      } as any);
+
+      const memInRange = {
+        id: 'm-lw',
+        raw: 'Last week I rewrote the API auth module completely.',
+        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+        importanceScore: 0.6,
+        effectiveScore: 0.6,
+        deletedAt: null,
+        supersededById: null,
+        layer: 'SESSION',
+        extraction: null,
+      };
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([memInRange]);
+      embedding.search.mockResolvedValue([{ id: 'm-lw', score: 0.8 }] as any);
+
+      await serviceWithReranker.recall('user-123', {
+        query: 'What did I work on last week?',
+        limit: 5,
+      } as any);
+
+      // Cross-encoder must receive the original query (including "last week")
+      // so it can rank memories with "last week" context correctly
+      expect((mockRerankService as any).rerank).toHaveBeenCalledWith(
+        'What did I work on last week?',
+        expect.any(Array),
+      );
+    });
+
+    it('should pass stripped semantic query to reranker on standard (non-temporal) path', async () => {
+      const mockRerankService = {
+        rerank: jest.fn().mockResolvedValue([{ index: 0, score: 0.9 }]),
+      } as unknown as RerankService;
+
+      const recallWeightService = {
+        recallWeight: jest.fn().mockReturnValue(1.0),
+        applyUsageWeighting: jest
+          .fn()
+          .mockImplementation((mems: any[]) => Promise.resolve(mems)),
+      } as unknown as RecallWeightService;
+
+      const rankingSvcWithReranker = new MemoryQueryRankingService(
+        prisma,
+        embedding,
+        recallWeightService,
+        mockRerankService,
+      );
+
+      const serviceWithReranker = new MemoryQueryService(
+        prisma,
+        embedding,
+        temporalParser,
+        recallWeightService,
+        rankingSvcWithReranker,
+        contextService,
+      );
+
+      // No temporal intent — parser returns original query as semanticQuery
+      temporalParser.parse.mockReturnValue({
+        semanticQuery: 'What kind of coffee do I like?',
+        temporalFilter: null,
+      } as any);
+
+      const mem = {
+        id: 'm-coffee',
+        raw: 'I prefer pour-over coffee with a V60.',
+        importanceScore: 0.6,
+        effectiveScore: 0.6,
+        deletedAt: null,
+        supersededById: null,
+        layer: 'IDENTITY',
+        extraction: null,
+      };
+
+      embedding.search.mockResolvedValue([
+        { id: 'm-coffee', score: 0.9 },
+      ] as any);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([mem]);
+
+      await serviceWithReranker.recall('user-123', {
+        query: 'What kind of coffee do I like?',
+        limit: 5,
+      } as any);
+
+      // Standard path: semanticQuery equals original query (no temporal stripping)
+      expect((mockRerankService as any).rerank).toHaveBeenCalledWith(
+        'What kind of coffee do I like?',
+        expect.any(Array),
+      );
     });
   });
 

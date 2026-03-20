@@ -90,6 +90,7 @@ describe('CloudSyncService', () => {
       $queryRawUnsafe: jest
         .fn()
         .mockResolvedValue([{ pg_try_advisory_lock: true }]),
+      $transaction: jest.fn((cb: (tx: any) => Promise<any>) => cb(prisma)),
     };
 
     const module: TestingModule = await Test.createTestingModule({

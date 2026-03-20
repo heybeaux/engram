@@ -11,7 +11,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EnsembleModelConfig } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import {
   ModelId,
   ModelStatus,
@@ -33,7 +33,7 @@ export class ModelRegistryService implements OnModuleInit {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: ServicePrismaService,
   ) {}
 
   async onModuleInit(): Promise<void> {

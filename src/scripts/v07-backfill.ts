@@ -13,9 +13,11 @@ const logger = new Logger('V07Backfill');
  * Safe to run multiple times (idempotent).
  */
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 async function main() {
-  const prisma = new PrismaClient();
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const prisma = new PrismaClient({ adapter });
 
   try {
     logger.log('Starting v0.7 multi-agent backfill...');

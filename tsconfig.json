@@ -22,5 +22,5 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
   },
-  "exclude": ["supabase"]
+  "exclude": ["supabase", "worktrees"]
 }

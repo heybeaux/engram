@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CheckpointService } from './checkpoint.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { ReembedCheckpoint } from './ensemble.types';
 
 describe('CheckpointService', () => {
@@ -29,7 +29,7 @@ describe('CheckpointService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckpointService,
-        { provide: PrismaService, useValue: prisma },
+        { provide: ServicePrismaService, useValue: prisma },
       ],
     }).compile();
 
@@ -88,7 +88,9 @@ describe('CheckpointService', () => {
 
   describe('delete', () => {
     it('should delete by jobId', async () => {
-      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({ count: 1 });
+      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({
+        count: 1,
+      });
 
       await service.delete('test-job-1');
 
@@ -158,7 +160,9 @@ describe('CheckpointService', () => {
 
   describe('cleanupStale', () => {
     it('should delete stale checkpoints and return count', async () => {
-      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({ count: 3 });
+      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({
+        count: 3,
+      });
 
       const result = await service.cleanupStale();
 
@@ -169,7 +173,9 @@ describe('CheckpointService', () => {
     });
 
     it('should return 0 when no stale checkpoints', async () => {
-      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.ensembleReembedCheckpoint.deleteMany.mockResolvedValue({
+        count: 0,
+      });
 
       const result = await service.cleanupStale();
 

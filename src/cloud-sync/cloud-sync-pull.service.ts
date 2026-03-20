@@ -17,6 +17,14 @@ export class CloudSyncPullService {
     deletedCount: number;
     durationMs: number;
   }> {
+    if (!accountId) {
+      this.logger.warn(
+        'triggerPull called without accountId — auth guard may not have resolved account context for this request',
+      );
+      throw new BadRequestException(
+        'Missing accountId — cannot pull without account context',
+      );
+    }
     const link = await this.getCloudLink(accountId);
     const syncKey = link.cloudSyncKey
       ? this.decryptApiKey(link.cloudSyncKey)
@@ -127,9 +135,7 @@ export class CloudSyncPullService {
 
           // Create new local memory — need a userId
           const defaultUser = await this.prisma.user.findFirst({
-            where: {
-              agent: { accountId },
-            },
+            where: { accountId },
             select: { id: true },
           });
 
@@ -217,7 +223,7 @@ export class CloudSyncPullService {
     const agentIds = agents.map((a) => a.id);
 
     const users = await this.prisma.user.findMany({
-      where: { agentId: { in: agentIds } },
+      where: { accountId },
       select: { id: true },
     });
     const userIds = users.map((u) => u.id);

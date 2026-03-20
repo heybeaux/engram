@@ -38,6 +38,13 @@ import {
   ImportMemoriesDto,
   ImportResult,
 } from './dto/export-import.dto';
+import {
+  BulkCreateMemoryDto,
+  BulkCreateResult,
+  BulkTextImportDto,
+  BulkTextResult,
+  ExportFilteredQueryDto,
+} from './dto/bulk.dto';
 import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import { UpdateMemoryDto } from './dto/update-memory.dto';
 import { ContextualRecallService } from './contextual-recall.service';
@@ -55,6 +62,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QueueService } from '../queue/queue.service';
 import { MemoryJobQueueService } from './memory-job-queue.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
+import { RetrievalSignalsService } from '../retrieval-signals/retrieval-signals.service';
 
 @ApiTags('memories')
 @Controller('v1')
@@ -69,6 +77,7 @@ export class MemoryController {
     private readonly queueService: QueueService,
     private readonly memoryJobQueue: MemoryJobQueueService,
     private readonly memoryPipeline: MemoryPipelineService,
+    private readonly retrievalSignals: RetrievalSignalsService,
   ) {}
 
   /**
@@ -84,11 +93,12 @@ export class MemoryController {
     const accountId = req.accountId ?? req.agent?.accountId;
     if (!accountId) return null;
 
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (agentId) {
-      where.agentId = agentId;
+      // Scope to users from the account that owns this agent
+      where.account = { agents: { some: { id: agentId, deletedAt: null } } };
     } else {
-      where.agent = { accountId, deletedAt: null };
+      where.accountId = accountId;
     }
 
     const users = await this.prisma.user.findMany({
@@ -119,10 +129,12 @@ export class MemoryController {
     @Headers('x-am-agent-id') headerAgentId?: string,
     @Req() req?: any,
   ): Promise<MemoryWithExtraction> {
-    // Persist agentId from header, falling back to the agent resolved by the auth guard
-    if (!dto.agentId) {
-      dto.agentId = headerAgentId || req?.agent?.id;
-    }
+    // agentId is ALWAYS server-authoritative: use the authenticated agent's id.
+    // The x-am-agent-id header is accepted only as an optional hint for cross-agent
+    // attribution (e.g. a proxy writing on behalf of another agent), but the guard
+    // has already validated the actual calling agent via the API key.
+    // This prevents clients from falsely attributing memories to other agents.
+    dto.agentId = req?.agent?.id ?? headerAgentId ?? dto.agentId;
     return this.memoryService.remember(userId, dto);
   }
 
@@ -193,6 +205,128 @@ export class MemoryController {
     return status;
   }
 
+  // =========================================================================
+  // BULK IMPORT (fast createMany + async embedding)
+  // =========================================================================
+
+  /**
+   * POST /v1/memories/bulk
+   * Bulk create memories using createMany for fast Postgres insertion.
+   * Embeddings are queued asynchronously via EmbeddingQueueProcessor.
+   */
+  @Post('memories/bulk')
+  @ApiOperation({
+    summary: 'Bulk create memories',
+    description:
+      'Insert up to 1000 memories in a single createMany call. Embeddings are queued asynchronously.',
+  })
+  @ApiResponse({ status: 201, description: 'Memories created successfully.' })
+  async bulkCreate(
+    @UserId() userId: string,
+    @Body() dto: BulkCreateMemoryDto,
+  ): Promise<BulkCreateResult> {
+    return this.memoryService.bulkCreate(userId, dto);
+  }
+
+  /**
+   * POST /v1/memories/bulk/text
+   * Accept raw text, auto-chunk at ~3500 chars, and bulk-insert.
+   */
+  @Post('memories/bulk/text')
+  @ApiOperation({
+    summary: 'Bulk import from raw text',
+    description:
+      'Accepts raw text, auto-chunks at ~3500 characters on paragraph/sentence boundaries, and bulk-inserts all chunks.',
+  })
+  @ApiResponse({ status: 201, description: 'Text chunked and stored.' })
+  async bulkTextImport(
+    @UserId() userId: string,
+    @Body() dto: BulkTextImportDto,
+  ): Promise<BulkTextResult> {
+    return this.memoryService.bulkTextImport(userId, dto);
+  }
+
+  /**
+   * GET /v1/memories/export/filtered
+   * Export memories as JSON, CSV, or NDJSON with filters.
+   */
+  @Get('memories/export/filtered')
+  @RateLimit(5)
+  @ApiOperation({
+    summary: 'Export memories with filters',
+    description:
+      'Export memories as JSON, CSV, or NDJSON with optional layer, project, and date filters.',
+  })
+  async exportMemoriesFiltered(
+    @UserId() userId: string,
+    @Query() query: ExportFilteredQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const format = query.format || 'json';
+    const date = new Date().toISOString().split('T')[0];
+    const ext =
+      format === 'ndjson' ? 'ndjson' : format === 'csv' ? 'csv' : 'json';
+
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="engram-export-${date}.${ext}"`,
+    );
+
+    const filters = {
+      layer: query.layer,
+      projectId: query.projectId,
+      startDate: query.startDate,
+      endDate: query.endDate,
+    };
+
+    const BATCH_SIZE = 500;
+    let cursor: string | undefined;
+    let isFirst = true;
+
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.write('id,raw,layer,importance,createdAt,updatedAt\n');
+    } else if (format === 'ndjson') {
+      res.setHeader('Content-Type', 'application/x-ndjson');
+    } else {
+      res.setHeader('Content-Type', 'application/json');
+      res.write('[');
+    }
+
+    while (true) {
+      const batch = await this.memoryService.exportMemoriesFiltered(
+        userId,
+        filters,
+        BATCH_SIZE,
+        cursor,
+      );
+      if (batch.length === 0) break;
+
+      for (const memory of batch) {
+        if (format === 'csv') {
+          const escapedRaw = '"' + memory.raw.replace(/"/g, '""') + '"';
+          res.write(
+            `${memory.id},${escapedRaw},${memory.layer},${memory.importance},${memory.createdAt},${memory.updatedAt}\n`,
+          );
+        } else if (format === 'ndjson') {
+          res.write(JSON.stringify(memory) + '\n');
+        } else {
+          if (!isFirst) res.write(',');
+          res.write(JSON.stringify(memory));
+          isFirst = false;
+        }
+      }
+
+      if (batch.length < BATCH_SIZE) break;
+      cursor = batch[batch.length - 1].id;
+    }
+
+    if (format === 'json') {
+      res.write(']');
+    }
+    res.end();
+  }
+
   /**
    * POST /v1/memories/query
    * Semantic search for memories
@@ -209,10 +343,30 @@ export class MemoryController {
     @UserId() userId: string,
     @Body() dto: QueryMemoryDto,
     @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
     @Query('agentId') agentId?: string,
   ): Promise<QueryResult> {
     const accountUserIds = await this.resolveAccountUserIds(req, agentId);
-    return this.memoryService.recall(accountUserIds || userId, dto);
+    const result = await this.memoryService.recall(accountUserIds || userId, dto);
+
+    // ENG-35: Log retrieval query for adaptive retrieval signals
+    const accountId = req.accountId ?? req.agent?.accountId;
+    if (accountId) {
+      try {
+        const queryId = await this.retrievalSignals.logQuery({
+          accountId,
+          queryText: dto.query,
+          strategyConfig: { vectorWeight: 0.6, bm25Weight: 0.4, rrfK: 60 },
+          resultCount: result.memories.length,
+          latencyMs: result.latencyMs,
+        });
+        res.set('X-Query-Id', queryId);
+      } catch {
+        // Signal logging must never break retrieval
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -407,7 +561,7 @@ export class MemoryController {
       id: string;
       externalId: string;
       displayName: string | null;
-      agentId: string;
+      accountId: string;
       createdAt: Date;
     }>;
   }> {
@@ -430,7 +584,7 @@ export class MemoryController {
         id: true,
         externalId: true,
         displayName: true,
-        agentId: true,
+        accountId: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },

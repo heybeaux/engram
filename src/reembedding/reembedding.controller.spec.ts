@@ -40,9 +40,15 @@ describe('ReembeddingController', () => {
     });
 
     it('should throw BAD_REQUEST on service error', async () => {
-      mockService.triggerReembedding.mockRejectedValue(new Error('Job already running'));
-      await expect(controller.triggerReembedding({} as any)).rejects.toThrow(HttpException);
-      await expect(controller.triggerReembedding({} as any)).rejects.toMatchObject({
+      mockService.triggerReembedding.mockRejectedValue(
+        new Error('Job already running'),
+      );
+      await expect(controller.triggerReembedding({} as any)).rejects.toThrow(
+        HttpException,
+      );
+      await expect(
+        controller.triggerReembedding({} as any),
+      ).rejects.toMatchObject({
         status: HttpStatus.BAD_REQUEST,
       });
     });
@@ -104,7 +110,9 @@ describe('ReembeddingController', () => {
 
     it('should throw NOT_FOUND when memory missing', async () => {
       mockService.previewEnrichment.mockResolvedValue(null);
-      await expect(controller.previewEnrichment('missing')).rejects.toThrow(HttpException);
+      await expect(controller.previewEnrichment('missing')).rejects.toThrow(
+        HttpException,
+      );
     });
   });
 
@@ -150,7 +158,10 @@ describe('ReembeddingController', () => {
   describe('isEnabled', () => {
     it('should return enabled status and version', () => {
       mockService.isEnabled.mockReturnValue(true);
-      expect(controller.isEnabled()).toEqual({ enabled: true, version: '1.0.0' });
+      expect(controller.isEnabled()).toEqual({
+        enabled: true,
+        version: '1.0.0',
+      });
     });
   });
 });

@@ -1,10 +1,10 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { readFileSync } from 'fs';
 
 async function main() {
-  const prisma = new PrismaClient({
-    datasources: { db: { url: 'postgresql://postgres:postgres@localhost:54322/engram_kit' } }
-  });
+  const adapter = new PrismaPg({ connectionString: 'postgresql://postgres:postgres@localhost:54322/engram_kit' });
+  const prisma = new PrismaClient({ adapter });
 
   const memories = JSON.parse(readFileSync('/tmp/memory-recovery/memory-snapshots/complete-dataset.json', 'utf-8'));
   console.log(`Loading ${memories.length} memories...`);

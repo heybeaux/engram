@@ -99,11 +99,12 @@ export class MemoryExportService {
         id: true,
         externalId: true,
         displayName: true,
-        agent: { select: { accountId: true, account: true } },
+        accountId: true,
+        account: true,
       },
     });
 
-    const account = user?.agent?.account as any;
+    const account = user?.account as any;
     const memoriesUsed = account?.memoriesUsed ?? 0;
     let memoryLimit = Infinity;
 
@@ -165,7 +166,7 @@ export class MemoryExportService {
           timestamp: item.createdAt ? new Date(item.createdAt) : new Date(),
         };
 
-        this.runWithRls(user?.agent?.accountId ?? undefined, () =>
+        this.runWithRls(user?.accountId ?? undefined, () =>
           this.pipelineService.extractAndEmbed(
             memory.id,
             item.raw,
@@ -415,9 +416,9 @@ export class MemoryExportService {
   ): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { agent: { select: { accountId: true } } },
+      select: { accountId: true },
     });
-    const accountId = user?.agent?.accountId;
+    const accountId = user?.accountId;
     if (!accountId) return;
 
     if (delta > 0) {

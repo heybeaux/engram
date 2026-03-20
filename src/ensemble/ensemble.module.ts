@@ -12,6 +12,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
+import { ServicePrismaModule } from '../prisma/service-prisma.module';
 import { EnsembleService } from './ensemble.service';
 import { EnsembleController } from './ensemble.controller';
 import { NightlyReembedService } from './nightly-reembed.service';
@@ -22,7 +23,7 @@ import { PgVectorEnsembleProvider } from './pgvector-ensemble.provider';
 import { AccountModule } from '../account/account.module';
 
 @Module({
-  imports: [AccountModule, ConfigModule, PrismaModule],
+  imports: [AccountModule, ConfigModule, PrismaModule, ServicePrismaModule],
   controllers: [EnsembleController],
   providers: [
     PgVectorEnsembleProvider,

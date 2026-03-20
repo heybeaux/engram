@@ -107,8 +107,8 @@ export class WebhookDeliveryService {
         headers['X-Engram-Signature'] = this.sign(body, sub.secret);
       }
 
-      let statusCode: number | null = null;
-      let error: string | null = null;
+      let statusCode: number | null;
+      let error: string | null;
 
       try {
         const controller = new AbortController();

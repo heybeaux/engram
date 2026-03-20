@@ -1,149 +1,429 @@
-import { CloudSyncPushService } from './cloud-sync-push.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { CloudSyncPushService, SyncResult } from './cloud-sync-push.service';
+import { PrismaService } from '../prisma/prisma.service';
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// Mock fetch globally
+const mockFetch = jest.fn();
+global.fetch = mockFetch as any;
 
-const makeMemory = (id: string, overrides: Record<string, any> = {}) => ({
-  id,
-  raw: `memory content ${id}`,
-  layer: 'SESSION',
-  memoryType: null,
-  source: 'API',
-  importanceHint: null,
-  importanceScore: 0.5,
-  effectiveScore: 0.5,
-  priority: 'NORMAL',
-  contentHash: `hash-${id}`,
-  createdAt: new Date('2025-01-01T00:00:00Z'),
-  deletedAt: null,
-  cloudSyncedAt: null,
-  extraction: null,
-  entities: [],
-  ...overrides,
-});
-
-const makeApiResponse = (
-  results: Array<{ sourceMemoryId: string; status: string }>,
-) => ({
-  ok: true,
-  status: 200,
-  json: jest.fn().mockResolvedValue({ results }),
-  text: jest.fn().mockResolvedValue(''),
-});
-
-// ─── describe ────────────────────────────────────────────────────────────────
+// Mock content hash
+jest.mock('../common/content-hash.util', () => ({
+  generateContentHash: jest.fn((raw: string) => `hash-${raw.slice(0, 8)}`),
+}));
 
 describe('CloudSyncPushService', () => {
   let service: CloudSyncPushService;
-  let prisma: jest.Mocked<PrismaService>;
-  let configService: jest.Mocked<ConfigService>;
-  let fetchSpy: jest.SpyInstance;
+  let prisma: any;
 
-  beforeEach(() => {
+  const mockMemory = {
+    id: 'mem-1',
+    raw: 'Test memory content',
+    layer: 'SESSION',
+    source: 'EXPLICIT_STATEMENT',
+    createdAt: new Date('2026-01-01'),
+    importanceScore: 0.5,
+    effectiveScore: 0.6,
+    importanceHint: null,
+    memoryType: null,
+    priority: 3,
+    contentHash: 'existing-hash',
+    extraction: {
+      who: 'user',
+      what: 'test',
+      when: new Date('2026-01-01'),
+      whereCtx: null,
+      why: null,
+      how: null,
+      topics: ['testing'],
+    },
+    entities: [
+      {
+        entity: {
+          name: 'TestEntity',
+          type: 'PERSON',
+          normalizedName: 'testentity',
+        },
+      },
+    ],
+  };
+
+  const makeMemory = (overrides: any = {}) => ({
+    ...mockMemory,
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
     prisma = {
       memory: {
-        count: jest.fn(),
-        findMany: jest.fn(),
-        update: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue({}),
       },
-    } as any;
+    };
 
-    configService = {
-      get: jest.fn().mockReturnValue('https://api.test.com'),
-    } as any;
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CloudSyncPushService,
+        { provide: PrismaService, useValue: prisma },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, fallback: string) => {
+              if (key === 'CLOUD_API_URL') return 'https://api.test.com';
+              return fallback;
+            }),
+          },
+        },
+      ],
+    }).compile();
 
-    service = new CloudSyncPushService(prisma, configService);
+    service = module.get<CloudSyncPushService>(CloudSyncPushService);
+  });
 
-    // Spy on global fetch
-    fetchSpy = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue(
-        makeApiResponse([]) as unknown as Response,
+  describe('performSyncWithClient', () => {
+    const apiKey = 'test-api-key';
+    const instanceId = 'inst-1';
+    const signal = new AbortController().signal;
+    const syncProgress = { synced: 0, total: 0 };
+
+    it('should return zero counts when no memories to sync', async () => {
+      prisma.memory.count.mockResolvedValue(0);
+      prisma.memory.findMany.mockResolvedValue([]);
+
+      const result = await service.performSyncWithClient(
+        prisma,
+        apiKey,
+        instanceId,
+        signal,
+        syncProgress,
       );
-  });
 
-  afterEach(() => {
-    fetchSpy.mockRestore();
-  });
+      expect(result.syncedCount).toBe(0);
+      expect(result.newCount).toBe(0);
+      expect(result.updatedCount).toBe(0);
+      expect(result.skippedCount).toBe(0);
+      expect(result.errorCount).toBe(0);
+      expect(result.lastSyncedAt).toBeNull();
+      expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    });
 
-  // ─── syncBatchToCloud ────────────────────────────────────────────────────────
+    it('should sync a batch of memories successfully', async () => {
+      const memories = [
+        makeMemory({ id: 'mem-1' }),
+        makeMemory({ id: 'mem-2' }),
+      ];
+      prisma.memory.count.mockResolvedValue(2);
+      prisma.memory.findMany
+        .mockResolvedValueOnce(memories)
+        .mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [
+            { sourceMemoryId: 'mem-1', status: 'created' },
+            { sourceMemoryId: 'mem-2', status: 'updated' },
+          ],
+        }),
+      });
+
+      const result = await service.performSyncWithClient(
+        prisma,
+        apiKey,
+        instanceId,
+        signal,
+        syncProgress,
+      );
+
+      expect(result.syncedCount).toBe(2);
+      expect(result.newCount).toBe(1);
+      expect(result.updatedCount).toBe(1);
+      expect(result.lastSyncedAt).not.toBeNull();
+      expect(prisma.memory.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('should stop sync when signal is aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      prisma.memory.count.mockResolvedValue(5);
+
+      const result = await service.performSyncWithClient(
+        prisma,
+        apiKey,
+        instanceId,
+        controller.signal,
+        syncProgress,
+      );
+
+      expect(result.syncedCount).toBe(0);
+      expect(prisma.memory.findMany).not.toHaveBeenCalled();
+    });
+
+    it('should stop on auth failure (401/403)', async () => {
+      const memories = [makeMemory({ id: 'mem-1' })];
+      prisma.memory.count.mockResolvedValue(1);
+      prisma.memory.findMany
+        .mockResolvedValueOnce(memories)
+        .mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized',
+      });
+
+      const result = await service.performSyncWithClient(
+        prisma,
+        apiKey,
+        instanceId,
+        signal,
+        syncProgress,
+      );
+
+      expect(result.errorCount).toBe(1);
+      // Should not attempt more batches after auth failure
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should generate contentHash for memories missing one', async () => {
+      const memNoHash = makeMemory({ id: 'mem-no-hash', contentHash: null });
+      prisma.memory.count.mockResolvedValue(1);
+      prisma.memory.findMany
+        .mockResolvedValueOnce([memNoHash])
+        .mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{ sourceMemoryId: 'mem-no-hash', status: 'created' }],
+        }),
+      });
+
+      await service.performSyncWithClient(
+        prisma,
+        apiKey,
+        instanceId,
+        signal,
+        syncProgress,
+      );
+
+      // Should have updated hash in DB
+      expect(prisma.memory.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'mem-no-hash' },
+          data: { contentHash: expect.any(String) },
+        }),
+      );
+    });
+
+    it('should handle null instanceId by using "unknown"', async () => {
+      const memories = [makeMemory({ id: 'mem-1' })];
+      prisma.memory.count.mockResolvedValue(1);
+      prisma.memory.findMany
+        .mockResolvedValueOnce(memories)
+        .mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{ sourceMemoryId: 'mem-1', status: 'created' }],
+        }),
+      });
+
+      await service.performSyncWithClient(
+        prisma,
+        apiKey,
+        null,
+        signal,
+        syncProgress,
+      );
+
+      const fetchCall = mockFetch.mock.calls[0];
+      expect(fetchCall[1].headers['X-Instance-Id']).toBe('unknown');
+    });
+
+    it('should track progress correctly', async () => {
+      const progress = { synced: 0, total: 0 };
+      const memories = [makeMemory({ id: 'mem-1' })];
+      prisma.memory.count.mockResolvedValue(1);
+      prisma.memory.findMany
+        .mockResolvedValueOnce(memories)
+        .mockResolvedValueOnce([]);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{ sourceMemoryId: 'mem-1', status: 'created' }],
+        }),
+      });
+
+      await service.performSyncWithClient(
+        prisma,
+        apiKey,
+        instanceId,
+        signal,
+        progress,
+      );
+
+      expect(progress.total).toBe(1);
+      expect(progress.synced).toBe(1);
+    });
+
+    it('should handle batch sync network failure gracefully', async () => {
+      const memories = [makeMemory({ id: 'mem-1' })];
+      prisma.memory.count.mockResolvedValue(1);
+      prisma.memory.findMany
+        .mockResolvedValueOnce(memories)
+        .mockResolvedValueOnce([]);
+
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await service.performSyncWithClient(
+        prisma,
+        apiKey,
+        instanceId,
+        signal,
+        syncProgress,
+      );
+
+      expect(result.errorCount).toBe(1);
+      expect(result.syncedCount).toBe(0);
+    });
+  });
 
   describe('syncBatchToCloud', () => {
-    it('sends POST to /v1/sync/push with X-AM-API-Key header for regular keys', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([
-          { sourceMemoryId: 'm1', status: 'created' },
-        ]) as unknown as Response,
-      );
+    const apiKey = 'test-api-key';
+    const instanceId = 'inst-1';
 
-      prisma.memory.update.mockResolvedValue({} as any);
+    it('should send correct payload structure', async () => {
+      const memories = [mockMemory];
 
-      await service.syncBatchToCloud(
-        [makeMemory('m1')],
-        'regular-api-key',
-        'inst-1',
-      );
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{ sourceMemoryId: 'mem-1', status: 'created' }],
+        }),
+      });
 
-      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      await service.syncBatchToCloud(memories, apiKey, instanceId);
+
+      const [url, opts] = mockFetch.mock.calls[0];
       expect(url).toBe('https://api.test.com/v1/sync/push');
-      expect((init.headers as Record<string, string>)['X-AM-API-Key']).toBe(
-        'regular-api-key',
-      );
-      expect(
-        (init.headers as Record<string, string>)['X-Sync-Key'],
-      ).toBeUndefined();
+      expect(opts.method).toBe('POST');
+      expect(opts.headers['Content-Type']).toBe('application/json');
+
+      const body = JSON.parse(opts.body);
+      expect(body.syncProtocolVersion).toBe(2);
+      expect(body.memories).toHaveLength(1);
+      expect(body.memories[0].raw).toBe('Test memory content');
+      expect(body.memories[0].localId).toBe('mem-1');
+      expect(body.memories[0].instanceId).toBe('inst-1');
+      expect(body.memories[0].extraction.who).toBe('user');
+      expect(body.memories[0].entities).toHaveLength(1);
     });
 
-    it('uses X-Sync-Key header for esync_ prefixed keys', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([]) as unknown as Response,
-      );
+    it('should use X-Sync-Key header for esync_ keys', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
 
-      await service.syncBatchToCloud(
-        [makeMemory('m1')],
-        'esync_abc123',
-        null,
-      );
+      await service.syncBatchToCloud([], 'esync_test-key', instanceId);
 
-      const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-      expect(
-        (init.headers as Record<string, string>)['X-Sync-Key'],
-      ).toBe('esync_abc123');
-      expect(
-        (init.headers as Record<string, string>)['X-AM-API-Key'],
-      ).toBeUndefined();
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers['X-Sync-Key']).toBe('esync_test-key');
+      expect(headers['X-AM-API-Key']).toBeUndefined();
     });
 
-    it('uses "unknown" as instanceId when null is passed', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([]) as unknown as Response,
-      );
+    it('should use X-AM-API-Key header for regular keys', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
 
-      await service.syncBatchToCloud([makeMemory('m1')], 'key', null);
+      await service.syncBatchToCloud([], 'regular-key', instanceId);
 
-      const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-      expect(
-        (init.headers as Record<string, string>)['X-Instance-Id'],
-      ).toBe('unknown');
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers['X-AM-API-Key']).toBe('regular-key');
+      expect(headers['X-Sync-Key']).toBeUndefined();
     });
 
-    it('returns correct counts for created/updated/skipped/errors', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([
-          { sourceMemoryId: 'm1', status: 'created' },
-          { sourceMemoryId: 'm2', status: 'updated' },
-          { sourceMemoryId: 'm3', status: 'skipped' },
-          { sourceMemoryId: 'm4', status: 'error' },
-        ]) as unknown as Response,
-      );
+    it('should throw on 401 with specific message', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized',
+      });
 
-      prisma.memory.update.mockResolvedValue({} as any);
+      await expect(
+        service.syncBatchToCloud([mockMemory], apiKey, instanceId),
+      ).rejects.toThrow('invalid or expired');
+    });
+
+    it('should throw on 403 with specific message', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: async () => 'Forbidden',
+      });
+
+      await expect(
+        service.syncBatchToCloud([mockMemory], apiKey, instanceId),
+      ).rejects.toThrow('invalid or expired');
+    });
+
+    it('should throw on 429 rate limit', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        text: async () => 'Too Many Requests',
+      });
+
+      await expect(
+        service.syncBatchToCloud([mockMemory], apiKey, instanceId),
+      ).rejects.toThrow('rate limit');
+    });
+
+    it('should throw on other HTTP errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal Server Error',
+      });
+
+      await expect(
+        service.syncBatchToCloud([mockMemory], apiKey, instanceId),
+      ).rejects.toThrow('Cloud API error 500');
+    });
+
+    it('should count created/updated/skipped correctly', async () => {
+      const memories = [
+        makeMemory({ id: 'mem-1' }),
+        makeMemory({ id: 'mem-2' }),
+        makeMemory({ id: 'mem-3' }),
+        makeMemory({ id: 'mem-4' }),
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [
+            { sourceMemoryId: 'mem-1', status: 'created' },
+            { sourceMemoryId: 'mem-2', status: 'updated' },
+            { sourceMemoryId: 'mem-3', status: 'skipped' },
+            { sourceMemoryId: 'mem-4', status: 'failed', error: 'bad data' },
+          ],
+        }),
+      });
 
       const result = await service.syncBatchToCloud(
-        [makeMemory('m1'), makeMemory('m2'), makeMemory('m3'), makeMemory('m4')],
-        'key',
-        'inst',
+        memories,
+        apiKey,
+        instanceId,
       );
 
       expect(result.synced).toBe(3);
@@ -153,301 +433,73 @@ describe('CloudSyncPushService', () => {
       expect(result.errors).toBe(1);
     });
 
-    it('marks synced memories with cloudSyncedAt via prisma update', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([
-          { sourceMemoryId: 'm1', status: 'created' },
-        ]) as unknown as Response,
-      );
-
-      prisma.memory.update.mockResolvedValue({} as any);
-
-      await service.syncBatchToCloud([makeMemory('m1')], 'key', null);
-
-      expect(prisma.memory.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'm1' },
-          data: expect.objectContaining({ cloudSyncedAt: expect.any(Date) }),
+    it('should mark synced memories with cloudSyncedAt', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{ sourceMemoryId: 'mem-1', status: 'created' }],
         }),
-      );
-    });
-
-    it('throws on 401 with "invalid or expired" message', async () => {
-      fetchSpy.mockResolvedValue({
-        ok: false,
-        status: 401,
-        text: jest.fn().mockResolvedValue('Unauthorized'),
-      } as unknown as Response);
-
-      await expect(
-        service.syncBatchToCloud([makeMemory('m1')], 'bad-key', null),
-      ).rejects.toThrow('invalid or expired');
-    });
-
-    it('throws on 403 with "invalid or expired" message', async () => {
-      fetchSpy.mockResolvedValue({
-        ok: false,
-        status: 403,
-        text: jest.fn().mockResolvedValue('Forbidden'),
-      } as unknown as Response);
-
-      await expect(
-        service.syncBatchToCloud([makeMemory('m1')], 'bad-key', null),
-      ).rejects.toThrow('invalid or expired');
-    });
-
-    it('throws on 429 with rate limit message', async () => {
-      fetchSpy.mockResolvedValue({
-        ok: false,
-        status: 429,
-        text: jest.fn().mockResolvedValue('Too Many Requests'),
-      } as unknown as Response);
-
-      await expect(
-        service.syncBatchToCloud([makeMemory('m1')], 'key', null),
-      ).rejects.toThrow('rate limit exceeded');
-    });
-
-    it('throws on generic HTTP errors', async () => {
-      fetchSpy.mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: jest.fn().mockResolvedValue('Server Error'),
-      } as unknown as Response);
-
-      await expect(
-        service.syncBatchToCloud([makeMemory('m1')], 'key', null),
-      ).rejects.toThrow('Cloud API error 500');
-    });
-
-    it('generates contentHash for memories missing one', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([]) as unknown as Response,
-      );
-
-      const memory = makeMemory('m1', { contentHash: null });
-      await service.syncBatchToCloud([memory], 'key', null);
-
-      // Verify that the payload's contentHash was populated
-      const body = JSON.parse(
-        (fetchSpy.mock.calls[0][1] as RequestInit).body as string,
-      );
-      expect(body.memories[0].contentHash).toBeTruthy();
-      expect(typeof body.memories[0].contentHash).toBe('string');
-    });
-
-    it('includes extraction data when present', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([]) as unknown as Response,
-      );
-
-      const memory = makeMemory('m1', {
-        extraction: {
-          who: 'Alice',
-          what: 'deployed service',
-          when: new Date('2025-06-01'),
-          whereCtx: 'production',
-          why: 'feature launch',
-          how: 'CI/CD',
-          topics: ['deploy', 'production'],
-        },
       });
 
-      await service.syncBatchToCloud([memory], 'key', null);
+      await service.syncBatchToCloud([mockMemory], apiKey, instanceId);
 
-      const body = JSON.parse(
-        (fetchSpy.mock.calls[0][1] as RequestInit).body as string,
-      );
-      expect(body.memories[0].extraction.who).toBe('Alice');
-      expect(body.memories[0].extraction.topics).toEqual([
-        'deploy',
-        'production',
-      ]);
+      expect(prisma.memory.update).toHaveBeenCalledWith({
+        where: { id: 'mem-1' },
+        data: { cloudSyncedAt: expect.any(Date) },
+      });
     });
 
-    it('does not crash if prisma update fails for a synced memory', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([
-          { sourceMemoryId: 'm1', status: 'created' },
-        ]) as unknown as Response,
-      );
+    it('should handle prisma update failure gracefully', async () => {
+      prisma.memory.update.mockRejectedValueOnce(new Error('DB error'));
 
-      prisma.memory.update.mockRejectedValue(new Error('DB error'));
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{ sourceMemoryId: 'mem-1', status: 'created' }],
+        }),
+      });
 
-      // Should not throw — just logs the error
+      // Should not throw - error is logged
       const result = await service.syncBatchToCloud(
-        [makeMemory('m1')],
-        'key',
-        null,
+        [mockMemory],
+        apiKey,
+        instanceId,
       );
-
-      // Still counts as synced even if mark-as-synced fails
       expect(result.synced).toBe(1);
     });
 
-    it('uses syncProtocolVersion 2', async () => {
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([]) as unknown as Response,
-      );
+    it('should handle memory without extraction', async () => {
+      const memNoExtraction = makeMemory({ extraction: null });
 
-      await service.syncBatchToCloud([makeMemory('m1')], 'key', null);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{ sourceMemoryId: 'mem-1', status: 'created' }],
+        }),
+      });
 
-      const body = JSON.parse(
-        (fetchSpy.mock.calls[0][1] as RequestInit).body as string,
-      );
-      expect(body.syncProtocolVersion).toBe(2);
-    });
-  });
+      await service.syncBatchToCloud([memNoExtraction], apiKey, instanceId);
 
-  // ─── performSyncWithClient ───────────────────────────────────────────────────
-
-  describe('performSyncWithClient', () => {
-    const makeDb = () => ({
-      memory: {
-        count: jest.fn().mockResolvedValue(0),
-        findMany: jest.fn().mockResolvedValue([]),
-        update: jest.fn().mockResolvedValue({}),
-      },
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.memories[0].extraction).toBeUndefined();
     });
 
-    it('returns zero counts when no memories are pending', async () => {
-      const db = makeDb();
-      const signal = new AbortController().signal;
-      const syncProgress = { synced: 0, total: 0 };
+    it('should not leak API keys in request body', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{ sourceMemoryId: 'mem-1', status: 'created' }],
+        }),
+      });
 
-      const result = await service.performSyncWithClient(
-        db as any,
-        'key',
-        null,
-        signal,
-        syncProgress,
+      await service.syncBatchToCloud(
+        [mockMemory],
+        'secret-key-123',
+        instanceId,
       );
 
-      expect(result.syncedCount).toBe(0);
-      expect(result.errorCount).toBe(0);
-      expect(result.durationMs).toBeGreaterThanOrEqual(0);
-    });
-
-    it('sets syncProgress.total from initial count', async () => {
-      const db = makeDb();
-      db.memory.count.mockResolvedValue(42);
-      db.memory.findMany.mockResolvedValue([]); // no actual batches
-
-      const syncProgress = { synced: 0, total: 0 };
-      await service.performSyncWithClient(
-        db as any,
-        'key',
-        null,
-        new AbortController().signal,
-        syncProgress,
-      );
-
-      expect(syncProgress.total).toBe(42);
-    });
-
-    it('stops processing immediately when signal is already aborted', async () => {
-      const db = makeDb();
-      db.memory.count.mockResolvedValue(10);
-      const controller = new AbortController();
-      controller.abort();
-
-      const result = await service.performSyncWithClient(
-        db as any,
-        'key',
-        null,
-        controller.signal,
-        { synced: 0, total: 0 },
-      );
-
-      // No batches should have been fetched
-      expect(db.memory.findMany).not.toHaveBeenCalled();
-      expect(result.syncedCount).toBe(0);
-    });
-
-    it('processes a single batch and returns correct counts', async () => {
-      const db = makeDb();
-      db.memory.count.mockResolvedValue(1);
-      db.memory.findMany
-        .mockResolvedValueOnce([makeMemory('m1')]) // first call: batch
-        .mockResolvedValueOnce([]); // second call: empty → done
-
-      fetchSpy.mockResolvedValue(
-        makeApiResponse([
-          { sourceMemoryId: 'm1', status: 'created' },
-        ]) as unknown as Response,
-      );
-
-      prisma.memory.update.mockResolvedValue({} as any);
-
-      const result = await service.performSyncWithClient(
-        db as any,
-        'key',
-        null,
-        new AbortController().signal,
-        { synced: 0, total: 0 },
-      );
-
-      expect(result.syncedCount).toBe(1);
-      expect(result.newCount).toBe(1);
-    });
-
-    it('stops sync on 401/invalid API key', async () => {
-      const db = makeDb();
-      db.memory.count.mockResolvedValue(5);
-      db.memory.findMany.mockResolvedValue([makeMemory('m1')]);
-
-      fetchSpy.mockResolvedValue({
-        ok: false,
-        status: 401,
-        text: jest.fn().mockResolvedValue('Unauthorized'),
-      } as unknown as Response);
-
-      const result = await service.performSyncWithClient(
-        db as any,
-        'bad-key',
-        null,
-        new AbortController().signal,
-        { synced: 0, total: 0 },
-      );
-
-      // Should break out of loop on auth error
-      expect(db.memory.findMany).toHaveBeenCalledTimes(1);
-      expect(result.errorCount).toBeGreaterThan(0);
-    });
-
-    it('accumulates errors across batches without stopping', async () => {
-      const db = makeDb();
-      db.memory.count.mockResolvedValue(2);
-      db.memory.findMany
-        .mockResolvedValueOnce([makeMemory('m1')])
-        .mockResolvedValueOnce([makeMemory('m2')])
-        .mockResolvedValueOnce([]); // done
-
-      // First batch: 429, second batch: success
-      fetchSpy
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 429,
-          text: jest.fn().mockResolvedValue(''),
-        } as unknown as Response)
-        .mockResolvedValue(
-          makeApiResponse([
-            { sourceMemoryId: 'm2', status: 'created' },
-          ]) as unknown as Response,
-        );
-
-      prisma.memory.update.mockResolvedValue({} as any);
-
-      const result = await service.performSyncWithClient(
-        db as any,
-        'key',
-        null,
-        new AbortController().signal,
-        { synced: 0, total: 0 },
-      );
-
-      expect(result.errorCount).toBe(1); // batch 1 failed
-      expect(result.syncedCount).toBe(1); // batch 2 succeeded
+      const body = mockFetch.mock.calls[0][1].body;
+      expect(body).not.toContain('secret-key-123');
     });
   });
 });

@@ -99,7 +99,12 @@ export class CloudSyncPushService {
       }
 
       try {
-        const result = await this.syncBatchToCloud(batch, apiKey, instanceId);
+        const result = await this.syncBatchToCloud(
+          batch,
+          apiKey,
+          instanceId,
+          db,
+        );
         syncedCount += result.synced;
         newCount += result.newCount;
         updatedCount += result.updatedCount;
@@ -141,6 +146,7 @@ export class CloudSyncPushService {
     memories: any[],
     apiKey: string,
     instanceId: string | null,
+    db?: PrismaClient | PrismaService,
   ): Promise<{
     synced: number;
     errors: number;
@@ -222,7 +228,9 @@ export class CloudSyncPushService {
         item.status === 'skipped'
       ) {
         try {
-          await this.prisma.memory.update({
+          // Use the passed-in db client (not this.prisma) to avoid
+          // stale RLS transaction proxy when running in background
+          await (db ?? this.prisma).memory.update({
             where: { id: item.sourceMemoryId },
             data: { cloudSyncedAt: new Date() },
           });

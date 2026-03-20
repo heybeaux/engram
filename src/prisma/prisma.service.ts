@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { rlsContext } from './rls-context';
 
 // Properties that only exist on the full PrismaClient, not on transaction clients
@@ -7,7 +8,6 @@ const NON_TRANSACTIONAL_PROPS = new Set([
   '$connect',
   '$disconnect',
   '$transaction',
-  '$use',
   '$extends',
   '$on',
   'onModuleInit',
@@ -21,7 +21,11 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
+    const adapter = new PrismaPg({
+      connectionString: process.env.DATABASE_URL,
+    });
     super({
+      adapter,
       transactionOptions: {
         maxWait: 10000,
         timeout: 30000,

@@ -92,7 +92,9 @@ describe('CapabilityDeltaService', () => {
     });
 
     it('should treat all as gained when only one checkpoint', async () => {
-      const caps = [{ name: 'coding', evidenceCount: 5, firstSeen: 'a', lastSeen: 'b' }];
+      const caps = [
+        { name: 'coding', evidenceCount: 5, firstSeen: 'a', lastSeen: 'b' },
+      ];
       mockPrisma.capabilityCheckpoint.findMany.mockResolvedValue([
         { checkpointAt: new Date(), capabilities: caps },
       ]);
@@ -109,7 +111,12 @@ describe('CapabilityDeltaService', () => {
         {
           checkpointAt: now,
           capabilities: [
-            { name: 'coding', evidenceCount: 10, firstSeen: 'a', lastSeen: 'b' },
+            {
+              name: 'coding',
+              evidenceCount: 10,
+              firstSeen: 'a',
+              lastSeen: 'b',
+            },
             { name: 'deploy', evidenceCount: 3, firstSeen: 'a', lastSeen: 'b' },
           ],
         },

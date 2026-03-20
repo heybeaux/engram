@@ -10,6 +10,7 @@ import {
   HttpStatus,
   Headers,
   UseGuards,
+  Optional,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,6 +22,7 @@ import {
 import { DeduplicationService } from './deduplication.service';
 import { ReviewService } from './review.service';
 import { LineageService } from './lineage.service';
+import { DedupSchedulerService } from './dedup-scheduler.service';
 import {
   TriggerScanDto,
   ScanResponseDto,
@@ -59,6 +61,7 @@ export class DeduplicationController {
     private dedupService: DeduplicationService,
     private reviewService: ReviewService,
     private lineageService: LineageService,
+    @Optional() private schedulerService?: DedupSchedulerService,
   ) {}
 
   // ==========================================================================
@@ -296,6 +299,29 @@ export class DeduplicationController {
       userId,
       ttlDays ? Number(ttlDays) : 14,
     );
+  }
+
+  /**
+   * ENG-17: Manually trigger backlog processing
+   */
+  @Post('drain')
+  @ApiOperation({ summary: 'Manually trigger dedup backlog drain' })
+  @ApiResponse({ status: 200 })
+  async drain(): Promise<{ enqueued: boolean; pendingCount: number }> {
+    if (!this.schedulerService) {
+      throw new HttpException(
+        'Dedup pipeline not available (Redis not configured)',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    try {
+      return await this.schedulerService.triggerManualDrain();
+    } catch (error) {
+      throw new HttpException(
+        error instanceof Error ? error.message : 'Failed to trigger drain',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
 
   // ==========================================================================

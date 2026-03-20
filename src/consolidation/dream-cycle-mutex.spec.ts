@@ -7,6 +7,12 @@ describe('DreamCycleService - Mutex', () => {
   beforeEach(() => {
     mockPrisma = {
       $queryRawUnsafe: jest.fn(),
+      account: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'acct-1' }]),
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+      },
       dreamCycleReport: {
         create: jest.fn().mockResolvedValue({ id: 'report-1' }),
         update: jest.fn().mockResolvedValue({}),
@@ -41,6 +47,18 @@ describe('DreamCycleService - Mutex', () => {
         candidates: 0,
       }),
     };
+    const mockPendingStage = {
+      run: jest.fn().mockResolvedValue({
+        processed: 0,
+        autoMerged: 0,
+        autoRejected: 0,
+        llmEvaluated: 0,
+        llmMerged: 0,
+        llmRejected: 0,
+        llmCalls: 0,
+        errors: 0,
+      }),
+    };
     const mockPatternsStage = {
       run: jest.fn().mockResolvedValue({
         patternsCreated: 0,
@@ -60,14 +78,33 @@ describe('DreamCycleService - Mutex', () => {
       run: jest.fn().mockResolvedValue({ processed: 0 }),
     };
 
+    const mockTieringStage = {
+      run: jest.fn().mockResolvedValue({ promoted: 0, demoted: 0 }),
+    };
+    const mockConsolidationStage = {
+      run: jest.fn().mockResolvedValue({ consolidated: 0 }),
+    };
+
+    const mockTracker = {
+      startStage: jest
+        .fn()
+        .mockResolvedValue({ id: 'mock-id', runId: 'mock-run', stage: 'mock' }),
+      completeStage: jest.fn().mockResolvedValue(undefined),
+      abortStage: jest.fn().mockResolvedValue(undefined),
+      errorStage: jest.fn().mockResolvedValue(undefined),
+      getTotalMemoryCount: jest.fn().mockResolvedValue(0),
+    };
+
     service = new DreamCycleService(
       mockPrisma,
       mockConfig as any,
-      mockDedupStage as any,
-      mockStalenessStage as any,
+      mockPendingStage as any,
+      mockTieringStage as any,
+      mockConsolidationStage as any,
       mockPatternsStage as any,
       mockDriftStage as any,
       mockIdentityStage as any,
+      mockTracker as any,
     );
   });
 
@@ -129,9 +166,9 @@ describe('DreamCycleService - Mutex', () => {
         .mockResolvedValueOnce([{ pg_try_advisory_lock: true }])
         .mockResolvedValueOnce([{}]); // releaseLock
 
-      // No userId, no DEFAULT_USER_ID → triggers auto-discover
-      // Make memory.findMany throw to cause failure
-      mockPrisma.memory.findMany.mockRejectedValueOnce(new Error('DB down'));
+      // No userId, no DEFAULT_USER_ID → triggers auto-discover via account.findMany
+      // Make account.findMany throw to cause failure
+      mockPrisma.account.findMany.mockRejectedValueOnce(new Error('DB down'));
 
       await expect(service.run({})).rejects.toThrow('DB down');
 

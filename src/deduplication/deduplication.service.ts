@@ -166,7 +166,7 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
    * under previous user records (e.g., after agent migration).
    */
   private async resolveAllUserIds(userId: string): Promise<string[]> {
-    let externalId: string | null = null;
+    let externalId: string | null;
     if (userId.startsWith('cm')) {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },

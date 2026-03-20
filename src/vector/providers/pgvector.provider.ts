@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   VectorProvider,
@@ -6,12 +6,15 @@ import {
   VectorSearchResult,
   VectorSearchOptions,
 } from '../vector.interface';
+import { HybridSearchService } from '../hybrid-search.service';
 
 /**
  * pgvector Provider
  *
  * Uses PostgreSQL's pgvector extension for vector storage.
  * Default provider - no external dependencies, runs locally.
+ *
+ * ENG-26: Now supports hybrid search (BM25 + vector fusion) via HybridSearchService.
  */
 @Injectable()
 export class PgVectorProvider implements VectorProvider {
@@ -19,12 +22,22 @@ export class PgVectorProvider implements VectorProvider {
   readonly name = 'pgvector';
   private readonly searchModel: string;
   private readonly disableLegacyFallback: boolean;
+  private readonly hybridEnabled: boolean;
   private legacyCheckCache: boolean | null = null;
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private hybridSearch?: HybridSearchService,
+  ) {
     this.searchModel = process.env.VECTOR_SEARCH_MODEL || 'bge-base';
     this.disableLegacyFallback =
       process.env.DISABLE_LEGACY_EMBEDDING_FALLBACK === 'true';
+    this.hybridEnabled =
+      process.env.HYBRID_SEARCH_ENABLED !== 'false' && !!this.hybridSearch;
+
+    if (this.hybridEnabled) {
+      this.logger.log('[PgVector] Hybrid search enabled (ENG-26)');
+    }
   }
 
   async upsert(record: VectorRecord): Promise<void> {
@@ -183,10 +196,41 @@ export class PgVectorProvider implements VectorProvider {
       results.slice(0, 3),
     );
 
-    return results.map((r) => ({
+    const vectorResults = results.map((r) => ({
       id: r.id,
       score: Number(r.score),
     }));
+
+    // ENG-26: Hybrid search — fuse vector results with text search if enabled
+    if (this.hybridEnabled && this.hybridSearch && options._queryText) {
+      try {
+        const textResults = await this.hybridSearch.textSearch(
+          options._queryText,
+          options,
+        );
+
+        if (textResults.length > 0) {
+          const weights = this.hybridSearch.classifyQuery(options._queryText);
+          const fused = this.hybridSearch.fuseResults(
+            vectorResults,
+            textResults,
+            limit,
+          );
+
+          this.logger.log(
+            `[PgVector] Hybrid fusion: ${vectorResults.length} vector + ${textResults.length} text → ${fused.length} fused (weights: v=${weights.vectorWeight.toFixed(2)}, t=${weights.textWeight.toFixed(2)})`,
+          );
+
+          return fused;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `[PgVector] Hybrid search failed, falling back to vector-only: ${(error as Error).message}`,
+        );
+      }
+    }
+
+    return vectorResults;
   }
 
   async delete(id: string): Promise<void> {

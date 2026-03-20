@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient({ datasourceUrl: 'postgresql://postgres:postgres@localhost:54322/engram_kit' });
+import { PrismaPg } from '@prisma/adapter-pg';
+const adapter = new PrismaPg({ connectionString: 'postgresql://postgres:postgres@localhost:54322/engram_kit' });
+const prisma = new PrismaClient({ adapter });
 async function main() {
   // Count first
   const count = await prisma.memory.count({

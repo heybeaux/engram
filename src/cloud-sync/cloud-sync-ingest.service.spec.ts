@@ -40,6 +40,7 @@ describe('CloudSyncIngestService', () => {
       upsert: jest.fn(),
       findMany: jest.fn(),
     },
+    $transaction: jest.fn((cb: (tx: any) => Promise<any>) => cb(mockPrisma)),
   };
 
   beforeEach(async () => {

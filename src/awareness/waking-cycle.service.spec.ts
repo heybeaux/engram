@@ -301,7 +301,7 @@ describe('WakingCycleService', () => {
         }),
       );
       expect(prisma.user.findFirst).toHaveBeenCalledWith({
-        where: { agent: { accountId: 'acc-42' } },
+        where: { accountId: 'acc-42' },
       });
     });
 

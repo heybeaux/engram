@@ -141,6 +141,131 @@
         ]
       }
     },
+    "/v1/memories/bulk": {
+      "post": {
+        "description": "Insert up to 1000 memories in a single createMany call. Embeddings are queued asynchronously.",
+        "operationId": "MemoryController_bulkCreate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkCreateMemoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Memories created successfully."
+          }
+        },
+        "summary": "Bulk create memories",
+        "tags": [
+          "memories"
+        ]
+      }
+    },
+    "/v1/memories/bulk/text": {
+      "post": {
+        "description": "Accepts raw text, auto-chunks at ~3500 characters on paragraph/sentence boundaries, and bulk-inserts all chunks.",
+        "operationId": "MemoryController_bulkTextImport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkTextImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Text chunked and stored."
+          }
+        },
+        "summary": "Bulk import from raw text",
+        "tags": [
+          "memories"
+        ]
+      }
+    },
+    "/v1/memories/export/filtered": {
+      "get": {
+        "description": "Export memories as JSON, CSV, or NDJSON with optional layer, project, and date filters.",
+        "operationId": "MemoryController_exportMemoriesFiltered",
+        "parameters": [
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "json",
+              "type": "string",
+              "enum": [
+                "json",
+                "csv",
+                "ndjson"
+              ]
+            }
+          },
+          {
+            "name": "layer",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "IDENTITY",
+                "PROJECT",
+                "SESSION",
+                "TASK",
+                "INSIGHT"
+              ]
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by project ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Filter memories created after this date (ISO 8601)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "Filter memories created before this date (ISO 8601)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Export memories with filters",
+        "tags": [
+          "memories"
+        ]
+      }
+    },
     "/v1/memories/query": {
       "post": {
         "description": "Semantic search across memories using natural language queries.",
@@ -290,6 +415,28 @@
             "description": "Anticipatory recall options — surfaces adjacent memories and insights",
             "schema": {
               "$ref": "#/components/schemas/AnticipatoryOptionsDto"
+            }
+          },
+          {
+            "name": "filterAgentId",
+            "required": false,
+            "in": "query",
+            "description": "Filter recalled memories by the agent that created them. When omitted all memories for the user are considered.",
+            "schema": {
+              "example": "cld_agent_abc123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentBoost",
+            "required": false,
+            "in": "query",
+            "description": "Score multiplier applied to memories created by the requesting agent. Default 1.0 (no boost). Values between 1.0 and 3.0 are recommended.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 5,
+              "example": 1.5,
+              "type": "number"
             }
           },
           {
@@ -2310,6 +2457,503 @@
         ]
       }
     },
+    "/v1/entity-profiles": {
+      "post": {
+        "operationId": "EntityProfileController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Profile created with attributes."
+          }
+        },
+        "summary": "Create an entity profile",
+        "tags": [
+          "Entity Profiles"
+        ]
+      },
+      "get": {
+        "operationId": "EntityProfileController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PERSON",
+                "ORGANIZATION",
+                "PROJECT",
+                "BRAND",
+                "PRODUCT",
+                "LOCATION",
+                "CONCEPT",
+                "CUSTOM"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Search name, aliases, description",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated profile list."
+          }
+        },
+        "summary": "List entity profiles with pagination",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/{id}": {
+      "get": {
+        "operationId": "EntityProfileController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profile with attributes and counts."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "Get entity profile detail",
+        "tags": [
+          "Entity Profiles"
+        ]
+      },
+      "patch": {
+        "operationId": "EntityProfileController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "Update entity profile",
+        "tags": [
+          "Entity Profiles"
+        ]
+      },
+      "delete": {
+        "operationId": "EntityProfileController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profile soft-deleted."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "Soft-delete entity profile",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/{id}/attributes": {
+      "post": {
+        "operationId": "EntityProfileController_addAttribute",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAttributeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Attribute created."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "Add attribute to profile",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/{id}/attributes/{attrId}": {
+      "patch": {
+        "operationId": "EntityProfileController_updateAttribute",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attrId",
+            "required": true,
+            "in": "path",
+            "description": "Attribute UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAttributeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Attribute updated."
+          },
+          "404": {
+            "description": "Profile or attribute not found."
+          }
+        },
+        "summary": "Update profile attribute",
+        "tags": [
+          "Entity Profiles"
+        ]
+      },
+      "delete": {
+        "operationId": "EntityProfileController_removeAttribute",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attrId",
+            "required": true,
+            "in": "path",
+            "description": "Attribute UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attribute deleted."
+          },
+          "404": {
+            "description": "Profile or attribute not found."
+          }
+        },
+        "summary": "Remove attribute from profile",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/{id}/memories": {
+      "post": {
+        "operationId": "EntityProfileController_attachMemorySimple",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Memory attached."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "Attach memory to profile (legacy / simple)",
+        "tags": [
+          "Entity Profiles"
+        ]
+      },
+      "get": {
+        "operationId": "EntityProfileController_listMemories",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attached memories list."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "List attached memories with relevance scores",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/{id}/memories/{memoryId}": {
+      "delete": {
+        "operationId": "EntityProfileController_detachMemorySimple",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memoryId",
+            "required": true,
+            "in": "path",
+            "description": "Memory UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory detached."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "Detach memory from profile",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/{id}/attach": {
+      "post": {
+        "operationId": "EntityProfileController_attach",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Memory attached."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "Manually attach a memory to a profile via the pipeline",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/{id}/detach": {
+      "post": {
+        "operationId": "EntityProfileController_detach",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory detached."
+          },
+          "404": {
+            "description": "Profile not found."
+          }
+        },
+        "summary": "Manually detach a memory from a profile",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/backfill": {
+      "post": {
+        "operationId": "EntityProfileController_backfill",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Backfill job started. Processes in background."
+          }
+        },
+        "summary": "Backfill entity profile attachments for all existing memories",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
+    "/v1/entity-profiles/scan": {
+      "post": {
+        "operationId": "EntityProfileController_scan",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Max memories to scan (default 50)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Scan result."
+          }
+        },
+        "summary": "Trigger a scan of recent unattached memories for the agent",
+        "tags": [
+          "Entity Profiles"
+        ]
+      }
+    },
     "/v1/observe": {
       "post": {
         "operationId": "AutoController_observe",
@@ -3124,6 +3768,21 @@
         ]
       }
     },
+    "/v1/dedup/drain": {
+      "post": {
+        "operationId": "DeduplicationController_drain",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Manually trigger dedup backlog drain",
+        "tags": [
+          "deduplication"
+        ]
+      }
+    },
     "/v1/dedup/merge": {
       "post": {
         "operationId": "DeduplicationController_merge",
@@ -3500,6 +4159,110 @@
         ]
       }
     },
+    "/v1/dedup/review": {
+      "get": {
+        "operationId": "AutoDedupController_getReviewQueue",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review queue items"
+          }
+        },
+        "summary": "Get items needing human review from automated dedup pipeline",
+        "tags": [
+          "deduplication"
+        ]
+      }
+    },
+    "/v1/dedup/review/{id}/resolve": {
+      "post": {
+        "operationId": "AutoDedupController_resolveCandidate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "DedupCandidate id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Candidate resolved"
+          }
+        },
+        "summary": "Resolve a dedup candidate (human decision)",
+        "tags": [
+          "deduplication"
+        ]
+      }
+    },
+    "/v1/dedup/pipeline/stats": {
+      "get": {
+        "operationId": "AutoDedupController_getPipelineStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Pipeline stats"
+          }
+        },
+        "summary": "Automated dedup pipeline statistics",
+        "tags": [
+          "deduplication"
+        ]
+      }
+    },
+    "/v1/dedup/pipeline/run": {
+      "post": {
+        "operationId": "AutoDedupController_triggerPipelineRun",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Pipeline run result"
+          }
+        },
+        "summary": "Manually trigger a full dedup pipeline run",
+        "tags": [
+          "deduplication"
+        ]
+      }
+    },
+    "/v1/dedup/auto-stats": {
+      "get": {
+        "operationId": "AutoDedupController_getAutoStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Pipeline stats"
+          }
+        },
+        "summary": "Automated dedup pipeline statistics (legacy alias)",
+        "tags": [
+          "deduplication"
+        ]
+      }
+    },
     "/v1/consolidation/dream-cycle": {
       "post": {
         "operationId": "ConsolidationController_runDreamCycle",
@@ -3515,6 +4278,20 @@
         ],
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Consolidation"
+        ]
+      }
+    },
+    "/v1/consolidation/dream-cycle/async": {
+      "post": {
+        "operationId": "ConsolidationController_startDreamCycleAsync",
+        "parameters": [],
+        "responses": {
+          "202": {
             "description": ""
           }
         },
@@ -3711,6 +4488,40 @@
         },
         "tags": [
           "FogIndex"
+        ]
+      }
+    },
+    "/v1/identity/bootstrap": {
+      "get": {
+        "operationId": "IdentityController_bootstrap",
+        "parameters": [
+          {
+            "name": "agentId",
+            "required": false,
+            "in": "query",
+            "description": "Agent ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "User ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Bootstrap identity data for agent/user pair",
+        "tags": [
+          "identity"
         ]
       }
     },
@@ -5207,6 +6018,110 @@
         ]
       }
     },
+    "/v1/health/metrics": {
+      "get": {
+        "operationId": "HealthMetricsController_getMetrics",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get memory system health metrics",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/metrics/refresh": {
+      "post": {
+        "operationId": "HealthMetricsController_refreshMetrics",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Force refresh of health metrics",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/metrics/snapshot": {
+      "post": {
+        "description": "Computes current health metrics and persists them for historical trending.",
+        "operationId": "HealthMetricsController_takeSnapshot",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Trigger a health metric snapshot",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/metrics/history": {
+      "get": {
+        "description": "Returns time-series data for a specific metric over the requested window.",
+        "operationId": "HealthMetricsController_getHistory",
+        "parameters": [
+          {
+            "name": "metric",
+            "required": true,
+            "in": "query",
+            "description": "Which metric to return history for",
+            "schema": {
+              "enum": [
+                "memory_freshness",
+                "embedding_coverage",
+                "consolidation_health",
+                "dedup_health",
+                "memory_vitality"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "How many days back to look (default 30, max 365)",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get historical health metric readings",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/health/metrics/latest": {
+      "get": {
+        "description": "Returns the most recent snapshot for each of the 5 health metrics.",
+        "operationId": "HealthMetricsController_getLatest",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get latest health metric snapshots",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/v1/memories/{id}/correct": {
       "post": {
         "operationId": "CorrectionController_correct",
@@ -5464,6 +6379,26 @@
           }
         ],
         "summary": "Refresh cloud subscription status (admin only)",
+        "tags": [
+          "cloud"
+        ]
+      }
+    },
+    "/v1/cloud/health": {
+      "get": {
+        "operationId": "CloudLinkController_healthCheck",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Health check: verify cloud link credentials and API reachability",
         "tags": [
           "cloud"
         ]
@@ -5996,6 +6931,72 @@
         ]
       }
     },
+    "/v1/agent/recall/{entityName}": {
+      "get": {
+        "description": "Look up an entity by name with multi-strategy matching (exact, alias, fuzzy, semantic). Returns profile, memories, relationships, and unverified attributes.",
+        "operationId": "AgentRecallController_recallOne",
+        "parameters": [
+          {
+            "name": "entityName",
+            "required": true,
+            "in": "path",
+            "description": "Entity name (URL-encoded)",
+            "schema": {
+              "example": "MAP%20International",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Max memories to return (default 10)",
+            "schema": {
+              "example": 10,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entity recall result."
+          },
+          "404": {
+            "description": "Entity not found."
+          }
+        },
+        "summary": "Recall a single entity",
+        "tags": [
+          "Agent Recall"
+        ]
+      }
+    },
+    "/v1/agent/recall": {
+      "post": {
+        "description": "Recall up to 20 entities in one request. Unknown entities return null in the array.",
+        "operationId": "AgentRecallController_recallBatch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRecallDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Array of recall results (null for misses)."
+          }
+        },
+        "summary": "Batch recall multiple entities",
+        "tags": [
+          "Agent Recall"
+        ]
+      }
+    },
     "/v1/teams/{id}/members/{memberId}": {
       "delete": {
         "operationId": "TeamsController_removeMember",
@@ -6388,6 +7389,215 @@
           "flush"
         ]
       }
+    },
+    "/v1/emails": {
+      "get": {
+        "operationId": "InboundEmailController_findEmails",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "InboundEmail"
+        ]
+      }
+    },
+    "/v1/webhooks/inbound-email": {
+      "post": {
+        "operationId": "InboundEmailController_handleWebhook",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "InboundEmail"
+        ]
+      }
+    },
+    "/v1/account/plan": {
+      "get": {
+        "operationId": "BillingController_getAccountPlan",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current plan details with usage and limits"
+          }
+        },
+        "summary": "Get current account plan and usage",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/v1/account/upgrade": {
+      "post": {
+        "operationId": "BillingController_upgradePlan",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Stripe checkout URL for plan upgrade"
+          }
+        },
+        "summary": "Initiate plan upgrade (returns checkout URL)",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/v1/webhooks/stripe": {
+      "post": {
+        "operationId": "BillingController_stripeWebhook",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Event received"
+          }
+        },
+        "summary": "Stripe webhook receiver (placeholder)",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
+    "/v1/profiles/import/preview": {
+      "post": {
+        "description": "Upload a CSV file with a mapping config to see what profiles/memories would be created. Returns first 100 rows.",
+        "operationId": "ImportV2Controller_preview",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "CSV file"
+                  },
+                  "mapping": {
+                    "type": "string",
+                    "description": "MappingConfig as JSON string"
+                  }
+                },
+                "required": [
+                  "file",
+                  "mapping"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preview result with profiles, memories, errors and stats"
+          }
+        },
+        "summary": "Preview a CSV import without writing to DB",
+        "tags": [
+          "Profiles — Bulk Import v2"
+        ]
+      }
+    },
+    "/v1/profiles/import": {
+      "post": {
+        "description": "Upload a CSV and mapping config. Returns a jobId for async processing.",
+        "operationId": "ImportV2Controller_startImport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "CSV file"
+                  },
+                  "mapping": {
+                    "type": "string",
+                    "description": "MappingConfig as JSON string"
+                  }
+                },
+                "required": [
+                  "file",
+                  "mapping"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Import job queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "jobId": "uuid-here",
+                    "status": "PROCESSING"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a bulk profile import",
+        "tags": [
+          "Profiles — Bulk Import v2"
+        ]
+      }
+    },
+    "/v1/profiles/import/{jobId}": {
+      "get": {
+        "operationId": "ImportV2Controller_getJobStatus",
+        "parameters": [
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "description": "Import job UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status with progress and stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "status": "PROCESSING",
+                    "progress": 0.75,
+                    "stats": {
+                      "profileCount": 75,
+                      "memoryCount": 60,
+                      "errorCount": 2
+                    },
+                    "errors": []
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        },
+        "summary": "Get import job status",
+        "tags": [
+          "Profiles — Bulk Import v2"
+        ]
+      }
     }
   },
   "info": {
@@ -6473,6 +7683,104 @@
         "type": "object",
         "properties": {}
       },
+      "BulkCreateMemoryItemDto": {
+        "type": "object",
+        "properties": {
+          "raw": {
+            "type": "string",
+            "description": "Memory content text"
+          },
+          "layer": {
+            "type": "string",
+            "enum": [
+              "IDENTITY",
+              "PROJECT",
+              "SESSION",
+              "TASK",
+              "INSIGHT"
+            ]
+          },
+          "importanceHint": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "EXPLICIT_STATEMENT",
+              "AGENT_OBSERVATION",
+              "AGENT_REFLECTION",
+              "SYSTEM"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Optional metadata"
+          }
+        },
+        "required": [
+          "raw"
+        ]
+      },
+      "BulkCreateMemoryDto": {
+        "type": "object",
+        "properties": {
+          "memories": {
+            "description": "Array of memories to create (max 1000)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkCreateMemoryItemDto"
+            }
+          },
+          "context": {
+            "type": "object",
+            "description": "Optional project/session context"
+          },
+          "agentId": {
+            "type": "string",
+            "description": "Agent ID for attribution"
+          }
+        },
+        "required": [
+          "memories"
+        ]
+      },
+      "BulkTextImportDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Raw text to chunk and import"
+          },
+          "chunkSize": {
+            "type": "number",
+            "description": "Target chunk size in characters (default 3500)",
+            "default": 3500
+          },
+          "layer": {
+            "type": "string",
+            "enum": [
+              "IDENTITY",
+              "PROJECT",
+              "SESSION",
+              "TASK",
+              "INSIGHT"
+            ]
+          },
+          "context": {
+            "type": "object",
+            "description": "Optional project/session context"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
       "AnticipatoryOptionsDto": {
         "type": "object",
         "properties": {
@@ -6552,6 +7860,18 @@
                 "$ref": "#/components/schemas/AnticipatoryOptionsDto"
               }
             ]
+          },
+          "filterAgentId": {
+            "type": "string",
+            "description": "Filter recalled memories by the agent that created them. When omitted all memories for the user are considered.",
+            "example": "cld_agent_abc123"
+          },
+          "agentBoost": {
+            "type": "number",
+            "description": "Score multiplier applied to memories created by the requesting agent. Default 1.0 (no boost). Values between 1.0 and 3.0 are recommended.",
+            "example": 1.5,
+            "minimum": 1,
+            "maximum": 5
           }
         },
         "required": [
@@ -6850,6 +8170,191 @@
                 "CUSTOM"
               ]
             }
+          }
+        }
+      },
+      "InlineAttributeDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "valueType": {
+            "type": "string",
+            "enum": [
+              "STRING",
+              "DATE",
+              "NUMBER",
+              "URL",
+              "EMAIL",
+              "PHONE",
+              "ADDRESS",
+              "JSON",
+              "MARKDOWN"
+            ]
+          },
+          "category": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ]
+      },
+      "CreateProfileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name for the entity"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PERSON",
+              "ORGANIZATION",
+              "PROJECT",
+              "BRAND",
+              "PRODUCT",
+              "LOCATION",
+              "CONCEPT",
+              "CUSTOM"
+            ],
+            "description": "Entity type"
+          },
+          "description": {
+            "type": "string",
+            "description": "Short description"
+          },
+          "aliases": {
+            "description": "Alternative names",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "description": "Tags for categorization",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "attributes": {
+            "description": "Initial attributes to create with the profile",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InlineAttributeDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ]
+      },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name for the entity"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PERSON",
+              "ORGANIZATION",
+              "PROJECT",
+              "BRAND",
+              "PRODUCT",
+              "LOCATION",
+              "CONCEPT",
+              "CUSTOM"
+            ],
+            "description": "Entity type"
+          },
+          "description": {
+            "type": "string",
+            "description": "Short description"
+          },
+          "aliases": {
+            "description": "Alternative names",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "description": "Tags for categorization",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "attributes": {
+            "description": "Initial attributes to create with the profile",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InlineAttributeDto"
+            }
+          }
+        }
+      },
+      "CreateAttributeDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Attribute key"
+          },
+          "value": {
+            "type": "string",
+            "description": "Attribute value"
+          },
+          "valueType": {
+            "type": "string",
+            "enum": [
+              "STRING",
+              "DATE",
+              "NUMBER",
+              "URL",
+              "EMAIL",
+              "PHONE",
+              "ADDRESS",
+              "JSON",
+              "MARKDOWN"
+            ],
+            "default": "STRING"
+          },
+          "category": {
+            "type": "string",
+            "description": "Category grouping"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source of the attribute"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ]
+      },
+      "UpdateAttributeDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "description": "New value"
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Mark attribute as verified"
           }
         }
       },
@@ -7607,6 +9112,10 @@
           "rollbacksThisWeek"
         ]
       },
+      "ResolveDto": {
+        "type": "object",
+        "properties": {}
+      },
       "CreateDelegationContractDto": {
         "type": "object",
         "properties": {
@@ -7992,6 +9501,30 @@
       "UpdateSourceDto": {
         "type": "object",
         "properties": {}
+      },
+      "BatchRecallDto": {
+        "type": "object",
+        "properties": {
+          "entities": {
+            "description": "Entity names to recall (max 20)",
+            "example": [
+              "MAP International",
+              "Operation Blessing"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "type": "number",
+            "description": "Max memories per entity (default 10)",
+            "example": 10
+          }
+        },
+        "required": [
+          "entities"
+        ]
       },
       "CreateChallengeDto": {
         "type": "object",

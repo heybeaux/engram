@@ -211,7 +211,7 @@ describe('Cross-Agent Verification E2E (HEY-131)', () => {
         where: { id: memoryA1Id },
         include: { user: true },
       });
-      expect(memory!.user.agentId).toBe(agentAId);
+      expect(memory!.user.accountId).toBe(account1Id);
     });
 
     it('should create second memory for Agent A', async () => {
@@ -239,7 +239,7 @@ describe('Cross-Agent Verification E2E (HEY-131)', () => {
         where: { id: memoryB1Id },
         include: { user: true },
       });
-      expect(memory!.user.agentId).toBe(agentBId);
+      expect(memory!.user.accountId).toBe(account1Id);
     });
 
     it('should create memory attributed to Agent C (different account)', async () => {
@@ -256,7 +256,7 @@ describe('Cross-Agent Verification E2E (HEY-131)', () => {
         where: { id: memoryC1Id },
         include: { user: true },
       });
-      expect(memory!.user.agentId).toBe(agentCId);
+      expect(memory!.user.accountId).toBe(account2Id);
     });
   });
 

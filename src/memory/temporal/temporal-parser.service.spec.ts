@@ -121,6 +121,29 @@ describe('TemporalParserService', () => {
       expect(daysDiff).toBe(3);
     });
 
+    it('should detect "recent" (adjective form) and filter to last 3 days', () => {
+      const result = service.parse('recent conversations about work', NOW);
+
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('recent');
+      // "recent" = last 3 days (same window as "recently")
+      const daysDiff = Math.round(
+        (NOW.getTime() - result.temporalFilter!.start.getTime()) /
+          (24 * 60 * 60 * 1000),
+      );
+      expect(daysDiff).toBe(3);
+      // "recent" should be stripped from the semantic query
+      expect(result.semanticQuery).toBe('conversations about work');
+    });
+
+    it('should detect case-insensitive "Recent" at start of query', () => {
+      const result = service.parse('Recent standup notes', NOW);
+
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('Recent');
+      expect(result.semanticQuery).toBe('standup notes');
+    });
+
     it('should detect "earlier today"', () => {
       const result = service.parse(
         'What did we talk about earlier today?',
@@ -203,14 +226,14 @@ describe('TemporalParserService', () => {
     it('should weight temporal heavily when temporal intent detected', () => {
       // High semantic, high temporal, medium importance
       const score = service.blendScores(0.9, 1.0, 0.5, true);
-      // 0.9*0.45 + 1.0*0.35 + 0.5*0.20 = 0.405 + 0.35 + 0.10 = 0.855
-      expect(score).toBeCloseTo(0.855, 2);
+      // 0.9*0.30 + 1.0*0.50 + 0.5*0.20 = 0.27 + 0.50 + 0.10 = 0.87
+      expect(score).toBeCloseTo(0.87, 2);
     });
 
     it('should ignore temporal when no temporal intent', () => {
       const score = service.blendScores(0.9, 0.0, 0.5, false);
-      // 0.9*0.65 + 0.5*0.35 = 0.585 + 0.175 = 0.76
-      expect(score).toBeCloseTo(0.76, 2);
+      // 0.9*0.85 + 0.5*0.15 = 0.765 + 0.075 = 0.84
+      expect(score).toBeCloseTo(0.84, 2);
     });
 
     it('should rank temporally relevant memories higher', () => {
@@ -220,9 +243,57 @@ describe('TemporalParserService', () => {
       const scoreB = service.blendScores(0.6, 1.0, 0.5, true);
 
       // B should rank higher because temporal intent matters
-      // A: 0.9*0.45 + 0.1*0.35 + 0.5*0.20 = 0.405 + 0.035 + 0.10 = 0.54
-      // B: 0.6*0.45 + 1.0*0.35 + 0.5*0.20 = 0.27 + 0.35 + 0.10 = 0.72
+      // A: 0.9*0.30 + 0.1*0.50 + 0.5*0.20 = 0.27 + 0.05 + 0.10 = 0.42
+      // B: 0.6*0.30 + 1.0*0.50 + 0.5*0.20 = 0.18 + 0.50 + 0.10 = 0.78
       expect(scoreB).toBeGreaterThan(scoreA);
+    });
+  });
+
+  describe('month/year temporal patterns', () => {
+    it('should detect "6 months ago"', () => {
+      const result = service.parse('standup notes from 6 months ago', NOW);
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('6 months ago');
+      // Window should be 6 months back from NOW
+      const sixMonthsAgo = new Date(NOW);
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      expect(result.temporalFilter!.start.getMonth()).toBe(
+        sixMonthsAgo.getMonth(),
+      );
+    });
+
+    it('should detect "2 years ago"', () => {
+      const result = service.parse('standup notes from 2 years ago', NOW);
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('2 years ago');
+      const twoYearsAgo = new Date(NOW);
+      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+      expect(result.temporalFilter!.start.getFullYear()).toBe(
+        twoYearsAgo.getFullYear(),
+      );
+    });
+
+    it('should detect "years ago" without number', () => {
+      const result = service.parse('standup notes from years ago', NOW);
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('years ago');
+      // Should cover 1-3 years range
+      const threeYearsAgo = new Date(NOW);
+      threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+      expect(result.temporalFilter!.start.getFullYear()).toBe(
+        threeYearsAgo.getFullYear(),
+      );
+    });
+
+    it('should detect "3 weeks ago"', () => {
+      const result = service.parse('messages from 3 weeks ago', NOW);
+      expect(result.temporalFilter).not.toBeNull();
+      expect(result.temporalFilter!.expression).toBe('3 weeks ago');
+      const daysDiff = Math.round(
+        (NOW.getTime() - result.temporalFilter!.start.getTime()) /
+          (24 * 60 * 60 * 1000),
+      );
+      expect(daysDiff).toBe(21);
     });
   });
 });

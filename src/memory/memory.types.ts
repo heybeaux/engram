@@ -21,7 +21,7 @@ export interface MemoryWithExtraction extends Memory {
 export interface MemoryWithScore extends MemoryWithExtraction {
   score?: number;
   /** Present when this memory was surfaced by the Anticipatory Recall Engine. */
-  recallSource?: 'standard' | 'anticipatory';
+  recallSource?: 'standard' | 'anticipatory' | 'graph';
   /** Anticipatory metadata (strategy, reason, salience). Only present when recallSource='anticipatory'. */
   anticipatory?: {
     strategy: string;

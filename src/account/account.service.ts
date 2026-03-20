@@ -209,7 +209,7 @@ export class AccountService {
     const actualMemoryCount = await this.prisma.memory.count({
       where: {
         deletedAt: null,
-        user: { agent: { accountId } },
+        user: { accountId },
       },
     });
 
@@ -554,9 +554,9 @@ export class AccountService {
       const agentIds = agents.map((a) => a.id);
 
       if (agentIds.length > 0) {
-        // Get all users for these agents
+        // Get all users for this account (users now belong to accounts, not agents)
         const users = await tx.user.findMany({
-          where: { agentId: { in: agentIds } },
+          where: { accountId },
           select: { id: true },
         });
         const userIds = users.map((u) => u.id);

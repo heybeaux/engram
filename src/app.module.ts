@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -43,22 +44,67 @@ import { CloudSyncModule } from './cloud-sync/cloud-sync.module';
 import { AwarenessModule } from './awareness/awareness.module';
 import { AnticipatoryModule } from './anticipatory/anticipatory.module';
 import { IdentityModule } from './identity/identity.module';
+import { EntityProfileModule } from './entity-profile/entity-profile.module';
+import { AgentRecallModule } from './agent-recall/agent-recall.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { UsageTrackingInterceptor } from './common/interceptors/usage-tracking.interceptor';
 import { ChallengeModule } from './challenge/challenge.module';
 import { TeamsModule } from './teams/teams.module';
 import { DelegationModule } from './delegation/delegation.module';
 import { SessionIndexingModule } from './session-indexing/session-indexing.module';
+import { InboundEmailModule } from './inbound-email/inbound-email.module';
+import { BillingModule } from './billing/billing.module';
+import { ImportModule } from './import/import.module';
+import { ImportV2Module } from './import-v2/import-v2.module';
+import { RetrievalSignalsModule } from './retrieval-signals/retrieval-signals.module';
 import { UsageLimitMiddleware } from './common/middleware/usage-limit.middleware';
 import { AuthModule } from './common/auth.module';
 import { PersistenceModule } from './common/persistence/persistence.module';
 
 const EDITION = process.env.EDITION || 'local';
 
+const hasRedis = !!(
+  process.env.REDIS_URL ||
+  process.env.REDIS_HOST ||
+  process.env.BULL_REDIS_URL
+);
+
+const bullRootModule = hasRedis
+  ? [
+      BullModule.forRootAsync({
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => {
+          const redisUrl =
+            config.get<string>('REDIS_URL') ||
+            config.get<string>('BULL_REDIS_URL');
+          if (redisUrl) {
+            const url = new URL(redisUrl);
+            return {
+              connection: {
+                host: url.hostname,
+                port: parseInt(url.port || '6379', 10),
+                password: url.password || undefined,
+                tls: url.protocol === 'rediss:' ? {} : undefined,
+              },
+            };
+          }
+          return {
+            connection: {
+              host: config.get('REDIS_HOST', 'localhost'),
+              port: config.get<number>('REDIS_PORT', 6379),
+              password: config.get('REDIS_PASSWORD') || undefined,
+            },
+          };
+        },
+      }),
+    ]
+  : [];
+
 const coreModules = [
   ConfigModule.forRoot({
     isGlobal: true,
   }),
+  ...bullRootModule,
   AuthModule,
   PersistenceModule,
   ScheduleModule.forRoot(),
@@ -127,10 +173,17 @@ const coreModules = [
   AwarenessModule,
   AnticipatoryModule,
   IdentityModule,
+  EntityProfileModule,
+  AgentRecallModule,
   ChallengeModule,
   TeamsModule,
   DelegationModule,
   SessionIndexingModule,
+  InboundEmailModule,
+  BillingModule,
+  ImportModule,
+  ImportV2Module,
+  RetrievalSignalsModule,
 ];
 
 const cloudModules = [

@@ -1,0 +1,276 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { getQueueToken } from '@nestjs/bullmq';
+import { DedupPipelineService } from './dedup-pipeline.service';
+import { ServicePrismaService } from '../../prisma/service-prisma.service';
+import { CandidateDetectionService } from './candidate-detection.service';
+import { DedupClassificationService } from './dedup-classification.service';
+import { DedupResolutionService } from './dedup-resolution.service';
+import { DEDUP_AUTO_DETECTION_QUEUE } from './candidate-detection.processor';
+
+const mockDetection = {
+  detectCandidates: jest
+    .fn()
+    .mockResolvedValue({ scanned: 10, created: 3, skipped: 0 }),
+};
+
+const mockClassification = {
+  processPendingCandidates: jest
+    .fn()
+    .mockResolvedValue({ processed: 3, errors: 0 }),
+};
+
+const mockResolution = {
+  processClassifiedCandidates: jest.fn().mockResolvedValue({
+    processed: 3,
+    autoMerged: 2,
+    autoConsolidated: 0,
+    queued: 1,
+    skipped: 0,
+    errors: 0,
+  }),
+};
+
+const mockQueue = {
+  add: jest.fn().mockResolvedValue({ id: 'job-1' }),
+};
+
+const mockPrisma = {
+  account: {
+    findMany: jest.fn().mockResolvedValue([{ id: 'acct-1' }]),
+  },
+  user: {
+    findMany: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+  },
+};
+
+const mockConfig = {
+  get: jest.fn((_key: string): any => 'true'),
+};
+
+describe('DedupPipelineService', () => {
+  let service: DedupPipelineService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        DedupPipelineService,
+        { provide: ConfigService, useValue: mockConfig },
+        { provide: ServicePrismaService, useValue: mockPrisma },
+        { provide: CandidateDetectionService, useValue: mockDetection },
+        { provide: DedupClassificationService, useValue: mockClassification },
+        { provide: DedupResolutionService, useValue: mockResolution },
+        {
+          provide: getQueueToken(DEDUP_AUTO_DETECTION_QUEUE),
+          useValue: mockQueue,
+        },
+      ],
+    }).compile();
+
+    service = module.get<DedupPipelineService>(DedupPipelineService);
+    jest.clearAllMocks();
+
+    // Re-wire mocks after clearAllMocks — default: one account with one user
+    mockPrisma.account.findMany.mockResolvedValue([{ id: 'acct-1' }]);
+    mockPrisma.user.findMany.mockResolvedValue([{ id: 'user-1' }]);
+    mockDetection.detectCandidates.mockResolvedValue({
+      scanned: 10,
+      created: 3,
+      skipped: 0,
+    });
+    mockClassification.processPendingCandidates
+      .mockResolvedValueOnce({ processed: 3, errors: 0 })
+      .mockResolvedValue({ processed: 0, errors: 0 });
+    mockResolution.processClassifiedCandidates
+      .mockResolvedValueOnce({
+        processed: 3,
+        autoMerged: 2,
+        autoConsolidated: 0,
+        queued: 1,
+        skipped: 0,
+        errors: 0,
+      })
+      .mockResolvedValue({
+        processed: 0,
+        autoMerged: 0,
+        autoConsolidated: 0,
+        queued: 0,
+        skipped: 0,
+        errors: 0,
+      });
+
+    (mockConfig.get as jest.Mock).mockImplementation(
+      (_key: string): any => 'true',
+    );
+    mockQueue.add.mockResolvedValue({ id: 'job-1' });
+  });
+
+  describe('runPipeline', () => {
+    it('runs all 3 phases per-user with account isolation', async () => {
+      const result = await service.runPipeline();
+
+      // ENG-34: detection called with userId for account isolation
+      expect(mockDetection.detectCandidates).toHaveBeenCalledWith('user-1');
+      expect(mockClassification.processPendingCandidates).toHaveBeenCalledWith(
+        'user-1',
+      );
+      expect(mockResolution.processClassifiedCandidates).toHaveBeenCalledWith(
+        'user-1',
+      );
+
+      expect(result.skipped).toBe(false);
+      expect(result.detection.scanned).toBe(10);
+      expect(result.classification.processed).toBe(3);
+      expect(result.resolution.autoMerged).toBe(2);
+    });
+
+    it('returns skipped result when pipeline is disabled', async () => {
+      (mockConfig.get as jest.Mock).mockImplementation((key: string): any => {
+        if (key === 'DEDUP_PIPELINE_ENABLED') return 'false';
+        return undefined;
+      });
+
+      const result = await service.runPipeline();
+
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('DEDUP_PIPELINE_ENABLED=false');
+      expect(mockDetection.detectCandidates).not.toHaveBeenCalled();
+    });
+
+    it('includes startedAt and finishedAt timestamps', async () => {
+      const before = new Date();
+      const result = await service.runPipeline();
+      const after = new Date();
+
+      expect(result.startedAt.getTime()).toBeGreaterThanOrEqual(
+        before.getTime(),
+      );
+      expect(result.finishedAt.getTime()).toBeGreaterThanOrEqual(
+        result.startedAt.getTime(),
+      );
+      expect(result.finishedAt.getTime()).toBeLessThanOrEqual(after.getTime());
+    });
+
+    it('loops classification until all pending are processed', async () => {
+      // Reset and re-mock classification to control loop precisely
+      mockClassification.processPendingCandidates.mockReset();
+      mockClassification.processPendingCandidates
+        .mockResolvedValueOnce({ processed: 10, errors: 0 })
+        .mockResolvedValueOnce({ processed: 5, errors: 0 })
+        .mockResolvedValue({ processed: 0, errors: 0 });
+
+      const result = await service.runPipeline();
+
+      // 3 classification calls for the single user + resolution calls
+      expect(mockClassification.processPendingCandidates).toHaveBeenCalledTimes(
+        3,
+      );
+      expect(result.classification.processed).toBe(15);
+    });
+
+    it('loops resolution until all classified are processed', async () => {
+      // Reset and re-mock resolution to control loop precisely
+      mockResolution.processClassifiedCandidates.mockReset();
+      mockResolution.processClassifiedCandidates
+        .mockResolvedValueOnce({
+          processed: 20,
+          autoMerged: 10,
+          autoConsolidated: 3,
+          queued: 5,
+          skipped: 2,
+          errors: 0,
+        })
+        .mockResolvedValue({
+          processed: 0,
+          autoMerged: 0,
+          autoConsolidated: 0,
+          queued: 0,
+          skipped: 0,
+          errors: 0,
+        });
+
+      const result = await service.runPipeline();
+
+      expect(mockResolution.processClassifiedCandidates).toHaveBeenCalledTimes(
+        2,
+      );
+      expect(result.resolution.autoMerged).toBe(10);
+      expect(result.resolution.autoConsolidated).toBe(3);
+    });
+
+    it('stops classification loop when only errors remain', async () => {
+      // Reset and re-mock
+      mockClassification.processPendingCandidates.mockReset();
+      mockClassification.processPendingCandidates
+        .mockResolvedValueOnce({ processed: 0, errors: 10 })
+        .mockResolvedValueOnce({ processed: 0, errors: 10 })
+        .mockResolvedValue({ processed: 0, errors: 0 });
+
+      const result = await service.runPipeline();
+
+      expect(result.classification.errors).toBe(20);
+    });
+
+    it('iterates per-account per-user for isolation', async () => {
+      mockPrisma.account.findMany.mockResolvedValue([
+        { id: 'acct-1' },
+        { id: 'acct-2' },
+      ]);
+      mockPrisma.user.findMany
+        .mockResolvedValueOnce([{ id: 'user-a' }])
+        .mockResolvedValueOnce([{ id: 'user-b' }]);
+
+      await service.runPipeline();
+
+      // Detection called once per user
+      expect(mockDetection.detectCandidates).toHaveBeenCalledWith('user-a');
+      expect(mockDetection.detectCandidates).toHaveBeenCalledWith('user-b');
+      expect(mockDetection.detectCandidates).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('handleDailyCron', () => {
+    it('triggers runPipeline when enabled', async () => {
+      const runSpy = jest.spyOn(service, 'runPipeline').mockResolvedValue({
+        startedAt: new Date(),
+        finishedAt: new Date(),
+        detection: { scanned: 0, created: 0, skipped: 0 },
+        classification: { processed: 0, errors: 0 },
+        resolution: {
+          processed: 0,
+          autoMerged: 0,
+          autoConsolidated: 0,
+          queued: 0,
+          skipped: 0,
+          errors: 0,
+        },
+        skipped: false,
+      });
+
+      await service.handleDailyCron();
+      expect(runSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips runPipeline when disabled', async () => {
+      (mockConfig.get as jest.Mock).mockImplementation((key: string): any => {
+        if (key === 'DEDUP_PIPELINE_ENABLED') return 'false';
+        return undefined;
+      });
+
+      const runSpy = jest.spyOn(service, 'runPipeline');
+      await service.handleDailyCron();
+      expect(runSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('enqueueDetection', () => {
+    it('adds a job to the detection queue', async () => {
+      await service.enqueueDetection();
+      expect(mockQueue.add).toHaveBeenCalledWith(
+        expect.any(String),
+        {},
+        expect.objectContaining({ attempts: 3 }),
+      );
+    });
+  });
+});

@@ -2,10 +2,12 @@
 FROM node:20-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
+# Cache bust: 2026-03-14 — force fresh pnpm install to pick up Prisma v7 + @prisma/adapter-pg
+ARG CACHE_BUST=2026-03-16
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
-RUN npx prisma generate
+# pnpm build runs: prisma generate && nest build
 RUN pnpm build
 
 # Stage 2: Runtime
@@ -16,6 +18,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh

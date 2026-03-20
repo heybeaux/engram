@@ -7,7 +7,7 @@ import { ModelId } from './ensemble.types';
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import {
   ReembedCheckpoint,
   ReembedProgress,
@@ -18,7 +18,7 @@ import {
 export class CheckpointService {
   private readonly logger = new Logger(CheckpointService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: ServicePrismaService) {}
 
   /**
    * Save a checkpoint

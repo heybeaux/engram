@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { ModelRegistryService } from './model-registry.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import {
   DEFAULT_PROMOTION_THRESHOLDS,
   DEFAULT_ACTIVE_MODELS,
@@ -10,7 +10,7 @@ import {
 
 describe('ModelRegistryService', () => {
   let service: ModelRegistryService;
-  let prisma: jest.Mocked<PrismaService>;
+  let prisma: jest.Mocked<ServicePrismaService>;
 
   const mockModel = (overrides: Record<string, unknown> = {}) => ({
     modelId: 'bge-base',
@@ -43,13 +43,13 @@ describe('ModelRegistryService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ModelRegistryService,
-        { provide: PrismaService, useValue: mockPrisma },
+        { provide: ServicePrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(ModelRegistryService);
-    prisma = module.get(PrismaService);
+    prisma = module.get(ServicePrismaService);
 
     // Mock create to return what was passed
     (prisma.ensembleModelConfig.create as jest.Mock).mockImplementation(

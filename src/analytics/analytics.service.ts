@@ -26,8 +26,13 @@ export class AnalyticsService {
    * Includes soft-deleted users so their memories are still counted in analytics.
    */
   private async getUserIdsForAgent(agentId: string): Promise<string[]> {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { accountId: true },
+    });
+    if (!agent?.accountId) return [];
     const users = await this.prisma.user.findMany({
-      where: { agentId },
+      where: { accountId: agent.accountId },
       select: { id: true },
     });
     return users.map((u) => u.id);

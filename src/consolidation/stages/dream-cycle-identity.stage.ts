@@ -1,5 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { LLMService } from '../../llm/llm.service';
 import { ConfigService } from '@nestjs/config';
 
@@ -45,7 +45,7 @@ export class DreamCycleIdentityStage {
   private readonly maxSourceMemories: number;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: ServicePrismaService,
     private readonly llm: LLMService,
     private readonly config: ConfigService,
   ) {
@@ -115,7 +115,7 @@ export class DreamCycleIdentityStage {
 
     // 5. Mark source memories as processed by dream cycle
     await this.prisma.memory.updateMany({
-      where: { id: { in: memories.map((m) => m.id) } },
+      where: { id: { in: memories.map((m) => m.id) }, userId },
       data: { lastDreamCycleAt: new Date() },
     });
 

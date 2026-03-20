@@ -56,6 +56,7 @@ describe('GET /v1/identity/agents', () => {
       mockTrustProfileService,
       {} as any, // delegationContractService
       {} as any, // challengeService
+      {} as any, // identityService
     );
   });
 

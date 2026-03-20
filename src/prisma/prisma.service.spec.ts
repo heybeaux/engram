@@ -2,16 +2,23 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from './prisma.service';
 import { rlsContext } from './rls-context';
 
+// Mock PrismaPg adapter
+jest.mock('@prisma/adapter-pg', () => ({
+  PrismaPg: jest.fn().mockImplementation(() => ({
+    provider: 'postgres',
+  })),
+}));
+
 // Mock PrismaClient
 jest.mock('@prisma/client', () => {
   class MockPrismaClient {
     $connect = jest.fn().mockResolvedValue(undefined);
     $disconnect = jest.fn().mockResolvedValue(undefined);
     $transaction = jest.fn();
-    $use = jest.fn();
     $extends = jest.fn();
     $on = jest.fn();
     memory = { update: jest.fn(), findMany: jest.fn() };
+    constructor(_opts?: any) {}
   }
   return { PrismaClient: MockPrismaClient };
 });

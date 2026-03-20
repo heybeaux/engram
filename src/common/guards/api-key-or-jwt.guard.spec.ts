@@ -159,7 +159,7 @@ describe('ApiKeyOrJwtGuard', () => {
     it('should auto-create user if x-am-user-id provided but user not found', async () => {
       const newUser = {
         id: 'user-new',
-        agentId: 'agent-1',
+        accountId: 'acc-1',
         externalId: 'NewUser',
       };
       mockPrisma.instanceApiKey.findUnique.mockResolvedValue({
@@ -181,7 +181,7 @@ describe('ApiKeyOrJwtGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: { agentId: 'agent-1', externalId: 'NewUser' },
+        data: { accountId: 'acc-1', externalId: 'NewUser' },
       });
       expect(request.user).toEqual(newUser);
     });
@@ -334,7 +334,7 @@ describe('ApiKeyOrJwtGuard', () => {
     it('should auto-create user from JWT when not found', async () => {
       const newUser = {
         id: 'user-new',
-        agentId: 'agent-1',
+        accountId: 'acc-1',
         externalId: 'acc-1',
       };
       mockJwt.verify.mockReturnValue({ sub: 'acc-1' });
@@ -348,7 +348,7 @@ describe('ApiKeyOrJwtGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: { agentId: 'agent-1', externalId: 'acc-1' },
+        data: { accountId: 'acc-1', externalId: 'acc-1' },
       });
       expect(request.user).toEqual(newUser);
     });
@@ -372,8 +372,8 @@ describe('ApiKeyOrJwtGuard', () => {
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: {
-          agentId_externalId: {
-            agentId: 'agent-1',
+          accountId_externalId: {
+            accountId: 'acc-1',
             externalId: 'CustomUser',
           },
         },
@@ -503,7 +503,7 @@ describe('ApiKeyOrJwtGuard', () => {
     it('should auto-create user via external ID in LAN bypass', async () => {
       const newUser = {
         id: 'user-new',
-        agentId: 'agent-1',
+        accountId: 'acc-1',
         externalId: 'NewUser',
       };
       mockPrisma.agent.findFirst.mockResolvedValue(agent);
@@ -517,7 +517,7 @@ describe('ApiKeyOrJwtGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: { agentId: 'agent-1', externalId: 'NewUser' },
+        data: { accountId: 'acc-1', externalId: 'NewUser' },
       });
     });
 

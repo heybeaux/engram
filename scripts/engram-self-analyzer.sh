@@ -43,13 +43,30 @@ echo "$DEDUP" >> "$REPORT"
 echo '```' >> "$REPORT"
 echo "" >> "$REPORT"
 
-# --- Fog Index ---
-echo "## Fog Index" >> "$REPORT"
-FOG=$(curl -s --max-time 10 "${HEADERS[@]}" http://localhost:3001/v1/fog-index 2>&1) || FOG="UNREACHABLE"
-echo '```json' >> "$REPORT"
-echo "$FOG" >> "$REPORT"
-echo '```' >> "$REPORT"
-echo "" >> "$REPORT"
+# --- Health Metrics ---
+echo "## Health Metrics" >> "$REPORT"
+METRICS=$(curl -s --max-time 10 "${HEADERS[@]}" http://localhost:3001/v1/health/metrics 2>&1) || METRICS="UNREACHABLE"
+
+if [ "$METRICS" != "UNREACHABLE" ] && echo "$METRICS" | jq -e '.metrics' > /dev/null 2>&1; then
+  METRICS_COUNT=$(echo "$METRICS" | jq '.metrics | length')
+  for i in $(seq 0 $((METRICS_COUNT - 1))); do
+    LABEL=$(echo "$METRICS" | jq -r ".metrics[$i].label")
+    VALUE=$(echo "$METRICS" | jq -r ".metrics[$i].value")
+    UNIT=$(echo "$METRICS" | jq -r ".metrics[$i].unit // empty")
+    STATUS=$(echo "$METRICS" | jq -r ".metrics[$i].status")
+    DESC=$(echo "$METRICS" | jq -r ".metrics[$i].description")
+    echo "### $LABEL" >> "$REPORT"
+    echo "- **Value:** $VALUE${UNIT:+ $UNIT}" >> "$REPORT"
+    echo "- **Status:** $STATUS" >> "$REPORT"
+    echo "- **Description:** $DESC" >> "$REPORT"
+    echo "" >> "$REPORT"
+  done
+else
+  echo '```' >> "$REPORT"
+  echo "$METRICS" >> "$REPORT"
+  echo '```' >> "$REPORT"
+  echo "" >> "$REPORT"
+fi
 
 # --- Growth Rate ---
 echo "## Growth Rate" >> "$REPORT"
