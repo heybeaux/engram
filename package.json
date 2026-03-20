@@ -28,7 +28,11 @@
     "premigrate:dev": "echo \"\n⚠️  WARNING: Use npm run migrate:safe or npm run migrate:deploy instead of prisma migrate dev\n\" && exit 1",
     "seed:staging": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed-staging.ts",
     "api:spec": "pnpm build && node scripts/generate-api-spec.mjs",
-    "api:routes": "node scripts/generate-routes.mjs"
+    "api:routes": "node scripts/generate-routes.mjs",
+    "autoresearch-recall": "npx ts-node scripts/autoresearch-recall.ts",
+    "autoresearch-generation": "npx ts-node scripts/autoresearch-insight-generation.ts",
+    "autoresearch-boost": "npx ts-node scripts/autoresearch-insight-boost.ts",
+    "autoresearch-surfacing": "npx ts-node scripts/autoresearch-insight-surfacing.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
