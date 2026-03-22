@@ -9,7 +9,7 @@
 
 ## Module Map
 
-> 52 modules total. Sizes from architecture watchdog (2026-03-09).
+> 53 modules total. Sizes from architecture watchdog (2026-03-22).
 
 ### Core
 | Module | Purpose | Files | Lines |
@@ -94,6 +94,7 @@
 | `rate-limit` | Rate limiting | 7 | 682 |
 | `eval` | Evaluation framework | 5 | 658 |
 | `feedback` | User feedback on recall quality | 6 | 284 |
+| `retrieval-signals` | Track query/retrieval signals and feedback (hit/miss/irrelevant) for recall quality tuning | 6 | 585 |
 
 ## Layer Rules
 1. **Controllers** handle HTTP, validate DTOs, delegate to services

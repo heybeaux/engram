@@ -16,7 +16,7 @@ npm run migrate:safe    # wrapper script
 ## Architecture
 `src/{module}/` — each module has `.controller.ts`, `.service.ts`, `.module.ts`, `.spec.ts` alongside.
 
-Modules: account, agent, agent-session, analytics, auto, clustering, common, config, consolidation, correction, dashboard, deduplication, embedding, ensemble, eval, events, feedback, fog-index, graph, health, hierarchy, llm, memory, memory-access-log, memory-pool, monitoring, multi-query, prefetch, prisma, project, rate-limit, reembedding, scoped-context, scripts, session, storage, stripe, summarization, user, utils, vector, webhooks.
+Modules: account, agent, agent-recall, agent-session, analytics, anticipatory, auto, awareness, challenge, cloud-link, cloud-sync, clustering, common, consolidation, correction, dashboard, deduplication, delegation, embedding, ensemble, entity-profile, eval, events, feedback, fog-index, graph, health, hierarchy, identity, instance, llm, memory, memory-access-log, memory-pool, monitoring, multi-query, prefetch, prisma, queue, rate-limit, reembedding, retrieval-signals, scoped-context, scripts, session-indexing, storage, stripe, summarization, teams, utils, vector, webhooks.
 
 Entry: `src/main.ts` → `src/app.module.ts`.
 
