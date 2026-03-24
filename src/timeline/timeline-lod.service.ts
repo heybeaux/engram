@@ -89,7 +89,7 @@ export class TimelineLodService {
       this.logger.error(
         `Failed to generate timeline LOD for ${date}: ${message}`,
       );
-      throw new Error(`Timeline LOD generation failed for ${date}: ${message}`);
+      throw new Error(`Timeline LOD generation failed for ${date}: ${message}`, { cause: error });
     }
   }
 
