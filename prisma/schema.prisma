@@ -2286,44 +2286,6 @@ model RetrievalStrategyProfile {
   @@map("retrieval_strategy_profiles")
 }
 
-// ─── ENG-46: Timeline LOD (Level of Detail) ─────────────────────────────────
-
-model Timeline {
-  id      String @id @default(cuid())
-  userId  String @map("user_id")
-  agentId String @map("agent_id")
-  date    DateTime @db.Date
-
-  /// Human-readable chapter title
-  chapter String
-
-  /// LOD content at different detail levels
-  indexText    String @map("index_text")    // ~30 tokens
-  summaryText  String @map("summary_text")  // ~200 tokens
-  standardText String @map("standard_text") // ~800 tokens
-
-  /// Structured data
-  events      Json @default("[]")
-  decisions   Json @default("[]")
-  openThreads Json @default("[]") @map("open_threads")
-  people      String[] @default([])
-  mood        String?
-  significance Float @default(0.5)
-
-  /// Linked memory IDs
-  memoryIds String[] @default([]) @map("memory_ids")
-
-  /// Embedding of summaryText for semantic search
-  summaryEmbedding Unsupported("vector(1536)")? @map("summary_embedding")
-
-  llmCalls Int @default(0) @map("llm_calls")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([agentId, date])
-  @@index([userId, date])
-  @@index([agentId, date])
 // ============================================================================
 // TIMELINE (ENG-44)
 // ============================================================================
