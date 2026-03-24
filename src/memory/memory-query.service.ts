@@ -89,7 +89,12 @@ export class MemoryQueryService {
 
     const subjectTypeFilter = this.buildSubjectTypeFilter(dto);
     const visibilityFilter = this.buildVisibilityFilter(dto);
+    const metadataFilter = this.buildMetadataFilter(dto);
     const limit = dto.limit ?? 10;
+
+    // ENG-42: Extract filter params for vector search
+    const filterTags = dto.filter?.tags;
+    const filterMetadata = dto.filter?.metadata;
 
     let scoredMemories: MemoryWithScore[];
 
@@ -107,6 +112,7 @@ export class MemoryQueryService {
           },
           ...subjectTypeFilter,
           ...visibilityFilter,
+          ...metadataFilter,
         },
         include: { extraction: true },
         orderBy: { createdAt: 'desc' },
@@ -127,6 +133,8 @@ export class MemoryQueryService {
         undefined,
         poolIds,
         searchQuery,
+        filterTags,
+        filterMetadata,
       );
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
 
@@ -169,6 +177,8 @@ export class MemoryQueryService {
         undefined,
         poolIds,
         searchQuery,
+        filterTags,
+        filterMetadata,
       );
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
@@ -268,6 +278,7 @@ export class MemoryQueryService {
           searchable: { not: false },
           ...subjectTypeFilter,
           ...visibilityFilter,
+          ...metadataFilter,
         },
         include: { extraction: true },
       });
@@ -464,6 +475,7 @@ export class MemoryQueryService {
     const memoryIds = multiQueryResult.results.map((r) => r.memoryId);
     const subjectTypeFilter = this.buildSubjectTypeFilter(dto);
     const visibilityFilterMQ = this.buildVisibilityFilter(dto);
+    const metadataFilterMQ = this.buildMetadataFilter(dto);
 
     const memories = await this.prisma.memory.findMany({
       where: {
@@ -473,6 +485,7 @@ export class MemoryQueryService {
         searchable: { not: false },
         ...subjectTypeFilter,
         ...visibilityFilterMQ,
+        ...metadataFilterMQ,
       },
       include: { extraction: true },
     });
@@ -602,6 +615,29 @@ export class MemoryQueryService {
       return { visibility: { in: dto.visibility } };
     }
     return {};
+  }
+
+  /**
+   * ENG-42: Build Prisma WHERE clause for tag + metadata pre-filtering.
+   */
+  buildMetadataFilter(dto: QueryMemoryDto): Record<string, any> {
+    const filter: Record<string, any> = {};
+
+    if (dto.filter?.tags && dto.filter.tags.length > 0) {
+      filter.tags = { hasEvery: dto.filter.tags };
+    }
+
+    if (dto.filter?.metadata && Object.keys(dto.filter.metadata).length > 0) {
+      // Prisma JSON path filter: memory.metadata must contain every key-value pair
+      const andConditions = Object.entries(dto.filter.metadata).map(
+        ([key, value]) => ({
+          metadata: { path: [key], equals: value },
+        }),
+      );
+      filter.AND = andConditions;
+    }
+
+    return filter;
   }
 
   /**

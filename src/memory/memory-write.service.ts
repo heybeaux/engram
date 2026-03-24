@@ -130,6 +130,7 @@ export class MemoryWriteService {
         createdBySession: dto.agentSessionKey ?? undefined,
         visibility: (dto.visibility ?? 'PRIVATE') as any,
         contentHash,
+        tags: dto.tags ?? [],
       },
     });
 

@@ -110,9 +110,10 @@ export class CreateMemoryDto {
   @IsNumber()
   importance?: number;
 
-  // Legacy alias: tags (ignored but accepted for compatibility)
+  // ENG-42: User-supplied tags for filtering on recall
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
   tags?: string[];
 
   @IsOptional()
