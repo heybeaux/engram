@@ -147,6 +147,39 @@ export class QueryMemoryDto {
   @Type(() => AnticipatoryOptionsDto)
   anticipatory?: AnticipatoryOptionsDto;
 
+  // ENG-48: Temporal and arc filtering
+  @ApiPropertyOptional({
+    description: 'Only recall memories created after this date (ISO 8601)',
+    example: '2026-03-20',
+  })
+  @IsOptional()
+  @IsString()
+  after?: string;
+
+  @ApiPropertyOptional({
+    description: 'Only recall memories created before this date (ISO 8601)',
+    example: '2026-03-24',
+  })
+  @IsOptional()
+  @IsString()
+  before?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by arc tag (prep for Phase 3)',
+    example: 'simulaas-product-development',
+  })
+  @IsOptional()
+  @IsString()
+  arc?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by memory type',
+    enum: ['memory', 'timeline'],
+  })
+  @IsOptional()
+  @IsEnum(['memory', 'timeline'])
+  type?: 'memory' | 'timeline';
+
   // v1.7: Agent-scoped recall filter (identity consolidation)
   // When set, restricts recalled memories to those created by this specific agent.
   // Useful when the caller wants only its own memories, not cross-agent shared memories.

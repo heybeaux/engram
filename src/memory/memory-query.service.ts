@@ -1,4 +1,9 @@
-import { Injectable, Optional, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Optional,
+  Logger,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
 import { TemporalParserService } from './temporal/temporal-parser.service';
@@ -43,6 +48,14 @@ export class MemoryQueryService {
     dto: QueryMemoryDto,
   ): Promise<QueryResult> {
     const startTime = Date.now();
+
+    // ENG-48: Reject timeline type until Phase 1 timeline table lands
+    if (dto.type === 'timeline') {
+      throw new BadRequestException(
+        'type="timeline" is not yet supported. Timeline queries will be available in a future release.',
+      );
+    }
+
     // Normalize userId for Prisma where clauses
     const userIdFilter = Array.isArray(userId) ? { in: userId } : userId;
 
@@ -93,23 +106,41 @@ export class MemoryQueryService {
     const limit = dto.limit ?? 10;
 
     // ENG-42: Extract filter params for vector search
-    const filterTags = dto.filter?.tags;
+    // ENG-48: Merge arc tag into filterTags
+    let filterTags = dto.filter?.tags ? [...dto.filter.tags] : undefined;
+    if (dto.arc) {
+      filterTags = filterTags ? [...filterTags, dto.arc] : [dto.arc];
+    }
     const filterMetadata = dto.filter?.metadata;
+
+    // ENG-48: Build temporal range filter from explicit after/before params
+    const temporalRangeFilter = this.buildTemporalRangeFilter(dto);
 
     let scoredMemories: MemoryWithScore[];
 
     if (hasTemporalIntent) {
       // TEMPORAL PATH
+      // ENG-48: Merge explicit after/before with temporal parser range
+      const temporalCreatedAt: Record<string, any> = {
+        gte: parsed.temporalFilter!.start,
+        lte: parsed.temporalFilter!.end,
+      };
+      if (dto.after) {
+        const afterDate = new Date(dto.after);
+        if (afterDate > temporalCreatedAt.gte) temporalCreatedAt.gte = afterDate;
+      }
+      if (dto.before) {
+        const beforeDate = new Date(dto.before);
+        if (beforeDate < temporalCreatedAt.lte) temporalCreatedAt.lte = beforeDate;
+      }
+
       const temporalMemories = await this.prisma.memory.findMany({
         where: {
           userId: userIdFilter,
           deletedAt: null,
           supersededById: null,
           searchable: { not: false },
-          createdAt: {
-            gte: parsed.temporalFilter!.start,
-            lte: parsed.temporalFilter!.end,
-          },
+          createdAt: temporalCreatedAt,
           ...subjectTypeFilter,
           ...visibilityFilter,
           ...metadataFilter,
@@ -279,6 +310,7 @@ export class MemoryQueryService {
           ...subjectTypeFilter,
           ...visibilityFilter,
           ...metadataFilter,
+          ...temporalRangeFilter,
         },
         include: { extraction: true },
       });
@@ -618,13 +650,29 @@ export class MemoryQueryService {
   }
 
   /**
+   * ENG-48: Build Prisma WHERE clause for explicit after/before date range.
+   */
+  buildTemporalRangeFilter(dto: QueryMemoryDto): Record<string, any> {
+    if (!dto.after && !dto.before) return {};
+    const createdAt: Record<string, any> = {};
+    if (dto.after) createdAt.gte = new Date(dto.after);
+    if (dto.before) createdAt.lte = new Date(dto.before);
+    return { createdAt };
+  }
+
+  /**
    * ENG-42: Build Prisma WHERE clause for tag + metadata pre-filtering.
    */
   buildMetadataFilter(dto: QueryMemoryDto): Record<string, any> {
     const filter: Record<string, any> = {};
 
-    if (dto.filter?.tags && dto.filter.tags.length > 0) {
-      filter.tags = { hasEvery: dto.filter.tags };
+    // ENG-42 + ENG-48: Merge filter.tags and arc into a single hasEvery filter
+    const allTags = [
+      ...(dto.filter?.tags ?? []),
+      ...(dto.arc ? [dto.arc] : []),
+    ];
+    if (allTags.length > 0) {
+      filter.tags = { hasEvery: allTags };
     }
 
     if (dto.filter?.metadata && Object.keys(dto.filter.metadata).length > 0) {
