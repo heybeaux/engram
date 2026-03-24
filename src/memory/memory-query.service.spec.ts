@@ -195,6 +195,95 @@ describe('MemoryQueryService', () => {
       });
     });
 
+    it('should pass filter tags and metadata to embedding search (ENG-42)', async () => {
+      embedding.search.mockResolvedValue([{ id: 'm1', score: 0.9 }] as any);
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'm1', raw: 'test', effectiveScore: 0.5, extraction: {}, tags: ['google-ads'] },
+        ]);
+
+      await service.recall(userId, {
+        query: 'test',
+        filter: {
+          tags: ['google-ads'],
+          metadata: { client: 'acme' },
+        },
+      } as any);
+
+      // temporalParser mock transforms query to 'test query'
+      expect(embedding.search).toHaveBeenCalledWith(
+        userId,
+        mockEmbedding,
+        expect.any(Number),
+        undefined,
+        undefined,
+        undefined,
+        'test query',
+        ['google-ads'],
+        { client: 'acme' },
+      );
+    });
+
+    it('should apply tag filter to Prisma findMany (ENG-42)', async () => {
+      embedding.search.mockResolvedValue([{ id: 'm1', score: 0.9 }] as any);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.recall(userId, {
+        query: 'test',
+        filter: { tags: ['important', 'project-x'] },
+      } as any);
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tags: { hasEvery: ['important', 'project-x'] },
+          }),
+        }),
+      );
+    });
+
+    it('should apply metadata filter to Prisma findMany (ENG-42)', async () => {
+      embedding.search.mockResolvedValue([{ id: 'm1', score: 0.9 }] as any);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.recall(userId, {
+        query: 'test',
+        filter: { metadata: { client: 'acme' } },
+      } as any);
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: [{ metadata: { path: ['client'], equals: 'acme' } }],
+          }),
+        }),
+      );
+    });
+
+    it('should use explicit poolIds for scoped recall (ENG-42)', async () => {
+      embedding.search.mockResolvedValue([]);
+      const result = await service.recall(userId, {
+        query: 'test',
+        poolIds: ['pool:map-international:google-ads'],
+      } as any);
+
+      // poolIds should be passed to embedding.search, not resolved from session
+      expect(memoryPoolService.getAccessiblePoolIds).not.toHaveBeenCalled();
+      // temporalParser mock transforms query to 'test query'
+      expect(embedding.search).toHaveBeenCalledWith(
+        userId,
+        mockEmbedding,
+        expect.any(Number),
+        undefined,
+        undefined,
+        ['pool:map-international:google-ads'],
+        'test query',
+        undefined,
+        undefined,
+      );
+    });
+
     it('should log access when agentSessionKey provided', async () => {
       embedding.search.mockResolvedValue([{ id: 'm1', score: 0.9 }] as any);
       prisma.memory.findMany = jest
@@ -250,6 +339,42 @@ describe('MemoryQueryService', () => {
     it('should fall back to service isEnabled', () => {
       multiQueryService.isEnabled.mockReturnValue(true);
       expect(service.shouldUseMultiQuery({} as any)).toBe(true);
+    });
+  });
+
+  describe('buildMetadataFilter (ENG-42)', () => {
+    it('should return empty object when no filter provided', () => {
+      const result = service.buildMetadataFilter({} as any);
+      expect(result).toEqual({});
+    });
+
+    it('should build tag filter with hasEvery (AND logic)', () => {
+      const result = service.buildMetadataFilter({
+        filter: { tags: ['a', 'b'] },
+      } as any);
+      expect(result).toEqual({ tags: { hasEvery: ['a', 'b'] } });
+    });
+
+    it('should build metadata path filter for each key-value pair', () => {
+      const result = service.buildMetadataFilter({
+        filter: { metadata: { client: 'acme', env: 'prod' } },
+      } as any);
+      expect(result).toEqual({
+        AND: [
+          { metadata: { path: ['client'], equals: 'acme' } },
+          { metadata: { path: ['env'], equals: 'prod' } },
+        ],
+      });
+    });
+
+    it('should combine tags and metadata filters', () => {
+      const result = service.buildMetadataFilter({
+        filter: { tags: ['x'], metadata: { k: 'v' } },
+      } as any);
+      expect(result).toEqual({
+        tags: { hasEvery: ['x'] },
+        AND: [{ metadata: { path: ['k'], equals: 'v' } }],
+      });
     });
   });
 

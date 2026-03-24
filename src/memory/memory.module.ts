@@ -1,7 +1,10 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { MemoryService } from './memory.service';
-import { MemoryController } from './memory.controller';
+import { MemoryQueryController } from './memory-query.controller';
+import { MemoryBulkController } from './memory-bulk.controller';
+import { MemoryAdminController } from './memory-admin.controller';
+import { MemoryCoreController } from './memory-core.controller';
 import { MemoryDedupService } from './memory-dedup.service';
 import { MemoryQueryService } from './memory-query.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
@@ -75,7 +78,12 @@ const bullExports = hasRedis ? [EmbeddingQueueProducer] : [];
     RetrievalSignalsModule,
     ...bullImports,
   ],
-  controllers: [MemoryController],
+  controllers: [
+    MemoryQueryController,
+    MemoryBulkController,
+    MemoryAdminController,
+    MemoryCoreController,
+  ],
   providers: [
     MemoryService,
     MemoryDedupService,

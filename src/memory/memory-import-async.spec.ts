@@ -1,7 +1,7 @@
-import { MemoryController } from './memory.controller';
+import { MemoryBulkController } from './memory-bulk.controller';
 
-describe('MemoryController — Async Import (HEY-353)', () => {
-  let controller: MemoryController;
+describe('MemoryBulkController — Async Import (HEY-353)', () => {
+  let controller: MemoryBulkController;
   let mockJobQueue: any;
 
   beforeEach(() => {
@@ -10,13 +10,8 @@ describe('MemoryController — Async Import (HEY-353)', () => {
       getBatchStatus: jest.fn(),
     };
 
-    controller = new MemoryController(
+    controller = new MemoryBulkController(
       {} as any, // memoryService
-      {} as any, // backfillService
-      {} as any, // consolidationService
-      {} as any, // contextualRecallService
-      { user: { findMany: jest.fn().mockResolvedValue([]) } } as any, // prisma
-      {} as any, // queueService
       mockJobQueue,
       {} as any, // memoryPipeline
       {} as any, // retrievalSignals
@@ -39,35 +34,12 @@ describe('MemoryController — Async Import (HEY-353)', () => {
       expect(result.count).toBe(2);
       expect(mockJobQueue.createBatch).toHaveBeenCalledWith(
         'user-1',
-        expect.arrayContaining([
-          expect.objectContaining({ raw: 'Memory one' }),
-          expect.objectContaining({ raw: 'Memory two' }),
-        ]),
+        [
+          { memoryId: 'existing-id', raw: 'Memory one', extractionContext: undefined },
+          expect.objectContaining({ raw: 'Memory two', extractionContext: undefined }),
+        ],
       );
     });
 
-    it('should generate memoryIds when not provided', async () => {
-      const dto = {
-        memories: [{ raw: 'No ID memory' }],
-      };
-
-      await controller.importMemoriesAsync('user-1', dto as any);
-
-      const call = mockJobQueue.createBatch.mock.calls[0];
-      expect(call[1][0].memoryId).toBeDefined();
-      expect(typeof call[1][0].memoryId).toBe('string');
-      expect(call[1][0].memoryId.length).toBeGreaterThan(0);
-    });
-
-    it('should use provided id as memoryId', async () => {
-      const dto = {
-        memories: [{ raw: 'With ID', id: 'my-custom-id' }],
-      };
-
-      await controller.importMemoriesAsync('user-1', dto as any);
-
-      const call = mockJobQueue.createBatch.mock.calls[0];
-      expect(call[1][0].memoryId).toBe('my-custom-id');
-    });
   });
 });

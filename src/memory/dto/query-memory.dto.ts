@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsArray,
   IsEnum,
+  IsObject,
   ValidateNested,
   Min,
   Max,
@@ -15,6 +16,28 @@ import { MemoryLayer, SubjectType } from '@prisma/client';
 import { MemoryVisibilityEnum } from './create-memory.dto';
 import { MultiQueryOptionsDto } from '../../multi-query/dto/multi-query.dto';
 import { AnticipatoryOptionsDto } from '../../anticipatory/dto/anticipatory.dto';
+
+/**
+ * ENG-42: Recall filter — applied BEFORE semantic ranking.
+ */
+export class RecallFilterDto {
+  @ApiPropertyOptional({
+    description: 'Must-match tags (AND logic — memory must have ALL listed tags)',
+    example: ['google-ads', 'campaign'],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Metadata key-value filters (memory.metadata must contain all entries)',
+    example: { client: 'acme', env: 'production' },
+  })
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, any>;
+}
 
 export class QueryMemoryDto {
   @ApiProperty({
@@ -102,6 +125,16 @@ export class QueryMemoryDto {
   @IsArray()
   @IsString({ each: true })
   poolIds?: string[];
+
+  // ENG-42: Pre-ranking metadata filter
+  @ApiPropertyOptional({
+    description: 'Pre-ranking filter applied before semantic scoring',
+    type: RecallFilterDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RecallFilterDto)
+  filter?: RecallFilterDto;
 
   // v1.6: Anticipatory Recall Engine options
   @ApiPropertyOptional({
