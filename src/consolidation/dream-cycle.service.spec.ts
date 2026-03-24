@@ -13,6 +13,7 @@ import {
   DreamCyclePendingStage,
   DreamCycleTieringStage,
   DreamCycleConsolidationStage,
+  DreamCycleTimelineSynthesisStage,
 } from './stages';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
 
@@ -173,6 +174,10 @@ describe('DreamCycleService', () => {
         {
           provide: DreamCycleConsolidationStage,
           useValue: mockConsolidationStage,
+        },
+        {
+          provide: DreamCycleTimelineSynthesisStage,
+          useValue: { run: jest.fn().mockResolvedValue({ synthesesCreated: 0 }) },
         },
         {
           provide: DreamCycleRunTrackerService,

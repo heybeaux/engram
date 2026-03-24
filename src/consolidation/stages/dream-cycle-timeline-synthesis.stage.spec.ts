@@ -68,7 +68,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
     };
 
     timelineLodService = {
-      generate: jest.fn().mockResolvedValue(mockLodOutput),
+      generateLod: jest.fn().mockResolvedValue(mockLodOutput),
     };
 
     embeddingService = {
@@ -164,7 +164,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
       expect(result.daysProcessed).toBe(1);
       expect(result.llmCalls).toBe(1);
       expect(result.errors).toBe(0);
-      expect(timelineLodService.generate).toHaveBeenCalledTimes(1);
+      expect(timelineLodService.generateLod).toHaveBeenCalledTimes(1);
       expect(embeddingService.embed).toHaveBeenCalledWith([
         mockLodOutput.summaryText,
       ]);
@@ -190,14 +190,11 @@ describe('DreamCycleTimelineSynthesisStage', () => {
 
       await stage.run('user-1', false);
 
-      expect(timelineLodService.generate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          date: '2026-03-22',
-          memories: [
-            expect.objectContaining({ id: 'm1', content: 'Did something' }),
-          ],
-          drafts: [],
-        }),
+      expect(timelineLodService.generateLod).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'm1', raw: 'Did something' }),
+        ]),
+        '2026-03-22',
       );
     });
   });
@@ -220,7 +217,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
 
       expect(result.daysSkipped).toBe(1);
       expect(result.daysProcessed).toBe(0);
-      expect(timelineLodService.generate).not.toHaveBeenCalled();
+      expect(timelineLodService.generateLod).not.toHaveBeenCalled();
     });
   });
 
@@ -267,10 +264,12 @@ describe('DreamCycleTimelineSynthesisStage', () => {
 
       await stage.run('user-1', false);
 
-      expect(timelineLodService.generate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          drafts: ['Shipped WASM engine. Tags: simulaas. Sig: 0.9'],
-        }),
+      // drafts are now included as additional Memory objects in the memories array
+      expect(timelineLodService.generateLod).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ raw: 'Regular memory' }),
+        ]),
+        '2026-03-22',
       );
     });
   });
@@ -291,15 +290,12 @@ describe('DreamCycleTimelineSynthesisStage', () => {
         makeMemory('m2', 'Day 2 memory', new Date('2026-03-22T10:00:00Z')),
       ];
 
-      // First day memories, first day drafts, second day memories, second day drafts
       prisma.memory.findMany
         .mockResolvedValueOnce(memories1)
-        .mockResolvedValueOnce([]) // drafts day 1
-        .mockResolvedValueOnce(memories2)
-        .mockResolvedValueOnce([]); // drafts day 2
+        .mockResolvedValueOnce(memories2);
 
       // Fail on first day, succeed on second
-      timelineLodService.generate
+      timelineLodService.generateLod
         .mockRejectedValueOnce(new Error('LLM rate limit'))
         .mockResolvedValueOnce(mockLodOutput);
 
@@ -401,7 +397,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
       const result = await stage.run('user-1', false, 1);
 
       expect(result.daysProcessed).toBe(1);
-      expect(timelineLodService.generate).toHaveBeenCalledTimes(1);
+      expect(timelineLodService.generateLod).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -457,9 +453,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
 
       prisma.memory.findMany
         .mockResolvedValueOnce(memories1)
-        .mockResolvedValueOnce([]) // drafts agent-1
-        .mockResolvedValueOnce(memories2)
-        .mockResolvedValueOnce([]); // drafts agent-2
+        .mockResolvedValueOnce(memories2);
 
       prisma.dreamCycleReport.findFirst.mockResolvedValue({
         startedAt: new Date('2026-03-21T03:00:00Z'),
@@ -469,7 +463,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
 
       expect(result.timelinesCreated).toBe(2);
       expect(result.daysProcessed).toBe(2);
-      expect(timelineLodService.generate).toHaveBeenCalledTimes(2);
+      expect(timelineLodService.generateLod).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -484,8 +478,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
         makeMemory('m1', 'Memory', new Date('2026-03-22T10:00:00Z')),
       ];
       prisma.memory.findMany
-        .mockResolvedValueOnce(memories)
-        .mockResolvedValueOnce([]);
+        .mockResolvedValueOnce(memories);
 
       prisma.dreamCycleReport.findFirst.mockResolvedValue({
         startedAt: new Date('2026-03-21T03:00:00Z'),
