@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { MemoryQueryService } from './memory-query.service';
 import { MemoryQueryRankingService } from './memory-query-ranking.service';
 import { MemoryQueryContextService } from './memory-query-context.service';
@@ -284,6 +285,198 @@ describe('MemoryQueryService', () => {
       );
     });
 
+    // ── ENG-48: Temporal and arc filtering ─────────────────────────────
+
+    it('should filter memories by after date (ENG-48)', async () => {
+      embedding.search.mockResolvedValue([
+        { id: 'm1', score: 0.9 },
+        { id: 'm2', score: 0.8 },
+      ] as any);
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        { id: 'm1', raw: 'recent', effectiveScore: 0.5, extraction: {}, createdAt: new Date('2026-03-22') },
+      ]);
+
+      const result = await service.recall(userId, {
+        query: 'test',
+        after: '2026-03-21',
+      } as any);
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAt: { gte: new Date('2026-03-21') },
+          }),
+        }),
+      );
+      expect(result.memories).toHaveLength(1);
+    });
+
+    it('should filter memories by before date (ENG-48)', async () => {
+      embedding.search.mockResolvedValue([
+        { id: 'm1', score: 0.9 },
+      ] as any);
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        { id: 'm1', raw: 'old', effectiveScore: 0.5, extraction: {}, createdAt: new Date('2026-03-10') },
+      ]);
+
+      const result = await service.recall(userId, {
+        query: 'test',
+        before: '2026-03-15',
+      } as any);
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAt: { lte: new Date('2026-03-15') },
+          }),
+        }),
+      );
+      expect(result.memories).toHaveLength(1);
+    });
+
+    it('should filter memories by combined after+before date range (ENG-48)', async () => {
+      embedding.search.mockResolvedValue([
+        { id: 'm1', score: 0.9 },
+      ] as any);
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        { id: 'm1', raw: 'in range', effectiveScore: 0.5, extraction: {}, createdAt: new Date('2026-03-12') },
+      ]);
+
+      const result = await service.recall(userId, {
+        query: 'test',
+        after: '2026-03-10',
+        before: '2026-03-15',
+      } as any);
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAt: { gte: new Date('2026-03-10'), lte: new Date('2026-03-15') },
+          }),
+        }),
+      );
+      expect(result.memories).toHaveLength(1);
+    });
+
+    it('should pass arc tag to embedding search and Prisma filter (ENG-48)', async () => {
+      embedding.search.mockResolvedValue([
+        { id: 'm1', score: 0.9 },
+      ] as any);
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        { id: 'm1', raw: 'arc memory', effectiveScore: 0.5, extraction: {}, tags: ['my-arc'] },
+      ]);
+
+      await service.recall(userId, {
+        query: 'test',
+        arc: 'my-arc',
+      } as any);
+
+      // Arc should be passed as filterTags to embedding.search
+      expect(embedding.search).toHaveBeenCalledWith(
+        userId,
+        mockEmbedding,
+        expect.any(Number),
+        undefined,
+        undefined,
+        undefined,
+        'test query',
+        ['my-arc'],
+        undefined,
+      );
+
+      // Arc should also appear in Prisma where clause
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tags: { hasEvery: ['my-arc'] },
+          }),
+        }),
+      );
+    });
+
+    it('should merge arc tag with existing filter.tags (ENG-48)', async () => {
+      embedding.search.mockResolvedValue([
+        { id: 'm1', score: 0.9 },
+      ] as any);
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.recall(userId, {
+        query: 'test',
+        arc: 'my-arc',
+        filter: { tags: ['existing-tag'] },
+      } as any);
+
+      // Both tags should be passed to embedding.search
+      expect(embedding.search).toHaveBeenCalledWith(
+        userId,
+        mockEmbedding,
+        expect.any(Number),
+        undefined,
+        undefined,
+        undefined,
+        'test query',
+        ['existing-tag', 'my-arc'],
+        undefined,
+      );
+
+      // Both tags in Prisma filter
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tags: { hasEvery: ['existing-tag', 'my-arc'] },
+          }),
+        }),
+      );
+    });
+
+    it('should throw BadRequestException for type="timeline" (ENG-48)', async () => {
+      await expect(
+        service.recall(userId, {
+          query: 'test',
+          type: 'timeline',
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should allow type="memory" as a no-op (ENG-48)', async () => {
+      embedding.search.mockResolvedValue([
+        { id: 'm1', score: 0.9 },
+      ] as any);
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        { id: 'm1', raw: 'test', effectiveScore: 0.5, extraction: {} },
+      ]);
+
+      const result = await service.recall(userId, {
+        query: 'test',
+        type: 'memory',
+      } as any);
+
+      expect(result.memories).toHaveLength(1);
+    });
+
+    it('should not add createdAt filter when after/before not provided (ENG-48)', async () => {
+      embedding.search.mockResolvedValue([
+        { id: 'm1', score: 0.9 },
+      ] as any);
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        { id: 'm1', raw: 'test', effectiveScore: 0.5, extraction: {} },
+      ]);
+
+      await service.recall(userId, {
+        query: 'test',
+      } as any);
+
+      const findManyCall = (prisma.memory.findMany as jest.Mock).mock.calls[0][0];
+      expect(findManyCall.where.createdAt).toBeUndefined();
+    });
+
     it('should log access when agentSessionKey provided', async () => {
       embedding.search.mockResolvedValue([{ id: 'm1', score: 0.9 }] as any);
       prisma.memory.findMany = jest
@@ -342,6 +535,33 @@ describe('MemoryQueryService', () => {
     });
   });
 
+  describe('buildTemporalRangeFilter (ENG-48)', () => {
+    it('should return empty object when no after/before provided', () => {
+      const result = service.buildTemporalRangeFilter({} as any);
+      expect(result).toEqual({});
+    });
+
+    it('should build gte filter for after', () => {
+      const result = service.buildTemporalRangeFilter({ after: '2026-03-20' } as any);
+      expect(result).toEqual({ createdAt: { gte: new Date('2026-03-20') } });
+    });
+
+    it('should build lte filter for before', () => {
+      const result = service.buildTemporalRangeFilter({ before: '2026-03-24' } as any);
+      expect(result).toEqual({ createdAt: { lte: new Date('2026-03-24') } });
+    });
+
+    it('should build combined gte+lte filter for after+before', () => {
+      const result = service.buildTemporalRangeFilter({
+        after: '2026-03-20',
+        before: '2026-03-24',
+      } as any);
+      expect(result).toEqual({
+        createdAt: { gte: new Date('2026-03-20'), lte: new Date('2026-03-24') },
+      });
+    });
+  });
+
   describe('buildMetadataFilter (ENG-42)', () => {
     it('should return empty object when no filter provided', () => {
       const result = service.buildMetadataFilter({} as any);
@@ -375,6 +595,21 @@ describe('MemoryQueryService', () => {
         tags: { hasEvery: ['x'] },
         AND: [{ metadata: { path: ['k'], equals: 'v' } }],
       });
+    });
+
+    it('should include arc tag in hasEvery filter (ENG-48)', () => {
+      const result = service.buildMetadataFilter({
+        arc: 'my-arc',
+      } as any);
+      expect(result).toEqual({ tags: { hasEvery: ['my-arc'] } });
+    });
+
+    it('should merge arc with existing filter.tags (ENG-48)', () => {
+      const result = service.buildMetadataFilter({
+        arc: 'my-arc',
+        filter: { tags: ['existing'] },
+      } as any);
+      expect(result).toEqual({ tags: { hasEvery: ['existing', 'my-arc'] } });
     });
   });
 

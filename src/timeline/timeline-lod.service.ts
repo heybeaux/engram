@@ -1,36 +1,60 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Memory } from '@prisma/client';
 import { LLMService } from '../llm/llm.service';
 
-export interface TimelineLodInput {
-  date: string; // "2026-03-22"
-  memories: Array<{ id: string; content: string; createdAt: Date }>;
-  drafts?: string[]; // TIMELINE_DRAFT content lines
+export interface TimelineEvent {
+  time?: string;
+  description: string;
+  significance: number;
+  tags: string[];
 }
 
-export interface TimelineLodOutput {
+export interface TimelineDecision {
+  description: string;
+  reasoning: string;
+  decidedBy: string;
+  reversible: boolean;
+  relatedMemoryIds: string[];
+}
+
+export interface TimelineLodResult {
+  indexText: string;
+  summaryText: string;
+  standardText: string;
+  events: TimelineEvent[];
+  decisions: TimelineDecision[];
   chapter: string;
-  indexText: string; // ~30 tokens
-  summaryText: string; // ~200 tokens
-  standardText: string; // ~800 tokens
-  events: Array<{
-    time?: string;
-    description: string;
-    significance: number;
-    tags: string[];
-  }>;
-  decisions: Array<{
-    description: string;
-    reasoning: string;
-  }>;
-  openThreads: Array<{
-    description: string;
-    priority: 'low' | 'medium' | 'high';
-  }>;
+  significance: number;
+  people: string[];
+  mood: string;
+}
+
+interface LlmTimelineResponse {
+  chapter: string;
+  indexText: string;
+  summaryText: string;
+  standardText: string;
+  events: TimelineEvent[];
+  decisions: TimelineDecision[];
   people: string[];
   mood: string;
   significance: number;
-  llmCalls: number;
 }
+
+const SYSTEM_PROMPT = `You are a memory archivist. Given a list of memories from a single day, generate a structured timeline entry at three levels of detail (LOD).
+
+Respond with a JSON object containing:
+- chapter: A short chapter title for this day (2-5 words)
+- indexText: ~30 tokens. Format: DATE: "CHAPTER TITLE" — one-line summary. [ARC]
+- summaryText: ~200 tokens. A narrative paragraph covering key events, decisions, open threads, and mood.
+- standardText: ~800 tokens. Full structured prose entry covering all significant events, decisions, people involved, and emotional tone.
+- events: Array of { time?: string, description: string, significance: number (1-10), tags: string[] }
+- decisions: Array of { description: string, reasoning: string, decidedBy: string, reversible: boolean, relatedMemoryIds: string[] }
+- people: Array of names/identifiers mentioned
+- mood: Overall emotional tone of the day (1-3 words)
+- significance: Overall day significance (1-10)
+
+Keep the output factual and grounded in the provided memories. Do not invent events.`;
 
 @Injectable()
 export class TimelineLodService {
@@ -38,51 +62,81 @@ export class TimelineLodService {
 
   constructor(private readonly llm: LLMService) {}
 
-  async generate(input: TimelineLodInput): Promise<TimelineLodOutput> {
-    const memoriesText = input.memories
-      .map((m, i) => {
-        const time = m.createdAt
-          ? new Date(m.createdAt).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            })
-          : '??:??';
-        return `[${time}] ${m.content}`;
-      })
-      .join('\n');
+  async generateLod(
+    memories: Memory[],
+    date: string,
+  ): Promise<TimelineLodResult> {
+    if (!memories.length) {
+      return this.emptyResult(date);
+    }
 
-    const draftsSection =
-      input.drafts && input.drafts.length > 0
-        ? `\n\nTimeline Drafts (agent-authored summaries):\n${input.drafts.join('\n')}`
-        : '';
+    const userPrompt = this.formatMemoriesPrompt(memories, date);
 
-    const result = await this.llm.json<TimelineLodOutput>(
-      [
-        {
-          role: 'system',
-          content: `You synthesize a day's memories into a structured timeline at multiple levels of detail.
-Output JSON with these fields:
-- chapter: short human-readable title for the day (3-6 words)
-- indexText: ~30 token one-liner for scanning weeks/months. Format: "YYYY-MM-DD: \"Chapter\" -- key facts. [arc]"
-- summaryText: ~200 token paragraph capturing the full day
-- standardText: ~800 token detailed narrative with events, decisions, reasoning, and open threads
-- events: array of {time?, description, significance (0-1), tags[]}
-- decisions: array of {description, reasoning}
-- openThreads: array of {description, priority: low|medium|high}
-- people: array of names mentioned
-- mood: single word or short phrase for the day's energy
-- significance: 0-1 overall importance of this day`,
-        },
-        {
-          role: 'user',
-          content: `Date: ${input.date}\n\nMemories from this day:\n${memoriesText}${draftsSection}`,
-        },
-      ],
-      undefined,
-      { temperature: 0.3 },
-    );
+    try {
+      const response = await this.llm.json<LlmTimelineResponse>(
+        [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt },
+        ],
+        undefined,
+        { temperature: 0.3, maxTokens: 2000 },
+      );
 
-    return { ...result, llmCalls: 1 };
+      return this.parseResponse(response, date);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown LLM error';
+      this.logger.error(
+        `Failed to generate timeline LOD for ${date}: ${message}`,
+      );
+      throw new Error(`Timeline LOD generation failed for ${date}: ${message}`, { cause: error });
+    }
+  }
+
+  private formatMemoriesPrompt(memories: Memory[], date: string): string {
+    const lines = memories.map((m) => {
+      const time = m.createdAt
+        ? new Date(m.createdAt).toISOString().slice(11, 16)
+        : '??:??';
+      const tags = m.tags?.length ? ` (tags: ${m.tags.join(', ')})` : '';
+      const sig = m.importanceScore != null ? m.importanceScore : '?';
+      return `[${time}] ${m.raw}${tags} significance: ${sig}`;
+    });
+
+    return `Date: ${date}\n\nMemories:\n${lines.join('\n')}`;
+  }
+
+  private parseResponse(
+    response: LlmTimelineResponse,
+    date: string,
+  ): TimelineLodResult {
+    return {
+      indexText: response.indexText || `${date}: "Quiet day" — no notable events. [misc]`,
+      summaryText: response.summaryText || 'No significant activity recorded.',
+      standardText: response.standardText || 'No detailed record available.',
+      events: Array.isArray(response.events) ? response.events : [],
+      decisions: Array.isArray(response.decisions) ? response.decisions : [],
+      chapter: response.chapter || 'Untitled',
+      significance:
+        typeof response.significance === 'number'
+          ? Math.max(1, Math.min(10, response.significance))
+          : 1,
+      people: Array.isArray(response.people) ? response.people : [],
+      mood: response.mood || 'neutral',
+    };
+  }
+
+  private emptyResult(date: string): TimelineLodResult {
+    return {
+      indexText: `${date}: "Quiet day" — no memories recorded. [idle]`,
+      summaryText: 'No memories were recorded for this day.',
+      standardText: 'No memories were recorded for this day. No events, decisions, or interactions to report.',
+      events: [],
+      decisions: [],
+      chapter: 'Quiet day',
+      significance: 1,
+      people: [],
+      mood: 'neutral',
+    };
   }
 }

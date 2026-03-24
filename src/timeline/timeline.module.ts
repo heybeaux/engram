@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { TimelineLodService } from './timeline-lod.service';
 import { LLMModule } from '../llm/llm.module';
+import { TimelineLodService } from './timeline-lod.service';
 
 @Module({
   imports: [LLMModule],
