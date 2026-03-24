@@ -254,6 +254,7 @@ function generateCarolMemories(): FixtureMemory[] {
       importanceScore: 0.3,
       tags: ['edge', 'generated'],
       created_at: subDays(counter),
+      searchable: false,
     });
     counter++;
   }

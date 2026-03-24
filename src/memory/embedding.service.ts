@@ -114,6 +114,8 @@ export class EmbeddingService {
     projectId?: string,
     poolIds?: string[],
     queryText?: string,
+    tags?: string[],
+    metadata?: Record<string, any>,
   ): Promise<VectorSearchResult[]> {
     return this.vector.search(queryEmbedding, {
       userId,
@@ -122,6 +124,8 @@ export class EmbeddingService {
         layers: layers?.map((l) => l.toString()),
         projectId,
         poolIds,
+        tags,
+        metadata,
       },
       _queryText: queryText,
     });

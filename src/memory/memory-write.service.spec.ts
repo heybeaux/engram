@@ -194,6 +194,38 @@ describe('MemoryWriteService', () => {
         'Memory content is required',
       );
     });
+
+    it('should persist tags when provided (ENG-42)', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.create.mockResolvedValue({
+        ...mockMemory,
+        tags: ['google-ads', 'campaign'],
+      });
+
+      await service.remember('user-456', {
+        raw: 'Campaign launched for Google Ads',
+        tags: ['google-ads', 'campaign'],
+      });
+
+      expect(mockPrisma.memory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tags: ['google-ads', 'campaign'],
+        }),
+      });
+    });
+
+    it('should default tags to empty array when not provided (ENG-42)', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.create.mockResolvedValue(mockMemory);
+
+      await service.remember('user-456', { raw: 'No tags here' });
+
+      expect(mockPrisma.memory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tags: [],
+        }),
+      });
+    });
   });
 
   describe('rememberAll', () => {

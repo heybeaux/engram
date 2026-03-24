@@ -64,6 +64,7 @@ function generateDaveMemories(): FixtureMemory[] {
         importanceScore: 0.4,
         tags: ['standup', 'daily', cluster.label],
         created_at: cluster.dateFn(i),
+        searchable: false,
       });
       counter++;
     }

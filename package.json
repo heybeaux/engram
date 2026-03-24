@@ -36,6 +36,7 @@
     "benchmark:precompute": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' test/benchmark/harness/precompute.ts",
     "benchmark:sim": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' test/benchmark/harness/simulate.ts",
     "benchmark:sweep": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' test/benchmark/harness/sweep.ts",
+    "benchmark:autoresearch": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' test/benchmark/harness/autoresearch-sweep.ts",
     "autoresearch-recall": "npx ts-node scripts/autoresearch-recall.ts",
     "autoresearch-generation": "npx ts-node scripts/autoresearch-insight-generation.ts",
     "autoresearch-boost": "npx ts-node scripts/autoresearch-insight-boost.ts",

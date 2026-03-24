@@ -143,6 +143,23 @@ export class PgVectorProvider implements VectorProvider {
       paramIndex += options.filter.poolIds.length;
     }
 
+    // ENG-42: Tag containment filter (AND logic — memory must have ALL listed tags)
+    if (options.filter?.tags && options.filter.tags.length > 0) {
+      const tagPlaceholders = options.filter.tags
+        .map((_, i) => `$${paramIndex + i}`)
+        .join(', ');
+      memoryWhereClause += ` AND m.tags @> ARRAY[${tagPlaceholders}]::text[]`;
+      params.push(...options.filter.tags);
+      paramIndex += options.filter.tags.length;
+    }
+
+    // ENG-42: Metadata JSONB containment filter
+    if (options.filter?.metadata && Object.keys(options.filter.metadata).length > 0) {
+      memoryWhereClause += ` AND m.metadata @> $${paramIndex}::jsonb`;
+      params.push(JSON.stringify(options.filter.metadata));
+      paramIndex++;
+    }
+
     // DEBUG: log search params
     this.logger.log(
       `[PgVector] search: model=${this.searchModel}, userId=${Array.isArray(options.userId) ? options.userId.join(',') : options.userId}, embDim=${embedding.length}, limit=${limit}, params=${params.length}, poolFilter=${!!options.filter?.poolIds}`,

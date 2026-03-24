@@ -43,6 +43,7 @@ export class MemoryQueryContextService {
         subjectType: SubjectType.USER,
         deletedAt: null,
         supersededById: null,
+        searchable: { not: false },
         userHidden: false,
       },
       orderBy: [
@@ -63,6 +64,7 @@ export class MemoryQueryContextService {
             layer: MemoryLayer.PROJECT,
             deletedAt: null,
             supersededById: null,
+            searchable: { not: false },
             userHidden: false,
           },
           orderBy: [
@@ -82,6 +84,7 @@ export class MemoryQueryContextService {
         layer: MemoryLayer.SESSION,
         deletedAt: null,
         supersededById: null,
+        searchable: { not: false },
         userHidden: false,
         createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
       },
@@ -101,6 +104,7 @@ export class MemoryQueryContextService {
             subjectType: SubjectType.AGENT,
             deletedAt: null,
             supersededById: null,
+            searchable: { not: false },
             userHidden: false,
           },
           orderBy: [

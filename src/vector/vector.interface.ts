@@ -25,6 +25,10 @@ export interface VectorSearchOptions {
     layers?: string[];
     projectId?: string;
     poolIds?: string[];
+    /** ENG-42: Must-match tags (AND logic) */
+    tags?: string[];
+    /** ENG-42: Metadata key-value containment filter */
+    metadata?: Record<string, any>;
   };
   /** ENG-26: Original query text for hybrid search (BM25 fusion) */
   _queryText?: string;

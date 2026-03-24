@@ -155,6 +155,7 @@ export class ContextualRecallService {
         id: { in: filteredIds.map((r) => r.id) },
         deletedAt: null,
         supersededById: null,
+        searchable: { not: false },
       },
       include: {
         extraction: true,
