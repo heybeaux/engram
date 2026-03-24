@@ -1,6 +1,14 @@
 import { KeywordRule, TopicDefinition, TopicId } from './prefetch.types';
 import { KEYWORD_RULES } from './topic-keyword-rules';
-import { TOPIC_DEFINITIONS } from './topic-taxonomy';
+import { PERSONAL_TOPIC_DEFINITIONS } from './topic-definitions-personal';
+import { SYSTEM_TOPIC_DEFINITIONS } from './topic-definitions-system';
+
+// Compose locally to avoid circular dependency with topic-taxonomy.ts
+// (topic-taxonomy.ts is a barrel that re-exports from this file)
+const TOPIC_DEFINITIONS: TopicDefinition[] = [
+  ...PERSONAL_TOPIC_DEFINITIONS,
+  ...SYSTEM_TOPIC_DEFINITIONS,
+];
 
 // ============================================================================
 // Helper Functions
