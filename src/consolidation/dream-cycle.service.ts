@@ -14,6 +14,7 @@ import {
   DreamCyclePendingStage,
   DreamCycleTieringStage,
   DreamCycleConsolidationStage,
+  DreamCycleTimelineSynthesisStage,
 } from './stages';
 import * as os from 'os';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
@@ -26,6 +27,7 @@ const DREAM_CYCLE_LOCK_KEY = 294967;
 export type DreamCycleStage =
   | 'pending'
   | 'tiering'
+  | 'timeline'
   | 'patterns'
   | 'clustering'
   | 'drift'
@@ -59,6 +61,7 @@ export interface DreamCycleResult {
 const ALL_STAGES: DreamCycleStage[] = [
   'pending',
   'tiering',
+  'timeline',
   'patterns',
   'clustering',
   'drift',
@@ -80,6 +83,7 @@ export class DreamCycleService {
     private patternsStage: DreamCyclePatternsStage,
     private driftStage: DreamCycleDriftStage,
     private identityStage: DreamCycleIdentityStage,
+    private timelineSynthesisStage: DreamCycleTimelineSynthesisStage,
     private tracker: DreamCycleRunTrackerService,
     @Optional() private generateContextService?: GenerateContextService,
     @Optional() private clusteringService?: ClusteringService,
@@ -349,6 +353,41 @@ export class DreamCycleService {
             consolidationStart,
           );
           const msg = `Consolidation stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
+      // Stage 2.8: Timeline synthesis (ENG-46)
+      if (stages.includes('timeline') && llmCallsUsed < this.maxLlmCalls) {
+        this.log('Stage 2.8: Timeline synthesis');
+        const timelineStart = new Date();
+        const timelineRecord = await this.tracker.startStage(
+          runId,
+          'timeline',
+          totalMemories,
+        );
+        try {
+          const timelineResult = await this.timelineSynthesisStage.run(
+            userId,
+            dryRun,
+            this.maxLlmCalls - llmCallsUsed,
+          );
+          await this.tracker.completeStage(
+            timelineRecord.id,
+            timelineResult.timelinesCreated + timelineResult.timelinesUpdated,
+            timelineStart,
+          );
+          llmCallsUsed += timelineResult.llmCalls;
+          stageDetails.timeline = timelineResult;
+          this.log('Stage 2.8 complete', timelineResult);
+        } catch (err) {
+          await this.tracker.errorStage(
+            timelineRecord.id,
+            err as Error,
+            timelineStart,
+          );
+          const msg = `Timeline synthesis stage failed: ${err instanceof Error ? err.message : String(err)}`;
           errors.push(msg);
           this.log(msg, undefined, 'error');
         }

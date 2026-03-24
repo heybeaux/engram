@@ -4,3 +4,4 @@ export { DreamCycleIdentityStage } from './dream-cycle-identity.stage';
 export { DreamCyclePendingStage } from './dream-cycle-pending.stage';
 export { DreamCycleTieringStage } from './dream-cycle-tiering.stage';
 export { DreamCycleConsolidationStage } from './dream-cycle-consolidation.stage';
+export { DreamCycleTimelineSynthesisStage } from './dream-cycle-timeline-synthesis.stage';

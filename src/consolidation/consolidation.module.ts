@@ -14,6 +14,7 @@ import {
   DreamCyclePendingStage,
   DreamCycleTieringStage,
   DreamCycleConsolidationStage,
+  DreamCycleTimelineSynthesisStage,
 } from './stages';
 import { MemoryModule } from '../memory/memory.module';
 import { LLMModule } from '../llm/llm.module';
@@ -21,6 +22,7 @@ import { ClusteringModule } from '../clustering/clustering.module';
 import { FogIndexModule } from '../fog-index/fog-index.module';
 import { AccountModule } from '../account/account.module';
 import { IdentityModule } from '../identity/identity.module';
+import { TimelineModule } from '../timeline/timeline.module';
 import { ServicePrismaModule } from '../prisma/service-prisma.module';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
 import { HealthMetricsService } from '../health/health-metrics.service';
@@ -52,6 +54,7 @@ const bullExports = hasRedis ? [DreamCycleQueueProducer] : [];
     ClusteringModule,
     FogIndexModule,
     IdentityModule,
+    TimelineModule,
     ServicePrismaModule,
     ...bullImports,
   ],
@@ -66,6 +69,7 @@ const bullExports = hasRedis ? [DreamCycleQueueProducer] : [];
     DreamCycleIdentityStage,
     DreamCycleTieringStage,
     DreamCycleConsolidationStage,
+    DreamCycleTimelineSynthesisStage,
     GenerateContextService,
     DreamCycleRunTrackerService,
     HealthMetricsService,
