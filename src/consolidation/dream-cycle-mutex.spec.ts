@@ -104,6 +104,7 @@ describe('DreamCycleService - Mutex', () => {
       mockPatternsStage as any,
       mockDriftStage as any,
       mockIdentityStage as any,
+      { run: jest.fn().mockResolvedValue({ synthesesCreated: 0 }) } as any, // timelineSynthesisStage
       mockTracker as any,
     );
   });

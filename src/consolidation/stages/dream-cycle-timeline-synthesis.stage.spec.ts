@@ -503,23 +503,5 @@ describe('DreamCycleTimelineSynthesisStage', () => {
     });
   });
 
-  describe('fetchTimelineDrafts', () => {
-    it('should strip TIMELINE_DRAFT: prefix from content', async () => {
-      prisma.memory.findMany.mockResolvedValue([
-        { raw: 'TIMELINE_DRAFT: Some important event happened' },
-        { raw: 'TIMELINE_DRAFT:Another event without space' },
-      ]);
-
-      const drafts = await stage.fetchTimelineDrafts(
-        'user-1',
-        'agent-1',
-        new Date('2026-03-22'),
-      );
-
-      expect(drafts).toEqual([
-        'Some important event happened',
-        'Another event without space',
-      ]);
-    });
-  });
 });
+// Note: fetchTimelineDrafts was removed in the ENG-44 schema alignment refactor.
