@@ -57,6 +57,7 @@ import { BillingModule } from './billing/billing.module';
 import { ImportModule } from './import/import.module';
 import { ImportV2Module } from './import-v2/import-v2.module';
 import { RetrievalSignalsModule } from './retrieval-signals/retrieval-signals.module';
+import { TimelineModule } from './timeline/timeline.module';
 import { UsageLimitMiddleware } from './common/middleware/usage-limit.middleware';
 import { AuthModule } from './common/auth.module';
 import { PersistenceModule } from './common/persistence/persistence.module';
@@ -184,6 +185,7 @@ const coreModules = [
   ImportModule,
   ImportV2Module,
   RetrievalSignalsModule,
+  TimelineModule,
 ];
 
 const cloudModules = [
