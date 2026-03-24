@@ -1,4 +1,9 @@
 import { MemoryController } from './memory.controller';
+import { MemoryCrudController } from './memory-crud.controller';
+import { MemorySearchController } from './memory-search.controller';
+import { MemoryImportExportController } from './memory-import-export.controller';
+import { MemoryGraphController } from './memory-graph.controller';
+import { MemoryHelpersService } from './memory-helpers.service';
 import { MemoryService } from './memory.service';
 import { BackfillService } from './backfill.service';
 import { ConsolidationService } from './consolidation.service';
@@ -8,9 +13,8 @@ import { PrismaService } from '../prisma/prisma.service';
 describe('MemoryController', () => {
   let controller: MemoryController;
   let memoryService: jest.Mocked<MemoryService>;
-  let backfillService: jest.Mocked<BackfillService>;
   let consolidationService: jest.Mocked<ConsolidationService>;
-  let contextualRecallService: jest.Mocked<ContextualRecallService>;
+  let helpers: jest.Mocked<MemoryHelpersService>;
 
   const userId = 'user-123';
 
@@ -30,20 +34,13 @@ describe('MemoryController', () => {
       exportMemoriesFiltered: jest.fn(),
     } as any;
 
-    backfillService = {
-      findMemoriesNeedingBackfill: jest.fn(),
-      backfillExtractions: jest.fn(),
-      backfillUserIdentity: jest.fn(),
-      findUserByExternalIdPattern: jest.fn(),
-    } as any;
-
     consolidationService = {
       promoteRecurringPatterns: jest.fn(),
       getStats: jest.fn(),
     } as any;
 
-    contextualRecallService = {
-      recall: jest.fn(),
+    helpers = {
+      resolveAccountUserIds: jest.fn().mockResolvedValue(null),
     } as any;
 
     const prismaService = {
@@ -52,37 +49,122 @@ describe('MemoryController', () => {
 
     controller = new MemoryController(
       memoryService,
-      backfillService,
       consolidationService,
-      contextualRecallService,
       prismaService,
-      {
-        enqueue: jest.fn().mockReturnValue('job-123'),
-        getStatus: jest.fn(),
-      } as any,
+      helpers,
+    );
+  });
+
+  // === CONTEXT ===
+
+  describe('loadContext', () => {
+    it('should load context', async () => {
+      const dto = { sessionHint: 'test' } as any;
+      const expected = { memories: [], summary: '' };
+      memoryService.loadContext.mockResolvedValue(expected as any);
+
+      const result = await controller.loadContext(userId, dto);
+
+      expect(result).toEqual(expected);
+    });
+  });
+
+  // === CONSOLIDATION ===
+
+  describe('consolidate', () => {
+    it('should run consolidation with defaults', async () => {
+      consolidationService.promoteRecurringPatterns.mockResolvedValue(
+        {} as any,
+      );
+
+      await controller.consolidate(userId);
+
+      expect(
+        consolidationService.promoteRecurringPatterns,
+      ).toHaveBeenCalledWith(userId, {
+        dryRun: false,
+        minOccurrences: undefined,
+        similarityThreshold: undefined,
+      });
+    });
+
+    it('should parse query params', async () => {
+      consolidationService.promoteRecurringPatterns.mockResolvedValue(
+        {} as any,
+      );
+
+      await controller.consolidate(userId, 'true', '5', '0.9');
+
+      expect(
+        consolidationService.promoteRecurringPatterns,
+      ).toHaveBeenCalledWith(userId, {
+        dryRun: true,
+        minOccurrences: 5,
+        similarityThreshold: 0.9,
+      });
+    });
+  });
+
+  describe('getConsolidationStats', () => {
+    it('should return stats for user', async () => {
+      const expected = {
+        totalMemories: 100,
+        sessionMemories: 60,
+        identityMemories: 20,
+        projectMemories: 15,
+        consolidatedCount: 5,
+        potentialClusters: 3,
+      };
+      consolidationService.getStats.mockResolvedValue(expected);
+
+      const result = await controller.getConsolidationStats(userId);
+
+      expect(result).toEqual(expected);
+    });
+  });
+});
+
+describe('MemoryCrudController', () => {
+  let controller: MemoryCrudController;
+  let memoryService: jest.Mocked<MemoryService>;
+  let helpers: jest.Mocked<MemoryHelpersService>;
+
+  const userId = 'user-123';
+
+  beforeEach(() => {
+    memoryService = {
+      remember: jest.fn(),
+      rememberAll: jest.fn(),
+      getById: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      markUsed: jest.fn(),
+      bulkCreate: jest.fn(),
+      bulkTextImport: jest.fn(),
+    } as any;
+
+    helpers = {
+      resolveAccountUserIds: jest.fn().mockResolvedValue(null),
+    } as any;
+
+    const prismaService = {
+      user: { findMany: jest.fn().mockResolvedValue([]) },
+      memory: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
+    } as any;
+
+    controller = new MemoryCrudController(
+      memoryService,
+      prismaService,
       {
         createBatch: jest.fn().mockReturnValue('batch-123'),
         getBatchStatus: jest.fn(),
       } as any,
-      {
-        getEmbeddingStatus: jest.fn().mockResolvedValue({
-          withEmbedding: 10,
-          withoutEmbedding: 2,
-          retryQueueSize: 1,
-          exhaustedRetries: 0,
-        }),
-        retryFailedEmbeddings: jest.fn().mockResolvedValue({
-          retried: 2,
-          succeeded: 1,
-          failed: 1,
-          discovered: 0,
-        }),
-      } as any,
-      { logQuery: jest.fn().mockResolvedValue('query-id') } as any, // retrievalSignals
+      helpers,
     );
   });
-
-  // === MEMORY CRUD ===
 
   describe('remember', () => {
     it('should create a memory', async () => {
@@ -105,68 +187,6 @@ describe('MemoryController', () => {
       const result = await controller.rememberAll(userId, dto);
 
       expect(result).toEqual({ created: 2, failed: 0 });
-    });
-  });
-
-  describe('recall', () => {
-    it('should search memories', async () => {
-      const dto = { query: 'test' } as any;
-      const expected = { memories: [], total: 0 };
-      memoryService.recall.mockResolvedValue(expected as any);
-
-      const req = { isInstanceKey: false };
-      const res = { setHeader: jest.fn() } as any;
-      const result = await controller.recall(userId, dto, req, res);
-
-      expect(result).toEqual(expected);
-      expect(memoryService.recall).toHaveBeenCalledWith(userId, dto);
-    });
-  });
-
-  describe('contextualRecall', () => {
-    it('should delegate to contextualRecallService', async () => {
-      const dto = { messages: [] } as any;
-      const expected = { triggered: false, memories: [] };
-      contextualRecallService.recall.mockResolvedValue(expected as any);
-
-      const req = { isInstanceKey: false };
-      const result = await controller.contextualRecall(userId, dto, req);
-
-      expect(result).toEqual(expected);
-    });
-  });
-
-  describe('getGraph', () => {
-    it('should return graph data with defaults', async () => {
-      const expected = { nodes: [], edges: [], entities: [] };
-      memoryService.getGraphData.mockResolvedValue(expected as any);
-
-      const mockReq = { user: { id: userId } } as any;
-      const result = await controller.getGraph(userId, mockReq);
-
-      expect(memoryService.getGraphData).toHaveBeenCalledWith(
-        userId,
-        500,
-        false,
-      );
-      expect(result).toEqual(expected);
-    });
-
-    it('should parse limit and includeAgent params', async () => {
-      memoryService.getGraphData.mockResolvedValue({
-        nodes: [],
-        edges: [],
-        entities: [],
-      } as any);
-
-      const mockReq = { user: { id: userId } } as any;
-      await controller.getGraph(userId, mockReq, '100', 'true');
-
-      expect(memoryService.getGraphData).toHaveBeenCalledWith(
-        userId,
-        100,
-        true,
-      );
     });
   });
 
@@ -216,8 +236,6 @@ describe('MemoryController', () => {
     });
   });
 
-  // === FEEDBACK ===
-
   describe('markUsed', () => {
     it('should mark memory as used', async () => {
       memoryService.markUsed.mockResolvedValue(undefined);
@@ -227,19 +245,162 @@ describe('MemoryController', () => {
       expect(memoryService.markUsed).toHaveBeenCalledWith('mem-1', userId);
     });
   });
+});
 
-  // === CONTEXT ===
+describe('MemorySearchController', () => {
+  let controller: MemorySearchController;
+  let memoryService: jest.Mocked<MemoryService>;
+  let contextualRecallService: jest.Mocked<ContextualRecallService>;
+  let helpers: jest.Mocked<MemoryHelpersService>;
 
-  describe('loadContext', () => {
-    it('should load context', async () => {
-      const dto = { sessionHint: 'test' } as any;
-      const expected = { memories: [], summary: '' };
-      memoryService.loadContext.mockResolvedValue(expected as any);
+  const userId = 'user-123';
 
-      const result = await controller.loadContext(userId, dto);
+  beforeEach(() => {
+    memoryService = {
+      recall: jest.fn(),
+    } as any;
+
+    contextualRecallService = {
+      recall: jest.fn(),
+    } as any;
+
+    helpers = {
+      resolveAccountUserIds: jest.fn().mockResolvedValue(null),
+    } as any;
+
+    controller = new MemorySearchController(
+      memoryService,
+      contextualRecallService,
+      { logQuery: jest.fn().mockResolvedValue('query-id') } as any,
+      helpers,
+    );
+  });
+
+  describe('recall', () => {
+    it('should search memories', async () => {
+      const dto = { query: 'test' } as any;
+      const expected = { memories: [], total: 0 };
+      memoryService.recall.mockResolvedValue(expected as any);
+
+      const req = { isInstanceKey: false };
+      const res = { setHeader: jest.fn(), set: jest.fn() } as any;
+      const result = await controller.recall(userId, dto, req, res);
+
+      expect(result).toEqual(expected);
+      expect(memoryService.recall).toHaveBeenCalledWith(userId, dto);
+    });
+  });
+
+  describe('contextualRecall', () => {
+    it('should delegate to contextualRecallService', async () => {
+      const dto = { messages: [] } as any;
+      const expected = { triggered: false, memories: [] };
+      contextualRecallService.recall.mockResolvedValue(expected as any);
+
+      const req = { isInstanceKey: false };
+      const result = await controller.contextualRecall(userId, dto, req);
 
       expect(result).toEqual(expected);
     });
+  });
+});
+
+describe('MemoryGraphController', () => {
+  let controller: MemoryGraphController;
+  let memoryService: jest.Mocked<MemoryService>;
+  let helpers: jest.Mocked<MemoryHelpersService>;
+
+  const userId = 'user-123';
+
+  beforeEach(() => {
+    memoryService = {
+      getGraphData: jest.fn(),
+    } as any;
+
+    helpers = {
+      resolveAccountUserIds: jest.fn().mockResolvedValue(null),
+    } as any;
+
+    controller = new MemoryGraphController(memoryService, helpers);
+  });
+
+  describe('getGraph', () => {
+    it('should return graph data with defaults', async () => {
+      const expected = { nodes: [], edges: [], entities: [] };
+      memoryService.getGraphData.mockResolvedValue(expected as any);
+
+      const mockReq = { user: { id: userId } } as any;
+      const result = await controller.getGraph(userId, mockReq);
+
+      expect(memoryService.getGraphData).toHaveBeenCalledWith(
+        userId,
+        500,
+        false,
+      );
+      expect(result).toEqual(expected);
+    });
+
+    it('should parse limit and includeAgent params', async () => {
+      memoryService.getGraphData.mockResolvedValue({
+        nodes: [],
+        edges: [],
+        entities: [],
+      } as any);
+
+      const mockReq = { user: { id: userId } } as any;
+      await controller.getGraph(userId, mockReq, '100', 'true');
+
+      expect(memoryService.getGraphData).toHaveBeenCalledWith(
+        userId,
+        100,
+        true,
+      );
+    });
+  });
+});
+
+describe('MemoryImportExportController', () => {
+  let controller: MemoryImportExportController;
+  let backfillService: jest.Mocked<BackfillService>;
+
+  const userId = 'user-123';
+
+  beforeEach(() => {
+    const memoryService = {
+      importMemories: jest.fn(),
+      exportMemoriesBatch: jest.fn(),
+      exportMemoriesFiltered: jest.fn(),
+    } as any;
+
+    backfillService = {
+      findMemoriesNeedingBackfill: jest.fn(),
+      backfillExtractions: jest.fn(),
+      backfillUserIdentity: jest.fn(),
+      findUserByExternalIdPattern: jest.fn(),
+    } as any;
+
+    controller = new MemoryImportExportController(
+      memoryService,
+      backfillService,
+      {
+        createBatch: jest.fn().mockReturnValue('batch-123'),
+        getBatchStatus: jest.fn(),
+      } as any,
+      {
+        getEmbeddingStatus: jest.fn().mockResolvedValue({
+          withEmbedding: 10,
+          withoutEmbedding: 2,
+          retryQueueSize: 1,
+          exhaustedRetries: 0,
+        }),
+        retryFailedEmbeddings: jest.fn().mockResolvedValue({
+          retried: 2,
+          succeeded: 1,
+          failed: 1,
+          discovered: 0,
+        }),
+      } as any,
+    );
   });
 
   // === BACKFILL ===
@@ -315,60 +476,6 @@ describe('MemoryController', () => {
       backfillService.findUserByExternalIdPattern.mockResolvedValue(expected);
 
       const result = await controller.lookupUserForBackfill('beaux');
-
-      expect(result).toEqual(expected);
-    });
-  });
-
-  // === CONSOLIDATION ===
-
-  describe('consolidate', () => {
-    it('should run consolidation with defaults', async () => {
-      consolidationService.promoteRecurringPatterns.mockResolvedValue(
-        {} as any,
-      );
-
-      await controller.consolidate(userId);
-
-      expect(
-        consolidationService.promoteRecurringPatterns,
-      ).toHaveBeenCalledWith(userId, {
-        dryRun: false,
-        minOccurrences: undefined,
-        similarityThreshold: undefined,
-      });
-    });
-
-    it('should parse query params', async () => {
-      consolidationService.promoteRecurringPatterns.mockResolvedValue(
-        {} as any,
-      );
-
-      await controller.consolidate(userId, 'true', '5', '0.9');
-
-      expect(
-        consolidationService.promoteRecurringPatterns,
-      ).toHaveBeenCalledWith(userId, {
-        dryRun: true,
-        minOccurrences: 5,
-        similarityThreshold: 0.9,
-      });
-    });
-  });
-
-  describe('getConsolidationStats', () => {
-    it('should return stats for user', async () => {
-      const expected = {
-        totalMemories: 100,
-        sessionMemories: 60,
-        identityMemories: 20,
-        projectMemories: 15,
-        consolidatedCount: 5,
-        potentialClusters: 3,
-      };
-      consolidationService.getStats.mockResolvedValue(expected);
-
-      const result = await controller.getConsolidationStats(userId);
 
       expect(result).toEqual(expected);
     });
