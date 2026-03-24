@@ -1,0 +1,4 @@
+node_modules/
+benchmark-data.json
+benchmark-results.json
+*.csv
