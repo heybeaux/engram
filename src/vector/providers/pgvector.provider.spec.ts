@@ -308,6 +308,70 @@ describe('PgVectorProvider', () => {
       );
     });
 
+    it('should filter by tags with array containment (ENG-42)', async () => {
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
+
+      await provider.search([0.1], {
+        userId: 'user-123',
+        limit: 10,
+        filter: {
+          tags: ['google-ads', 'campaign'],
+        },
+      });
+
+      const call = mockPrisma.$queryRawUnsafe.mock.calls.find(
+        (c: any[]) => typeof c[0] === 'string' && c[0].includes('tags @>'),
+      );
+      expect(call).toBeDefined();
+      expect(call[0]).toContain('m.tags @> ARRAY[');
+      // Tags should be passed as individual params
+      expect(call).toContain('google-ads');
+      expect(call).toContain('campaign');
+    });
+
+    it('should filter by metadata with JSONB containment (ENG-42)', async () => {
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
+
+      await provider.search([0.1], {
+        userId: 'user-123',
+        limit: 10,
+        filter: {
+          metadata: { client: 'acme', env: 'prod' },
+        },
+      });
+
+      const call = mockPrisma.$queryRawUnsafe.mock.calls.find(
+        (c: any[]) => typeof c[0] === 'string' && c[0].includes('metadata @>'),
+      );
+      expect(call).toBeDefined();
+      expect(call[0]).toContain('m.metadata @>');
+      // Metadata should be passed as JSON string param
+      expect(call).toContain(JSON.stringify({ client: 'acme', env: 'prod' }));
+    });
+
+    it('should combine tags, metadata, and pool filters (ENG-42)', async () => {
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
+
+      await provider.search([0.1], {
+        userId: 'user-123',
+        limit: 10,
+        filter: {
+          poolIds: ['pool-1'],
+          tags: ['tag-a'],
+          metadata: { key: 'val' },
+        },
+      });
+
+      const call = mockPrisma.$queryRawUnsafe.mock.calls.find(
+        (c: any[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('tags @>') &&
+          c[0].includes('metadata @>') &&
+          c[0].includes('memory_pool_memberships'),
+      );
+      expect(call).toBeDefined();
+    });
+
     it('should convert score to number', async () => {
       // Prisma might return score as string or bigint
       mockPrisma.$queryRawUnsafe.mockResolvedValue([

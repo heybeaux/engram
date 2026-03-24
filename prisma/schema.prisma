@@ -215,6 +215,9 @@ model Memory {
   // HEY-174: Scoped memory visibility for cross-agent sharing
   visibility MemoryVisibility @default(PRIVATE)
 
+  // ENG-42: User-supplied tags for filtering
+  tags String[] @default([]) @map("tags")
+
   // Extensible metadata (used by Awareness/Waking Cycle for insight metadata,
   // e.g. insightType, signalSource, actionable, expiresAt, acknowledged)
   metadata Json? @map("metadata")
@@ -250,6 +253,7 @@ model Memory {
   @@index([contentHash])
   @@index([visibility])
   @@index([embeddingStatus])
+  @@index([tags], type: Gin) // ENG-42: Fast tag containment queries
   @@map("memories")
 
   // Automated dedup pipeline relations
