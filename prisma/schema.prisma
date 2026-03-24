@@ -2285,3 +2285,42 @@ model RetrievalStrategyProfile {
 
   @@map("retrieval_strategy_profiles")
 }
+
+// ============================================================================
+// TIMELINE (ENG-44)
+// ============================================================================
+
+model Timeline {
+  id             String   @id @default(uuid())
+  agentId        String
+  agentLocalDate DateTime @db.Date
+  timezone       String   @default("UTC")
+  chapter        String
+  arcId          String?
+
+  // LOD content — only summary gets an embedding
+  indexText    String
+  summaryText  String
+  standardText String
+
+  // Structured data
+  events       Json     @default("[]")   // TimelineEvent[]
+  decisions    Json     @default("[]")   // Decision[]
+  openThreadIds String[] @default([])    // refs to Arc.openThreads
+
+  people     String[] @default([])
+  mood       String?
+  significance Float  @default(0.5)
+  memoryIds  String[] @default([])      // links to Memory.id
+
+  // Embedding: summary only
+  summaryEmbedding Unsupported("vector(768)")?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, agentLocalDate])
+  @@index([agentId, agentLocalDate(sort: Desc)])
+  @@index([arcId])
+  @@map("timelines")
+}
