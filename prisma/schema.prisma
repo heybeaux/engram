@@ -155,50 +155,51 @@ model Memory {
   safetyCritical  Boolean   @default(false) @map("safety_critical")
 
   // Subject fields: who/what is this memory ABOUT?
-  subjectType      SubjectType            @default(USER) @map("subject_type")
-  subjectId        String?                @map("subject_id") // userId, agentId, or entityId
-  agentId          String?                @map("agent_id") // For agent self-memories
-  source           MemorySource           @default(EXPLICIT_STATEMENT)
-  importanceHint   ImportanceHint?        @map("importance_hint")
-  importanceScore  Float                  @default(0.5) @map("importance_score")
-  confidence       Float                  @default(1.0)
-  sessionPosition  Int?                   @map("session_position")
-  embeddingId      String?                @unique @map("embedding_id")
-  embeddingModel   String?                @map("embedding_model")
-  embeddingStatus  EmbeddingStatus        @default(PENDING) @map("embedding_status")
-  isDuplicateOf    String?                @map("is_duplicate_of")
-  ingestedAt       DateTime               @default(now()) @map("ingested_at")
-  retrievalCount   Int                    @default(0) @map("retrieval_count")
-  lastRetrievedAt  DateTime?              @map("last_retrieved_at")
-  usedCount        Int                    @default(0) @map("used_count")
-  lastUsedAt       DateTime?              @map("last_used_at")
-  consolidated     Boolean                @default(false)
-  consolidatedAt   DateTime?              @map("consolidated_at")
-  supersededById   String?                @map("superseded_by_id")
-  supersededAt     DateTime?              @map("superseded_at")
-  consolidatedInto String?                @map("consolidated_into")
+  subjectType            SubjectType      @default(USER) @map("subject_type")
+  subjectId              String?          @map("subject_id") // userId, agentId, or entityId
+  agentId                String?          @map("agent_id") // For agent self-memories
+  source                 MemorySource     @default(EXPLICIT_STATEMENT)
+  importanceHint         ImportanceHint?  @map("importance_hint")
+  importanceScore        Float            @default(0.5) @map("importance_score")
+  confidence             Float            @default(1.0)
+  sessionPosition        Int?             @map("session_position")
+  embeddingId            String?          @unique @map("embedding_id")
+  embeddingModel         String?          @map("embedding_model")
+  embeddingStatus        EmbeddingStatus  @default(PENDING) @map("embedding_status")
+  isDuplicateOf          String?          @map("is_duplicate_of")
+  ingestedAt             DateTime         @default(now()) @map("ingested_at")
+  retrievalCount         Int              @default(0) @map("retrieval_count")
+  lastRetrievedAt        DateTime?        @map("last_retrieved_at")
+  usedCount              Int              @default(0) @map("used_count")
+  lastUsedAt             DateTime?        @map("last_used_at")
+  consolidated           Boolean          @default(false)
+  consolidatedAt         DateTime?        @map("consolidated_at")
+  supersededById         String?          @map("superseded_by_id")
+  supersededAt           DateTime?        @map("superseded_at")
+  consolidatedInto       String?          @map("consolidated_into")
   // ENG-31: Durability classification for retrieval scoring
-  durability             MemoryDurability  @default(UNCLASSIFIED)
-  durabilityClassifiedAt DateTime?         @map("durability_classified_at")
+  durability             MemoryDurability @default(UNCLASSIFIED)
+  durabilityClassifiedAt DateTime?        @map("durability_classified_at")
 
-  createdAt        DateTime               @default(now()) @map("created_at")
-  updatedAt        DateTime               @updatedAt @map("updated_at")
-  deletedAt        DateTime?              @map("deleted_at")
-  embedding        Unsupported("vector")?
-  searchVector     Unsupported("tsvector")?  @map("search_vector")
-  feedback         Feedback[]
-  project          Project?               @relation(fields: [projectId], references: [id])
-  session          Session?               @relation(fields: [sessionId], references: [id])
-  supersededBy     Memory?                @relation("MemorySupersedes", fields: [supersededById], references: [id])
-  supersedes       Memory[]               @relation("MemorySupersedes")
-  consolidatedTo   Memory?                @relation("MemoryConsolidates", fields: [consolidatedInto], references: [id])
-  consolidates     Memory[]               @relation("MemoryConsolidates")
-  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chainSources     MemoryChainLink[]      @relation("ChainSource")
-  chainTargets     MemoryChainLink[]      @relation("ChainTarget")
-  entities         MemoryEntity[]
-  extraction       MemoryExtraction?
-  hierarchyUnits   HierarchyUnit[]
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+  deletedAt      DateTime?                @map("deleted_at")
+  processedAt    DateTime?                @map("processed_at")
+  embedding      Unsupported("vector")?
+  searchVector   Unsupported("tsvector")? @map("search_vector")
+  feedback       Feedback[]
+  project        Project?                 @relation(fields: [projectId], references: [id])
+  session        Session?                 @relation(fields: [sessionId], references: [id])
+  supersededBy   Memory?                  @relation("MemorySupersedes", fields: [supersededById], references: [id])
+  supersedes     Memory[]                 @relation("MemorySupersedes")
+  consolidatedTo Memory?                  @relation("MemoryConsolidates", fields: [consolidatedInto], references: [id])
+  consolidates   Memory[]                 @relation("MemoryConsolidates")
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chainSources   MemoryChainLink[]        @relation("ChainSource")
+  chainTargets   MemoryChainLink[]        @relation("ChainTarget")
+  entities       MemoryEntity[]
+  extraction     MemoryExtraction?
+  hierarchyUnits HierarchyUnit[]
 
   // Multi-agent attribution
   createdBySession String?                @map("created_by_session")
@@ -240,6 +241,10 @@ model Memory {
   // Entity Profiles
   entityProfiles EntityProfileMemory[]
 
+  // Automated dedup pipeline relations
+  dedupCandidates1 DedupCandidate[] @relation("DedupCandidate1")
+  dedupCandidates2 DedupCandidate[] @relation("DedupCandidate2")
+
   @@index([clusterId])
   @@index([userId, layer])
   @@index([userId, createdAt])
@@ -254,11 +259,8 @@ model Memory {
   @@index([visibility])
   @@index([embeddingStatus])
   @@index([tags], type: Gin) // ENG-42: Fast tag containment queries
+  @@index([userId, processedAt])
   @@map("memories")
-
-  // Automated dedup pipeline relations
-  dedupCandidates1 DedupCandidate[] @relation("DedupCandidate1")
-  dedupCandidates2 DedupCandidate[] @relation("DedupCandidate2")
 }
 
 /// UX feedback from dashboard users (in-app widget + NPS)
@@ -519,9 +521,9 @@ model MemoryPool {
   updatedAt   DateTime       @updatedAt @map("updated_at")
   archivedAt  DateTime?      @map("archived_at")
 
-  memberships      MemoryPoolMembership[]
-  grants           PoolGrant[]
-  entityProfiles   EntityProfile[]
+  memberships    MemoryPoolMembership[]
+  grants         PoolGrant[]
+  entityProfiles EntityProfile[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -2071,36 +2073,36 @@ enum AttachMethod {
 }
 
 model EntityProfile {
-  id             String              @id @default(uuid())
-  userId         String              @map("user_id")
-  user           User                @relation(fields: [userId], references: [id])
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
 
   name           String
   type           EntityType
-  normalizedName String              @map("normalized_name")
-  aliases        String[]            @default([])
+  normalizedName String     @map("normalized_name")
+  aliases        String[]   @default([])
   avatar         String?
   description    String?
 
-  attributes     EntityAttribute[]
+  attributes EntityAttribute[]
 
-  entityId       String?             @unique @map("entity_id")
-  entity         Entity?             @relation(fields: [entityId], references: [id])
+  entityId String? @unique @map("entity_id")
+  entity   Entity? @relation(fields: [entityId], references: [id])
 
-  memories       EntityProfileMemory[]
-  tags           String[]            @default([])
+  memories EntityProfileMemory[]
+  tags     String[]              @default([])
 
-  source         ProfileSource       @default(MANUAL)
-  verified       Boolean             @default(true)
+  source   ProfileSource @default(MANUAL)
+  verified Boolean       @default(true)
 
-  embedding      Unsupported("vector(1536)")?
+  embedding Unsupported("vector(1536)")?
 
-  poolId         String?             @map("pool_id")
-  pool           MemoryPool?         @relation(fields: [poolId], references: [id])
+  poolId String?     @map("pool_id")
+  pool   MemoryPool? @relation(fields: [poolId], references: [id])
 
-  createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
-  deletedAt      DateTime?           @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   @@index([userId])
   @@index([normalizedName])
@@ -2109,21 +2111,21 @@ model EntityProfile {
 }
 
 model EntityAttribute {
-  id         String        @id @default(uuid())
-  profileId  String        @map("profile_id")
-  profile    EntityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id        String        @id @default(uuid())
+  profileId String        @map("profile_id")
+  profile   EntityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  key        String
-  value      String
-  valueType  AttributeType @default(STRING) @map("value_type")
-  category   String?
+  key       String
+  value     String
+  valueType AttributeType @default(STRING) @map("value_type")
+  category  String?
 
   source     String?
-  confidence Float         @default(1.0)
-  verified   Boolean       @default(false)
+  confidence Float   @default(1.0)
+  verified   Boolean @default(false)
 
-  createdAt  DateTime      @default(now()) @map("created_at")
-  updatedAt  DateTime      @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([profileId, key, source])
   @@index([profileId])
@@ -2131,16 +2133,16 @@ model EntityAttribute {
 }
 
 model EntityProfileMemory {
-  id             String        @id @default(uuid())
-  profileId      String        @map("profile_id")
-  profile        EntityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  memoryId       String        @map("memory_id")
-  memory         Memory        @relation(fields: [memoryId], references: [id])
+  id        String        @id @default(uuid())
+  profileId String        @map("profile_id")
+  profile   EntityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  memoryId  String        @map("memory_id")
+  memory    Memory        @relation(fields: [memoryId], references: [id])
 
-  relevanceScore Float         @map("relevance_score")
-  attachMethod   AttachMethod  @map("attach_method")
+  relevanceScore Float        @map("relevance_score")
+  attachMethod   AttachMethod @map("attach_method")
 
-  createdAt      DateTime      @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([profileId, memoryId])
   @@index([profileId])
@@ -2150,24 +2152,24 @@ model EntityProfileMemory {
 
 /// Automated dedup pipeline — candidate pairs detected by vector/text similarity
 model DedupCandidate {
-  id              String    @id @default(cuid())
-  memoryId1       String    @map("memory_id_1")
-  memoryId2       String    @map("memory_id_2")
-  similarityScore Float     @map("similarity_score")
+  id              String @id @default(cuid())
+  memoryId1       String @map("memory_id_1")
+  memoryId2       String @map("memory_id_2")
+  similarityScore Float  @map("similarity_score")
   /// VECTOR | TEXT
-  detectionMethod String    @map("detection_method")
+  detectionMethod String @map("detection_method")
 
   /// DUPLICATE | SUPPORTING | OVERLAPPING | CONFLICTING | RELATED
-  classification  String?
-  confidence      Float?
-  mergedContent   String?   @map("merged_content")
-  reasoning       String?
+  classification String?
+  confidence     Float?
+  mergedContent  String? @map("merged_content")
+  reasoning      String?
 
   /// PENDING | CLASSIFIED | RESOLVED
-  status          String    @default("PENDING")
-  classifiedAt    DateTime? @map("classified_at")
-  resolvedAt      DateTime? @map("resolved_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  status       String    @default("PENDING")
+  classifiedAt DateTime? @map("classified_at")
+  resolvedAt   DateTime? @map("resolved_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   memory1 Memory @relation("DedupCandidate1", fields: [memoryId1], references: [id])
   memory2 Memory @relation("DedupCandidate2", fields: [memoryId2], references: [id])
@@ -2243,15 +2245,15 @@ model RetrievalSignal {
 
 /// Query execution log for signal attribution and latency tracking
 model RetrievalLog {
-  id            String    @id @default(cuid())
-  accountId     String    @map("account_id")
-  queryText     String    @map("query_text")
-  queryType     QueryType? @map("query_type")
-  strategyConfig Json?    @map("strategy_config")
-  resultCount   Int       @default(0) @map("result_count")
-  latencyMs     Int       @map("latency_ms")
-  armId         String?   @map("arm_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  id             String     @id @default(cuid())
+  accountId      String     @map("account_id")
+  queryText      String     @map("query_text")
+  queryType      QueryType? @map("query_type")
+  strategyConfig Json?      @map("strategy_config")
+  resultCount    Int        @default(0) @map("result_count")
+  latencyMs      Int        @map("latency_ms")
+  armId          String?    @map("arm_id")
+  createdAt      DateTime   @default(now()) @map("created_at")
 
   @@index([accountId, createdAt])
   @@map("retrieval_logs")
@@ -2259,16 +2261,16 @@ model RetrievalLog {
 
 /// Per-account retrieval strategy profile
 model RetrievalStrategyProfile {
-  id                    String    @id @default(cuid())
-  accountId             String    @unique @map("account_id")
+  id        String @id @default(cuid())
+  accountId String @unique @map("account_id")
 
   // RRF parameters
-  rrfK                  Float     @default(60) @map("rrf_k")
-  vectorWeight          Float     @default(0.6) @map("vector_weight")
-  bm25Weight            Float     @default(0.4) @map("bm25_weight")
+  rrfK         Float @default(60) @map("rrf_k")
+  vectorWeight Float @default(0.6) @map("vector_weight")
+  bm25Weight   Float @default(0.4) @map("bm25_weight")
 
   // Extended parameters
-  temporalDecayEnabled  Boolean   @default(false) @map("temporal_decay_enabled")
+  temporalDecayEnabled Boolean @default(false) @map("temporal_decay_enabled")
 
   // Strategy metadata
   confidenceScore       Float     @default(0.0) @map("confidence_score")
@@ -2277,11 +2279,11 @@ model RetrievalStrategyProfile {
   lastOptimizedAt       DateTime? @map("last_optimized_at")
 
   // Version tracking for rollback
-  version               Int       @default(1)
-  previousParams        Json?     @map("previous_params")
+  version        Int   @default(1)
+  previousParams Json? @map("previous_params")
 
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("retrieval_strategy_profiles")
 }
@@ -2304,14 +2306,14 @@ model Timeline {
   standardText String
 
   // Structured data
-  events       Json     @default("[]")   // TimelineEvent[]
-  decisions    Json     @default("[]")   // Decision[]
-  openThreadIds String[] @default([])    // refs to Arc.openThreads
+  events        Json     @default("[]") // TimelineEvent[]
+  decisions     Json     @default("[]") // Decision[]
+  openThreadIds String[] @default([]) // refs to Arc.openThreads
 
-  people     String[] @default([])
-  mood       String?
-  significance Float  @default(0.5)
-  memoryIds  String[] @default([])      // links to Memory.id
+  people       String[] @default([])
+  mood         String?
+  significance Float    @default(0.5)
+  memoryIds    String[] @default([]) // links to Memory.id
 
   // Embedding: summary only
   summaryEmbedding Unsupported("vector(768)")?
