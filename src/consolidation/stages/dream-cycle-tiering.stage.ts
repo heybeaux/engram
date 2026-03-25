@@ -38,6 +38,9 @@ export class DreamCycleTieringStage {
       where: {
         userId,
         deletedAt: null,
+        // Phase 0 scalability: delta-only — only process memories not yet processed
+        // or modified since last dream cycle run. Full-corpus scans don't scale.
+        processedAt: null,
       },
       select: {
         id: true,
@@ -85,6 +88,16 @@ export class DreamCycleTieringStage {
           data: { tier: newTier },
         });
       }
+    }
+
+    // Phase 0: Mark processed memories with processedAt watermark
+    if (!dryRun && memories.length > 0) {
+      await this.prisma.memory.updateMany({
+        where: {
+          id: { in: memories.map((m) => m.id) },
+        },
+        data: { processedAt: new Date() },
+      });
     }
 
     const result = { promoted, demoted, unchanged };
