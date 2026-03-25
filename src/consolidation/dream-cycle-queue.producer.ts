@@ -38,6 +38,12 @@ export class DreamCycleQueueProducer {
       backoff: { type: 'exponential' as const, delay: 5000 },
       removeOnComplete: { count: 100 },
       removeOnFail: { count: 50 },
+      // ENG-49: Bump job timeout to 3600s (1hr) to prevent dream cycle timeouts
+      // as memory corpus grows and Timeline Synthesis stage adds processing time.
+      // Previously defaulted to BullMQ default (no limit on some versions).
+      jobId: undefined,
+      delay: 0,
+      timeout: 3600000, // 1 hour in ms
     };
 
     await this.flowProducer.add({
