@@ -50,11 +50,13 @@ export class EntityMemoryService {
 
     // Create new IDENTITY memory directly via Prisma to avoid circular dependency
     // (MemoryWriteService -> MemoryPipelineService -> EntityMemoryService).
-    // The embedding queue processor will pick this up and embed it asynchronously.
+    // EmbeddingRetryCron (runs every 5 minutes) discovers PENDING memories and
+    // enqueues them for embedding — expect up to a 5-minute delay before this
+    // memory becomes vector-searchable.
     await this.prisma.memory.create({
       data: {
         userId: entity.userId,
-        raw: `${entity.name} is a ${entityType} known to ${entity.userId}.`,
+        raw: `${entity.name} is ${entityType.match(/^[aeiou]/i) ? 'an' : 'a'} ${entityType} known to ${entity.userId}.`,
         layer: MemoryLayer.IDENTITY,
         source: MemorySource.AGENT_OBSERVATION,
         tags: [tag, `entity-type:${entityType}`, 'auto:entity-extraction'],

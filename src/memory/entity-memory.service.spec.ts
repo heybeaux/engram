@@ -60,7 +60,7 @@ describe('EntityMemoryService', () => {
     expect(mockPrisma.memory.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          raw: 'JIBE Commerce is a organization known to user-1.',
+          raw: 'JIBE Commerce is an organization known to user-1.',
           layer: 'IDENTITY',
           tags: expect.arrayContaining(['entity:jibe-commerce', 'entity-type:organization']),
         }),
@@ -151,7 +151,7 @@ describe('EntityMemoryService', () => {
     expect(mockPrisma.memory.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          raw: 'Acme Corp is a organization known to user-1.',
+          raw: 'Acme Corp is an organization known to user-1.',
           layer: 'IDENTITY',
         }),
       }),
