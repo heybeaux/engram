@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { DeduplicationService } from './deduplication.service';
+import { DedupJobStoreService } from './dedup-job-store.service';
 import { SimilarityService } from './similarity.service';
 import { SafetyService, DEFAULT_SAFETY_CONFIG } from './safety.service';
 import { MergeService } from './merge.service';
@@ -99,6 +100,7 @@ describe('DeduplicationService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DeduplicationService,
+        DedupJobStoreService,
         { provide: ConfigService, useValue: mockConfig },
         { provide: SimilarityService, useValue: mockSimilarity },
         { provide: SafetyService, useValue: mockSafety },

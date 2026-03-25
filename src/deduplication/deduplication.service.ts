@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import Redis from 'ioredis';
 import {
   MemoryMergedEvent,
   DedupClusterFoundEvent,
@@ -18,6 +17,7 @@ import {
   MemoryCluster,
   PairwiseSimilarity,
 } from './similarity.service';
+import { DedupJobStoreService, BatchJob } from './dedup-job-store.service';
 import {
   SafetyService,
   SafetyConfig,
@@ -40,10 +40,6 @@ import {
 } from './dto/deduplication.dto';
 import { randomUUID } from 'crypto';
 
-const REDIS_JOB_PREFIX = 'engram:dedup:job:';
-const REDIS_CURRENT_JOB_KEY = 'engram:dedup:currentJob';
-const JOB_TTL_SECONDS = 604_800; // 7 days
-
 /**
  * Deduplication configuration
  */
@@ -58,24 +54,6 @@ interface DedupConfig {
 }
 
 /**
- * Batch job state
- */
-interface BatchJob {
-  id: string;
-  status: BatchJobStatus;
-  userId: string;
-  memoriesProcessed: number;
-  clustersFound: number;
-  autoMerged: number;
-  queuedForReview: number;
-  skipped: number;
-  errors: string[];
-  startedAt: Date;
-  completedAt?: Date;
-  dryRun: boolean;
-}
-
-/**
  * Deduplication Service
  *
  * Main orchestrator for memory deduplication.
@@ -86,9 +64,6 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DeduplicationService.name);
   private config: DedupConfig;
   private safetyConfig: SafetyConfig;
-  private jobs: Map<string, BatchJob> = new Map();
-  private currentJob: string | null = null;
-  private redis: Redis | null = null;
 
   constructor(
     private configService: ConfigService,
@@ -98,6 +73,7 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
     private merge: MergeService,
     private lineage: LineageService,
     private review: ReviewService,
+    private jobStore: DedupJobStoreService,
     @Optional() private eventEmitter?: EventEmitter2,
   ) {
     this.config = {
@@ -110,30 +86,14 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
       incrementalAutoMerge: true,
     };
     this.safetyConfig = { ...DEFAULT_SAFETY_CONFIG };
-
-    const redisUrl = this.configService.get<string>('REDIS_URL');
-    if (redisUrl && redisUrl.startsWith('redis')) {
-      this.redis = new Redis(redisUrl, {
-        maxRetriesPerRequest: 3,
-        lazyConnect: true,
-      });
-      this.redis.connect().catch((err) => {
-        this.logger.warn(
-          `[DeduplicationService] Redis connect failed, falling back to in-memory: ${err.message}`,
-        );
-        this.redis = null;
-      });
-    }
   }
 
   async onModuleInit(): Promise<void> {
-    await this.restoreAndRecoverJobs();
+    await this.jobStore.restoreAndRecoverJobs();
   }
 
   onModuleDestroy(): void {
-    const runningJobs = Array.from(this.jobs.values()).filter(
-      (j) => j.status === BatchJobStatus.RUNNING,
-    );
+    const runningJobs = this.jobStore.getRunningJobs();
     if (runningJobs.length > 0) {
       this.logger.warn(
         `Shutting down with ${runningJobs.length} deduplication job(s) still in progress: ${runningJobs.map((j) => j.id).join(', ')}`,
@@ -142,7 +102,7 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
         job.status = BatchJobStatus.FAILED;
         job.completedAt = new Date();
         job.errors.push('Interrupted by server shutdown');
-        this.persistJob(job).catch(() => {});
+        this.jobStore.persist(job).catch(() => {});
       }
     }
   }
@@ -320,10 +280,11 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Prevent concurrent jobs
-    if (this.currentJob) {
-      const current = this.jobs.get(this.currentJob);
+    const currentJobId = this.jobStore.getCurrentJobId();
+    if (currentJobId) {
+      const current = this.jobStore.getJob(currentJobId);
       if (current && current.status === BatchJobStatus.RUNNING) {
-        throw new Error(`A batch job is already running: ${this.currentJob}`);
+        throw new Error(`A batch job is already running: ${currentJobId}`);
       }
     }
 
@@ -351,10 +312,10 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
       dryRun,
     };
 
-    this.jobs.set(jobId, job);
-    this.currentJob = jobId;
-    this.persistJob(job).catch(() => {});
-    this.persistCurrentJob(jobId).catch(() => {});
+    this.jobStore.setJob(job);
+    this.jobStore.setCurrentJobId(jobId);
+    this.jobStore.persist(job).catch(() => {});
+    this.jobStore.persistCurrentJobId(jobId).catch(() => {});
 
     try {
       // Load user-specific config (auto-resolve threshold, etc.)
@@ -419,7 +380,7 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
 
       job.status = BatchJobStatus.COMPLETED;
       job.completedAt = new Date();
-      await this.persistJob(job);
+      await this.jobStore.persist(job);
 
       this.logger.log(
         `[DeduplicationService] Batch job ${jobId} completed: ` +
@@ -460,7 +421,7 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
       job.status = BatchJobStatus.FAILED;
       job.completedAt = new Date();
       job.errors.push(error instanceof Error ? error.message : String(error));
-      await this.persistJob(job);
+      await this.jobStore.persist(job);
 
       throw error;
     }
@@ -819,92 +780,13 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
    * Get batch job status
    */
   getJobStatus(jobId: string): BatchJob | null {
-    return this.jobs.get(jobId) ?? null;
+    return this.jobStore.getJob(jobId);
   }
 
   /**
    * Get current job status
    */
   getCurrentJobStatus(): BatchJob | null {
-    if (!this.currentJob) return null;
-    return this.jobs.get(this.currentJob) ?? null;
-  }
-
-  // ─── Redis-backed job persistence ──────────────────────────────────
-
-  private async persistJob(job: BatchJob): Promise<void> {
-    if (!this.redis) return;
-    try {
-      await this.redis.set(
-        `${REDIS_JOB_PREFIX}${job.id}`,
-        JSON.stringify(job),
-        'EX',
-        JOB_TTL_SECONDS,
-      );
-    } catch {
-      // fallback to memory-only
-    }
-  }
-
-  private async persistCurrentJob(jobId: string | null): Promise<void> {
-    if (!this.redis) return;
-    try {
-      if (jobId) {
-        await this.redis.set(
-          REDIS_CURRENT_JOB_KEY,
-          jobId,
-          'EX',
-          JOB_TTL_SECONDS,
-        );
-      } else {
-        await this.redis.del(REDIS_CURRENT_JOB_KEY);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  private deserializeJob(raw: string): BatchJob {
-    const parsed = JSON.parse(raw);
-    parsed.startedAt = new Date(parsed.startedAt);
-    parsed.completedAt = parsed.completedAt
-      ? new Date(parsed.completedAt)
-      : undefined;
-    return parsed;
-  }
-
-  private async restoreAndRecoverJobs(): Promise<void> {
-    if (!this.redis) return;
-    try {
-      const keys = await this.redis.keys(`${REDIS_JOB_PREFIX}*`);
-      for (const key of keys) {
-        const raw = await this.redis.get(key);
-        if (!raw) continue;
-        const job = this.deserializeJob(raw);
-        if (job.status === BatchJobStatus.RUNNING) {
-          job.status = BatchJobStatus.FAILED;
-          job.completedAt = new Date();
-          job.errors.push('Interrupted by server restart');
-          await this.persistJob(job);
-          this.logger.warn(
-            `[DeduplicationService] Marked stale job ${job.id} as failed (interrupted by restart)`,
-          );
-        }
-        this.jobs.set(job.id, job);
-      }
-      // Clear stale currentJob pointer
-      const currentJobId = await this.redis.get(REDIS_CURRENT_JOB_KEY);
-      if (currentJobId) {
-        const currentJob = this.jobs.get(currentJobId);
-        if (!currentJob || currentJob.status !== BatchJobStatus.RUNNING) {
-          this.currentJob = null;
-          await this.persistCurrentJob(null);
-        }
-      }
-    } catch (err) {
-      this.logger.warn(
-        `[DeduplicationService] Failed to restore jobs from Redis: ${err}`,
-      );
-    }
+    return this.jobStore.getCurrentJob();
   }
 }

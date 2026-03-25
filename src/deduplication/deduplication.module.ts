@@ -6,6 +6,7 @@ import { SafetyService } from './safety.service';
 import { MergeService } from './merge.service';
 import { LineageService } from './lineage.service';
 import { ReviewService } from './review.service';
+import { DedupJobStoreService } from './dedup-job-store.service';
 import { MemoryModule } from '../memory/memory.module';
 import { AccountModule } from '../account/account.module';
 
@@ -43,6 +44,7 @@ import { AccountModule } from '../account/account.module';
   controllers: [DeduplicationController],
   providers: [
     DeduplicationService,
+    DedupJobStoreService,
     SimilarityService,
     SafetyService,
     MergeService,
@@ -51,6 +53,7 @@ import { AccountModule } from '../account/account.module';
   ],
   exports: [
     DeduplicationService,
+    DedupJobStoreService,
     SimilarityService,
     SafetyService,
     MergeService,
