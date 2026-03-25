@@ -9,6 +9,7 @@ import { EmbeddingService } from './embedding.service';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { GraphExtractionService } from '../graph/services/graph-extraction.service';
 import { AttachmentPipelineService } from '../entity-profile/attachment-pipeline.service';
+import { EntityMemoryService } from './entity-memory.service';
 import { parseFlexibleDate } from '../utils/date-parser';
 import {
   RELATED_SIMILARITY_THRESHOLD,
@@ -39,6 +40,7 @@ export class MemoryPipelineService {
     @Optional() private hierarchyService?: HierarchyService,
     @Optional() private graphExtraction?: GraphExtractionService,
     @Optional() private attachmentPipeline?: AttachmentPipelineService,
+    @Optional() private entityMemory?: EntityMemoryService,
   ) {}
 
   /**
@@ -572,6 +574,19 @@ export class MemoryPipelineService {
         }
       } catch (error) {
         this.logger.error(`Failed to store entity ${entity.name}:`, error);
+      }
+    }
+
+    // ENG-50: Create IDENTITY memories for person/org entities (fire-and-forget)
+    if (this.entityMemory) {
+      for (const entity of entities) {
+        this.entityMemory
+          .ensureEntityMemory({ name: entity.name, type: entity.type, userId })
+          .catch((err) =>
+            this.logger.warn(
+              `Failed to ensure entity memory for ${entity.name}: ${err instanceof Error ? err.message : err}`,
+            ),
+          );
       }
     }
   }
