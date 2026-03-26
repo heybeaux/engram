@@ -8,7 +8,8 @@
  *   npx ts-node scripts/backfill-halfvec.ts
  */
 
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '@prisma/client/runtime/library'
+const { PrismaClient } = require('../src/prisma/prisma.service');
 
 const BATCH_SIZE = 500;
 
