@@ -14,10 +14,12 @@ import { LocalEmbedProvider } from './local-embed.provider';
 import { OpenAIEmbedProvider } from './openai-embed.provider';
 import { CloudEnsembleService } from './cloud-ensemble.service';
 import { CloudEnsembleEmbedProvider } from './cloud-ensemble-embed.provider';
+import { EmbeddingProxyController } from './embedding-proxy.controller';
 
 @Global()
 @Module({
   imports: [ConfigModule],
+  controllers: [EmbeddingProxyController],
   providers: [
     LocalEmbedProvider,
     OpenAIEmbedProvider,
