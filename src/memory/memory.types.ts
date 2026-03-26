@@ -33,6 +33,7 @@ export interface MemoryWithScore extends MemoryWithExtraction {
 }
 
 export interface QueryResult {
+  recallId: string;
   memories: MemoryWithScore[];
   queryTokens: number;
   latencyMs: number;

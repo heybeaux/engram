@@ -171,6 +171,7 @@ model Memory {
   retrievalCount         Int              @default(0) @map("retrieval_count")
   lastRetrievedAt        DateTime?        @map("last_retrieved_at")
   usedCount              Int              @default(0) @map("used_count")
+  unusedCount            Int              @default(0) @map("unused_count")
   lastUsedAt             DateTime?        @map("last_used_at")
   consolidated           Boolean          @default(false)
   consolidatedAt         DateTime?        @map("consolidated_at")

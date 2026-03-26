@@ -58,6 +58,7 @@ import { ImportModule } from './import/import.module';
 import { ImportV2Module } from './import-v2/import-v2.module';
 import { RetrievalSignalsModule } from './retrieval-signals/retrieval-signals.module';
 import { TimelineModule } from './timeline/timeline.module';
+import { TrajectoryFeedbackModule } from './memory/feedback/feedback.module';
 import { UsageLimitMiddleware } from './common/middleware/usage-limit.middleware';
 import { AuthModule } from './common/auth.module';
 import { PersistenceModule } from './common/persistence/persistence.module';
@@ -186,6 +187,7 @@ const coreModules = [
   ImportV2Module,
   RetrievalSignalsModule,
   TimelineModule,
+  TrajectoryFeedbackModule,
 ];
 
 const cloudModules = [

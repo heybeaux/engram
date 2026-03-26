@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   Injectable,
   Optional,
@@ -454,6 +455,7 @@ export class MemoryQueryService {
     }
 
     return {
+      recallId: randomUUID(),
       memories: result,
       queryTokens: dto.query.split(/\s+/).length,
       latencyMs: Date.now() - startTime,
@@ -605,6 +607,7 @@ export class MemoryQueryService {
     }
 
     return {
+      recallId: randomUUID(),
       memories: result,
       queryTokens: dto.query.split(/\s+/).length,
       latencyMs: Date.now() - startTime,
