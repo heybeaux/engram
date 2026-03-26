@@ -41,7 +41,7 @@ export class ContextualRecallService {
   ) {}
 
   async recall(
-    userId: string | string[],
+    userId: string | string[] | null,
     dto: ContextualRecallDto,
   ): Promise<ContextualRecallResponseDto> {
     const startTime = Date.now();
@@ -76,7 +76,7 @@ export class ContextualRecallService {
         const singleUserId = Array.isArray(userId) ? userId[0] : userId;
         poolIds = await this.memoryPoolService.getAccessiblePoolIds(
           dto.agentSessionKey,
-          singleUserId,
+          singleUserId ?? 'default',
         );
       } catch (err) {
         this.logger.warn('[ContextualRecall] Failed to resolve pool IDs:', err);
@@ -92,7 +92,7 @@ export class ContextualRecallService {
     ]);
 
     const vectorResults = await this.embedding.search(
-      userId,
+      userId ?? 'default',
       queryEmbedding,
       limit + excludeSet.size, // over-fetch to account for filtering
       undefined,
@@ -106,7 +106,7 @@ export class ContextualRecallService {
     if (dto.delegationContext) {
       delegatorMemoryIds = await this.getDelegatorMemoryIds(
         dto.delegationContext,
-        userId,
+        userId ?? 'default',
       );
     }
 

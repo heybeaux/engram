@@ -1,7 +1,6 @@
 import {
   createParamDecorator,
   ExecutionContext,
-  UnauthorizedException,
 } from '@nestjs/common';
 
 /**
@@ -9,15 +8,12 @@ import {
  * (set by ApiKeyGuard after validating X-AM-User-ID)
  */
 export const UserId = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext): string => {
+  (data: unknown, ctx: ExecutionContext): string | null => {
     const request = ctx.switchToHttp().getRequest();
-    const userId = request.user?.id ?? request.userId;
-    if (!userId) {
-      throw new UnauthorizedException(
-        'User ID is required but was not resolved from the request',
-      );
-    }
-    return userId;
+    // ENG-109: Return null instead of throwing when userId is not resolved.
+    // The guard should always set a user, but if it doesn't (e.g. no
+    // X-AM-User-ID header and no default user), callers handle null gracefully.
+    return request.user?.id ?? request.userId ?? null;
   },
 );
 
