@@ -12,9 +12,16 @@ import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import { MultiQueryService } from '../multi-query/multi-query.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
-import { AnticipatoryService } from '../anticipatory/anticipatory.service';
-import { ResultExplanationDto } from '../multi-query/dto/multi-query.dto';
-import { Memory, SubjectType } from '@prisma/client';
+import { QueryLogService } from '../memory-access-log/query-log.service';
+import {
+  AnticipatoryService,
+  AnticipatoryRunResult,
+} from '../anticipatory/anticipatory.service';
+import {
+  MultiQueryMetadataDto,
+  ResultExplanationDto,
+} from '../multi-query/dto/multi-query.dto';
+import { Memory, MemoryLayer, SubjectType } from '@prisma/client';
 import {
   MemoryWithExtraction,
   MemoryWithScore,
@@ -39,6 +46,7 @@ export class MemoryQueryService {
     @Optional() private memoryPoolService?: MemoryPoolService,
     @Optional() private memoryAccessLogService?: MemoryAccessLogService,
     @Optional() private anticipatoryService?: AnticipatoryService,
+    @Optional() private queryLogService?: QueryLogService,
   ) {}
 
   /**
@@ -454,11 +462,29 @@ export class MemoryQueryService {
       }
     }
 
+    const latencyMs = Date.now() - startTime;
+
+    // Fire-and-forget query log for re-ranker training
+    if (this.queryLogService) {
+      this.queryLogService.logQuery({
+        queryText: dto.query,
+        queryEmbedding: queryEmbedding,
+        agentId: dto.agentId,
+        sessionKey: dto.agentSessionKey,
+        results: result.map((m, i) => ({
+          memoryId: m.id,
+          cosineScore: m.score ?? 0,
+          rank: i + 1,
+        })),
+        latencyMs,
+      });
+    }
+
     return {
       recallId: randomUUID(),
       memories: result,
       queryTokens: dto.query.split(/\s+/).length,
-      latencyMs: Date.now() - startTime,
+      latencyMs,
       ...(anticipatoryMeta ? { anticipatoryMeta } : {}),
     };
   }
@@ -606,11 +632,29 @@ export class MemoryQueryService {
       }
     }
 
+    const latencyMsMq = Date.now() - startTime;
+
+    // Fire-and-forget query log for re-ranker training (multi-query path)
+    if (this.queryLogService) {
+      this.queryLogService.logQuery({
+        queryText: dto.query,
+        queryEmbedding: [], // multi-query uses multiple embeddings; omit to avoid picking one arbitrarily
+        agentId: dto.agentId,
+        sessionKey: dto.agentSessionKey,
+        results: result.map((m, i) => ({
+          memoryId: m.id,
+          cosineScore: m.score ?? 0,
+          rank: i + 1,
+        })),
+        latencyMs: latencyMsMq,
+      });
+    }
+
     return {
       recallId: randomUUID(),
       memories: result,
       queryTokens: dto.query.split(/\s+/).length,
-      latencyMs: Date.now() - startTime,
+      latencyMs: latencyMsMq,
       multiQuery: multiQueryMetadata,
       explanations,
       ...(anticipatoryMeta2 ? { anticipatoryMeta: anticipatoryMeta2 } : {}),

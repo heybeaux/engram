@@ -583,6 +583,24 @@ model MemoryAccessLog {
   @@map("memory_access_logs")
 }
 
+/// Query log for re-ranker training data collection
+model QueryLog {
+  id              String   @id @default(cuid())
+  queryText       String   @map("query_text")
+  queryEmbedding  Float[]  @map("query_embedding")
+  agentId         String?  @map("agent_id")
+  sessionKey      String?  @map("session_key")
+  resultsReturned Json     @map("results_returned") // [{memory_id, cosine_score, rank}]
+  resultCount     Int      @map("result_count")
+  latencyMs       Int      @map("latency_ms")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([agentId, createdAt])
+  @@index([sessionKey, createdAt])
+  @@index([createdAt])
+  @@map("query_logs")
+}
+
 enum AgentSessionStatus {
   ACTIVE
   COMPLETED
