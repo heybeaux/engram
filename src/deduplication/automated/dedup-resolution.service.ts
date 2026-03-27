@@ -124,6 +124,7 @@ export class DedupResolutionService {
           this.logger.log(
             `[DedupResolution] Skipping safety-critical pair: ${candidate.id}`,
           );
+          await this.markQueued(candidate.id, 'safety-critical');
           stats.queued++;
           stats.processed++;
           continue;
@@ -142,7 +143,7 @@ export class DedupResolutionService {
               );
               stats.autoMerged++;
             } else {
-              // Leave as CLASSIFIED — review queue picks it up
+              await this.markQueued(candidate.id, 'low-confidence');
               stats.queued++;
             }
             break;
@@ -158,16 +159,17 @@ export class DedupResolutionService {
               );
               stats.autoConsolidated++;
             } else if (confidence >= AUTO_CONSOLIDATE_CONFIDENCE_LOW) {
-              // 0.7–0.9: queue for review
+              await this.markQueued(candidate.id, 'overlapping-needs-review');
               stats.queued++;
             } else {
-              // < 0.7: skip
+              await this.markQueued(candidate.id, 'low-confidence');
               stats.queued++;
             }
             break;
 
           case 'CONFLICTING':
             // Always queue — never auto-resolve conflicts
+            await this.markQueued(candidate.id, 'conflicting');
             stats.queued++;
             break;
 
@@ -331,6 +333,16 @@ export class DedupResolutionService {
     await this.prisma.dedupCandidate.update({
       where: { id: candidateId },
       data: { status: 'RESOLVED', resolvedAt: new Date(), reasoning },
+    });
+  }
+
+  private async markQueued(
+    candidateId: string,
+    reasoning: string,
+  ): Promise<void> {
+    await this.prisma.dedupCandidate.update({
+      where: { id: candidateId },
+      data: { status: 'QUEUED', reasoning },
     });
   }
 

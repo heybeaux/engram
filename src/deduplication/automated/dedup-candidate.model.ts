@@ -11,7 +11,11 @@ export type DedupClassification =
   | 'CONFLICTING'
   | 'RELATED';
 
-export type AutoCandidateStatus = 'PENDING' | 'CLASSIFIED' | 'RESOLVED';
+export type AutoCandidateStatus =
+  | 'PENDING'
+  | 'CLASSIFIED'
+  | 'QUEUED'
+  | 'RESOLVED';
 
 /** pgvector cosine similarity threshold for candidate creation */
 export const COSINE_THRESHOLD = 0.88;
