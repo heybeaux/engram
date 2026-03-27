@@ -86,7 +86,7 @@ export class DreamCycleQueueProducer {
         backoff: { type: 'exponential' as const, delay: 5000 },
         removeOnComplete: { count: 100 },
         removeOnFail: { count: 50 },
-        timeout: DREAM_CYCLE_STAGE_TIMEOUTS[name],
+        // timeout not supported in BullMQ v5 JobsOptions; handled via worker lockDuration
       },
     };
     if (children?.length) {
