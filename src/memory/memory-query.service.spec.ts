@@ -35,6 +35,7 @@ describe('MemoryQueryService', () => {
 
     embedding = {
       generate: jest.fn().mockResolvedValue(mockEmbedding),
+      generateForRecall: jest.fn().mockResolvedValue(mockEmbedding),
       search: jest.fn().mockResolvedValue([]),
     } as any;
 
@@ -112,7 +113,7 @@ describe('MemoryQueryService', () => {
 
       expect(result.memories).toHaveLength(2);
       expect(result.latencyMs).toBeGreaterThanOrEqual(0);
-      expect(embedding.generate).toHaveBeenCalledWith('test query');
+      expect(embedding.generateForRecall).toHaveBeenCalledWith('test query');
     });
 
     it('should use temporal path when temporal intent detected', async () => {
@@ -759,7 +760,7 @@ describe('MemoryQueryService', () => {
 
       // embedding.generate should be called exactly once (for the query),
       // NOT twice (surfaceInsights reuses the cached embedding)
-      expect(embedding.generate).toHaveBeenCalledTimes(1);
+      expect(embedding.generateForRecall).toHaveBeenCalledTimes(1);
     });
 
     it('should use vector search for insight relevance instead of re-embedding each', async () => {
@@ -797,7 +798,7 @@ describe('MemoryQueryService', () => {
       // Second call should filter by INSIGHT layer
       expect(searchCalls[1][3]).toEqual(['INSIGHT']);
       // Should NOT re-embed each insight individually — only 1 generate call
-      expect(embedding.generate).toHaveBeenCalledTimes(1);
+      expect(embedding.generateForRecall).toHaveBeenCalledTimes(1);
     });
   });
 

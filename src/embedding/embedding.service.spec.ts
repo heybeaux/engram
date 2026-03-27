@@ -96,6 +96,20 @@ describe('EmbeddingService', () => {
       const result = await service.healthCheck();
       expect(result).toBe(true);
     });
+
+    it('should pass options through embedOneWithOptions', async () => {
+      mockLocalProvider.embed.mockResolvedValue([[0.1, 0.2, 0.3]]);
+
+      const result = await service.embedOneWithOptions('recall query', {
+        priority: 'recall',
+        timeoutMs: 5000,
+      });
+      expect(result).toEqual([0.1, 0.2, 0.3]);
+      expect(mockLocalProvider.embed).toHaveBeenCalledWith(['recall query'], {
+        priority: 'recall',
+        timeoutMs: 5000,
+      });
+    });
   });
 
   describe('with openai provider', () => {

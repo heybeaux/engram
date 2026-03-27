@@ -7,7 +7,7 @@ import { createHash } from 'crypto';
 
 const mockPrisma = {
   agent: { findUnique: jest.fn() },
-  user: { findUnique: jest.fn(), create: jest.fn() },
+  user: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
 };
 
 function createMockContext(overrides: {
@@ -210,7 +210,7 @@ describe('ApiKeyGuard', () => {
 
     expect(await guard.canActivate(ctx)).toBe(true);
     expect(mockPrisma.user.create).toHaveBeenCalledWith({
-      data: { accountId: 'acc-1', externalId: 'NewUser' },
+      data: { accountId: 'acc-1', externalId: 'newuser' },
     });
   });
 
@@ -318,5 +318,126 @@ describe('ApiKeyGuard', () => {
     await expect(guard.canActivate(ctx)).rejects.toThrow(
       'Missing X-AM-API-Key header',
     );
+  });
+
+  // --- ENG-109: Case-insensitive externalId ---
+
+  describe('ENG-109: case-insensitive externalId', () => {
+    const apiKey = 'engram_case';
+    const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
+    const agent = { id: 'agent-1', accountId: 'acc-1', apiKeyHash, deletedAt: null };
+
+    it('should normalize externalId to lowercase on lookup', async () => {
+      const user = { id: 'user-1', accountId: 'acc-1', externalId: 'beaux', deletedAt: null };
+      mockPrisma.agent.findUnique.mockResolvedValue(agent);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+
+      const ctx = createMockContext({
+        headers: { 'x-am-api-key': apiKey, 'x-am-user-id': 'Beaux' },
+      });
+
+      expect(await guard.canActivate(ctx)).toBe(true);
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+      });
+    });
+
+    it('should normalize BEAUX to beaux on lookup', async () => {
+      const user = { id: 'user-1', accountId: 'acc-1', externalId: 'beaux', deletedAt: null };
+      mockPrisma.agent.findUnique.mockResolvedValue(agent);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+
+      const ctx = createMockContext({
+        headers: { 'x-am-api-key': apiKey, 'x-am-user-id': 'BEAUX' },
+      });
+
+      expect(await guard.canActivate(ctx)).toBe(true);
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+      });
+    });
+
+    it('should create user with lowercase externalId when not found', async () => {
+      const newUser = { id: 'user-new', accountId: 'acc-1', externalId: 'beaux', deletedAt: null };
+      mockPrisma.agent.findUnique.mockResolvedValue(agent);
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue(newUser);
+
+      const ctx = createMockContext({
+        headers: { 'x-am-api-key': apiKey, 'x-am-user-id': 'Beaux' },
+      });
+
+      expect(await guard.canActivate(ctx)).toBe(true);
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: { accountId: 'acc-1', externalId: 'beaux' },
+      });
+    });
+  });
+
+  // --- ENG-109: Optional X-AM-User-ID ---
+
+  describe('ENG-109: optional X-AM-User-ID', () => {
+    const apiKey = 'engram_noid';
+    const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
+    const agent = { id: 'agent-1', accountId: 'acc-1', apiKeyHash, deletedAt: null };
+
+    it('should resolve default user when X-AM-User-ID is omitted', async () => {
+      const defaultUser = { id: 'user-default', accountId: 'acc-1', externalId: 'default', isDefault: true, deletedAt: null };
+      mockPrisma.agent.findUnique.mockResolvedValue(agent);
+      mockPrisma.user.findFirst.mockResolvedValue(defaultUser);
+
+      const request = {
+        headers: { 'x-am-api-key': apiKey },
+        ip: '203.0.113.1',
+        connection: { remoteAddress: '203.0.113.1' },
+      };
+      const ctx = {
+        switchToHttp: () => ({ getRequest: () => request }),
+      } as unknown as ExecutionContext;
+
+      expect(await guard.canActivate(ctx)).toBe(true);
+      expect((request as any).user).toEqual(defaultUser);
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+        where: { accountId: 'acc-1', isDefault: true, deletedAt: null },
+        orderBy: { createdAt: 'asc' },
+      });
+    });
+
+    it('should create default user when none exists and X-AM-User-ID is omitted', async () => {
+      const createdDefault = { id: 'user-new-default', accountId: 'acc-1', externalId: 'default', isDefault: true, deletedAt: null };
+      mockPrisma.agent.findUnique.mockResolvedValue(agent);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue(createdDefault);
+
+      const request = {
+        headers: { 'x-am-api-key': apiKey },
+        ip: '203.0.113.1',
+        connection: { remoteAddress: '203.0.113.1' },
+      };
+      const ctx = {
+        switchToHttp: () => ({ getRequest: () => request }),
+      } as unknown as ExecutionContext;
+
+      expect(await guard.canActivate(ctx)).toBe(true);
+      expect((request as any).user).toEqual(createdDefault);
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: { accountId: 'acc-1', externalId: 'default', isDefault: true },
+      });
+    });
+
+    it('should still scope to specific user when X-AM-User-ID is provided', async () => {
+      const user = { id: 'user-1', accountId: 'acc-1', externalId: 'beaux', deletedAt: null };
+      mockPrisma.agent.findUnique.mockResolvedValue(agent);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+
+      const ctx = createMockContext({
+        headers: { 'x-am-api-key': apiKey, 'x-am-user-id': 'beaux' },
+      });
+
+      expect(await guard.canActivate(ctx)).toBe(true);
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+      });
+    });
   });
 });

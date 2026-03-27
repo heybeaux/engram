@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectFlowProducer } from '@nestjs/bullmq';
-import { FlowProducer } from 'bullmq';
+import { FlowProducer, FlowJob } from 'bullmq';
 import { randomUUID } from 'crypto';
 import {
   DREAM_CYCLE_QUEUE,
   DREAM_CYCLE_JOBS,
+  DREAM_CYCLE_STAGE_TIMEOUTS,
   DreamCycleJobData,
+  DreamCycleJobName,
 } from './dream-cycle.queue';
 
 @Injectable()
@@ -32,68 +34,64 @@ export class DreamCycleQueueProducer {
       dryRun: options.dryRun ?? false,
       maxLlmCalls: options.maxLlmCalls,
       maxMemories: options.maxMemories,
-    };
-    const defaultOpts = {
-      attempts: 3,
-      backoff: { type: 'exponential' as const, delay: 5000 },
-      removeOnComplete: { count: 100 },
-      removeOnFail: { count: 50 },
-      // ENG-49: Bump job timeout to 3600s (1hr) to prevent dream cycle timeouts
-      // as memory corpus grows and Timeline Synthesis stage adds processing time.
-      // Previously defaulted to BullMQ default (no limit on some versions).
-      jobId: undefined,
-      delay: 0,
-      timeout: 3600000, // 1 hour in ms
+      cursor: { llmCallsUsed: 0 },
     };
 
-    await this.flowProducer.add({
-      name: DREAM_CYCLE_JOBS.REPORT,
-      queueName: DREAM_CYCLE_QUEUE,
-      data: jobData,
-      opts: defaultOpts,
-      children: [
-        {
-          name: DREAM_CYCLE_JOBS.IDENTITY,
-          queueName: DREAM_CYCLE_QUEUE,
-          data: jobData,
-          opts: defaultOpts,
-          children: [
-            {
-              name: DREAM_CYCLE_JOBS.PATTERNS,
-              queueName: DREAM_CYCLE_QUEUE,
-              data: jobData,
-              opts: defaultOpts,
-              children: [
-                {
-                  name: DREAM_CYCLE_JOBS.TIERING,
-                  queueName: DREAM_CYCLE_QUEUE,
-                  data: jobData,
-                  opts: defaultOpts,
-                  children: [
-                    {
-                      name: DREAM_CYCLE_JOBS.PENDING,
-                      queueName: DREAM_CYCLE_QUEUE,
-                      data: jobData,
-                      opts: defaultOpts,
-                    },
-                  ],
-                },
-              ],
-            },
-            {
-              name: DREAM_CYCLE_JOBS.DRIFT,
-              queueName: DREAM_CYCLE_QUEUE,
-              data: jobData,
-              opts: defaultOpts,
-            },
-          ],
-        },
-      ],
-    });
+    const flow = this.buildFlow(jobData);
+    await this.flowProducer.add(flow);
 
     this.logger.log(
       `Dream Cycle flow enqueued: runId=${runId} userId=${userId}`,
     );
     return runId;
+  }
+
+  /**
+   * Build the BullMQ FlowJob DAG.
+   *
+   * Execution order (children complete before parent):
+   *   PENDING → TIERING → CONSOLIDATION → PATTERNS → CLUSTERING → DRIFT → IDENTITY → REPORT
+   *
+   * Each stage is a separate job with independent retry & timeout.
+   */
+  buildFlow(jobData: DreamCycleJobData): FlowJob {
+    return this.job(DREAM_CYCLE_JOBS.REPORT, jobData, [
+      this.job(DREAM_CYCLE_JOBS.IDENTITY, jobData, [
+        this.job(DREAM_CYCLE_JOBS.DRIFT, jobData, [
+          this.job(DREAM_CYCLE_JOBS.CLUSTERING, jobData, [
+            this.job(DREAM_CYCLE_JOBS.PATTERNS, jobData, [
+              this.job(DREAM_CYCLE_JOBS.CONSOLIDATION, jobData, [
+                this.job(DREAM_CYCLE_JOBS.TIERING, jobData, [
+                  this.job(DREAM_CYCLE_JOBS.PENDING, jobData),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+  }
+
+  private job(
+    name: DreamCycleJobName,
+    data: DreamCycleJobData,
+    children?: FlowJob[],
+  ): FlowJob {
+    const node: FlowJob = {
+      name,
+      queueName: DREAM_CYCLE_QUEUE,
+      data,
+      opts: {
+        attempts: 3,
+        backoff: { type: 'exponential' as const, delay: 5000 },
+        removeOnComplete: { count: 100 },
+        removeOnFail: { count: 50 },
+        // timeout not supported in BullMQ v5 JobsOptions; handled via worker lockDuration
+      },
+    };
+    if (children?.length) {
+      node.children = children;
+    }
+    return node;
   }
 }

@@ -106,7 +106,7 @@ export class AwarenessController {
     };
   }
 
-  @Get('awareness/status')
+  @Get('status')
   @HttpCode(200)
   getStatus() {
     return {
@@ -123,7 +123,7 @@ export class AwarenessController {
     };
   }
 
-  @Post('awareness/cycle')
+  @Post('cycle')
   @HttpCode(200)
   async triggerCycle(@Query('accountId') accountId?: string) {
     if (!this.wakingCycle) {

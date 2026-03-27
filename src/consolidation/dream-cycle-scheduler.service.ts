@@ -48,12 +48,12 @@ export class DreamCycleSchedulerService implements OnModuleInit {
     const start = Date.now();
 
     try {
-      const result = await this.dreamCycle.run();
+      // ENG-97: Prefer BullMQ-based execution; falls back to sequential automatically
+      const { runId, mode } = await this.dreamCycle.runAsync();
       const durationSec = ((Date.now() - start) / 1000).toFixed(1);
       this.logger.log(
-        `Dream Cycle completed in ${durationSec}s - ` +
-          `status=${result.status}, merged=${result.duplicatesMerged}, ` +
-          `archived=${result.memoriesArchived}, patterns=${result.patternsCreated}`,
+        `Dream Cycle ${mode === 'queued' ? 'enqueued' : 'completed'} in ${durationSec}s - ` +
+          `runId=${runId}, mode=${mode}`,
       );
     } catch (error) {
       const durationSec = ((Date.now() - start) / 1000).toFixed(1);

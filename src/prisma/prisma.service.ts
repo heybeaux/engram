@@ -28,7 +28,7 @@ export class PrismaService
       adapter,
       transactionOptions: {
         maxWait: 10000,
-        timeout: 30000,
+        timeout: 120000,
       },
     });
 

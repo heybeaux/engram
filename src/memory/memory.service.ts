@@ -92,7 +92,7 @@ export class MemoryService {
    * Semantic search for memories — delegates to MemoryQueryService
    */
   async recall(
-    userId: string | string[],
+    userId: string | string[] | null,
     dto: QueryMemoryDto,
   ): Promise<QueryResult> {
     return this.queryService.recall(userId, dto);

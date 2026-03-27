@@ -35,7 +35,13 @@ export class AwarenessSourceService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit(): Promise<void> {
-    await this.loadFromDb();
+    try {
+      await this.loadFromDb();
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load signal sources on init (DB may not be ready): ${error.message}`,
+      );
+    }
   }
 
   private async loadFromDb(): Promise<void> {

@@ -19,6 +19,7 @@ import * as os from 'os';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
 import { assertSanityGate } from './dream-cycle-sanity-gate';
 import { HealthMetricsService } from '../health/health-metrics.service';
+import { DreamCycleQueueProducer } from './dream-cycle-queue.producer';
 
 // Advisory lock key for Dream Cycle (arbitrary unique int)
 const DREAM_CYCLE_LOCK_KEY = 294967;
@@ -87,11 +88,19 @@ export class DreamCycleService {
     @Optional() private trustProfileService?: TrustProfileService,
     @Optional() private eventEmitter?: EventEmitter2,
     @Optional() private readonly healthMetrics?: HealthMetricsService,
+    @Optional() private readonly queueProducer?: DreamCycleQueueProducer,
   ) {
     this.maxLlmCalls = parseInt(
       this.config.get('DREAM_MAX_LLM_CALLS') ?? '50',
       10,
     );
+  }
+
+  /**
+   * Returns true when BullMQ queue infrastructure is available (Redis connected).
+   */
+  get hasQueueBackend(): boolean {
+    return !!this.queueProducer;
   }
 
   async acquireLock(): Promise<boolean> {
@@ -136,6 +145,40 @@ export class DreamCycleService {
     } finally {
       await this.releaseLock();
     }
+  }
+
+  /**
+   * ENG-97: Enqueue the dream cycle as atomic BullMQ jobs when Redis is
+   * available. Each stage runs as an independent, retryable job.
+   * Falls back to sequential execution if Redis/queue is unavailable.
+   */
+  async runAsync(
+    options: DreamCycleOptions = {},
+  ): Promise<{ runId: string; mode: 'queued' | 'sequential' }> {
+    const userId =
+      options.userId || this.config.get<string>('DEFAULT_USER_ID') || 'default';
+
+    if (this.queueProducer) {
+      try {
+        const runId = await this.queueProducer.enqueue(userId, {
+          dryRun: options.dryRun,
+          maxLlmCalls: this.maxLlmCalls,
+          maxMemories: options.maxMemories,
+        });
+        this.log(`Dream Cycle enqueued via BullMQ: runId=${runId}`);
+        return { runId, mode: 'queued' };
+      } catch (err) {
+        this.log(
+          `BullMQ enqueue failed, falling back to sequential: ${(err as Error).message}`,
+          undefined,
+          'error',
+        );
+      }
+    }
+
+    // Fallback: run synchronously
+    const result = await this.run(options);
+    return { runId: result.id, mode: 'sequential' };
   }
 
   private async runInternal(

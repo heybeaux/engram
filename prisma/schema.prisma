@@ -2184,7 +2184,7 @@ model DedupCandidate {
   mergedContent  String? @map("merged_content")
   reasoning      String?
 
-  /// PENDING | CLASSIFIED | RESOLVED
+  /// PENDING | CLASSIFIED | QUEUED | RESOLVED
   status       String    @default("PENDING")
   classifiedAt DateTime? @map("classified_at")
   resolvedAt   DateTime? @map("resolved_at")

@@ -216,13 +216,15 @@ export class ApiKeyGuard implements CanActivate {
    */
   private async findOrCreateUser(accountId: string, externalId: string | null) {
     if (externalId) {
+      // ENG-109: Normalize to lowercase for case-insensitive matching
+      const normalizedId = externalId.toLowerCase();
       // Attempt findUnique first (happy path)
       let user = await this.prisma.user.findUnique({
-        where: { accountId_externalId: { accountId, externalId } },
+        where: { accountId_externalId: { accountId, externalId: normalizedId } },
       });
       if (!user) {
         user = await this.prisma.user.create({
-          data: { accountId, externalId },
+          data: { accountId, externalId: normalizedId },
         });
       }
       return user;

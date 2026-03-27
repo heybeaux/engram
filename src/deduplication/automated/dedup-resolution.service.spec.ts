@@ -90,7 +90,7 @@ describe('DedupResolutionService', () => {
       expect(mockPrisma.$transaction).toHaveBeenCalled();
     });
 
-    it('queues DUPLICATE candidates with confidence < 0.7 for review', async () => {
+    it('queues DUPLICATE candidates with confidence < 0.7 for review and updates status to QUEUED', async () => {
       mockPrisma.dedupCandidate.findMany.mockResolvedValue([
         makeCandidate({ classification: 'DUPLICATE', confidence: 0.5 }),
       ]);
@@ -100,6 +100,11 @@ describe('DedupResolutionService', () => {
       expect(stats.autoMerged).toBe(0);
       expect(stats.queued).toBe(1);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'QUEUED' }),
+        }),
+      );
     });
 
     it('auto-merges SUPPORTING candidates with confidence >= 0.7', async () => {
@@ -120,7 +125,7 @@ describe('DedupResolutionService', () => {
       expect(stats.autoConsolidated).toBe(1);
     });
 
-    it('queues OVERLAPPING with confidence 0.7–0.9 for review', async () => {
+    it('queues OVERLAPPING with confidence 0.7–0.9 for review and updates status to QUEUED', async () => {
       mockPrisma.dedupCandidate.findMany.mockResolvedValue([
         makeCandidate({ classification: 'OVERLAPPING', confidence: 0.8 }),
       ]);
@@ -128,9 +133,14 @@ describe('DedupResolutionService', () => {
       const stats = await service.processClassifiedCandidates();
       expect(stats.queued).toBe(1);
       expect(stats.autoConsolidated).toBe(0);
+      expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'QUEUED' }),
+        }),
+      );
     });
 
-    it('always queues CONFLICTING candidates — never auto-merges', async () => {
+    it('always queues CONFLICTING candidates with QUEUED status — never auto-merges', async () => {
       mockPrisma.dedupCandidate.findMany.mockResolvedValue([
         makeCandidate({ classification: 'CONFLICTING', confidence: 0.99 }),
       ]);
@@ -141,6 +151,11 @@ describe('DedupResolutionService', () => {
       expect(stats.autoMerged).toBe(0);
       expect(stats.autoConsolidated).toBe(0);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'QUEUED' }),
+        }),
+      );
     });
 
     it('marks RELATED candidates resolved immediately without merge', async () => {
@@ -159,7 +174,7 @@ describe('DedupResolutionService', () => {
       );
     });
 
-    it('never auto-merges CONSTRAINT-type memories', async () => {
+    it('never auto-merges CONSTRAINT-type memories — marks QUEUED', async () => {
       mockPrisma.dedupCandidate.findMany.mockResolvedValue([
         makeCandidate({
           classification: 'DUPLICATE',
@@ -173,9 +188,14 @@ describe('DedupResolutionService', () => {
       expect(stats.autoMerged).toBe(0);
       expect(stats.queued).toBe(1);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'QUEUED' }),
+        }),
+      );
     });
 
-    it('never auto-merges safety-critical memories', async () => {
+    it('never auto-merges safety-critical memories — marks QUEUED', async () => {
       mockPrisma.dedupCandidate.findMany.mockResolvedValue([
         makeCandidate({
           classification: 'DUPLICATE',
@@ -188,6 +208,11 @@ describe('DedupResolutionService', () => {
 
       expect(stats.autoMerged).toBe(0);
       expect(stats.queued).toBe(1);
+      expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'QUEUED' }),
+        }),
+      );
     });
 
     it('creates MemoryMergeEvent with canRollback: true on auto-merge', async () => {
