@@ -15,17 +15,41 @@ import {
   AwarenessSourceService,
   SignalSourceConfig,
 } from './awareness-source.service';
+import {
+  IsString,
+  IsIn,
+  IsBoolean,
+  IsObject,
+  IsOptional,
+} from 'class-validator';
 
 class CreateSourceDto {
+  @IsString()
   name: string;
+
+  @IsIn(['linear', 'github', 'memory', 'custom'])
   type: 'linear' | 'github' | 'memory' | 'custom';
+
+  @IsOptional()
+  @IsBoolean()
   enabled?: boolean;
+
+  @IsOptional()
+  @IsObject()
   config?: Record<string, any>;
 }
 
 class UpdateSourceDto {
+  @IsOptional()
+  @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsBoolean()
   enabled?: boolean;
+
+  @IsOptional()
+  @IsObject()
   config?: Record<string, any>;
 }
 
