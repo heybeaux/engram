@@ -6,8 +6,24 @@ import { MemoryDedupService } from './memory-dedup.service';
 import { MemoryLayer, MemorySource } from '@prisma/client';
 import { Job } from 'bullmq';
 import { EmbedMemoryJobData } from './embedding.queue';
+import { EMBEDDING_QUEUE } from './embedding.queue';
 
 describe('EmbeddingQueueProcessor', () => {
+  it('should register with concurrency 2', () => {
+    const processorMeta = Reflect.getMetadata(
+      'bullmq:processor_metadata',
+      EmbeddingQueueProcessor,
+    );
+    expect(processorMeta).toBeDefined();
+    expect(processorMeta.name).toBe(EMBEDDING_QUEUE);
+
+    const workerMeta = Reflect.getMetadata(
+      'bullmq:worker_metadata',
+      EmbeddingQueueProcessor,
+    );
+    expect(workerMeta).toBeDefined();
+    expect(workerMeta.concurrency).toBe(2);
+  });
   let processor: EmbeddingQueueProcessor;
   let mockPipeline: jest.Mocked<Partial<MemoryPipelineService>>;
   let mockPrisma: any;

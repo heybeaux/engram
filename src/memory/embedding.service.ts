@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger, Optional } from '@nestjs/common';
 import { MemoryLayer } from '@prisma/client';
 import { LLMService } from '../llm/llm.service';
 import { VectorService } from '../vector/vector.service';
+import { EmbeddingService as EmbedFacade } from '../embedding/embedding.service';
 
 export interface VectorSearchResult {
   id: string;
@@ -26,9 +27,12 @@ export class EmbeddingService {
   private readonly COOLDOWN_MS = 60_000; // 1 minute cooldown
   private readonly logger = new Logger(EmbeddingService.name);
 
+  private static readonly RECALL_TIMEOUT_MS = 5_000;
+
   constructor(
     private llm: LLMService,
     private vector: VectorService,
+    @Optional() @Inject(EmbedFacade) private embedFacade?: EmbedFacade,
   ) {}
 
   /**
@@ -71,6 +75,36 @@ export class EmbeddingService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Generate embedding for a recall query with priority flag and shorter timeout.
+   * Sends X-Priority: recall to engram-embed so the request skips the batch queue.
+   * Falls back to standard generate() if the facade is unavailable.
+   */
+  async generateForRecall(text: string): Promise<number[]> {
+    if (this.embedFacade) {
+      try {
+        const embedding = await this.embedFacade.embedOneWithOptions(text, {
+          priority: 'recall',
+          timeoutMs: EmbeddingService.RECALL_TIMEOUT_MS,
+        });
+        this.dimensions = embedding.length;
+        // Reset circuit breaker on success (recall proves service is up)
+        if (this.consecutiveFailures > 0) {
+          this.logger.log(
+            `[CircuitBreaker] Recovered via recall after ${this.consecutiveFailures} failures`,
+          );
+        }
+        this.consecutiveFailures = 0;
+        return embedding;
+      } catch (error) {
+        this.logger.warn(
+          `[Recall] Priority embed failed, falling back to standard: ${(error as Error).message}`,
+        );
+      }
+    }
+    return this.generate(text);
   }
 
   /**

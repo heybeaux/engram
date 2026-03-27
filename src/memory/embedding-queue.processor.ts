@@ -10,7 +10,7 @@ import {
 } from './memory-dedup.service';
 import { MemoryLayer, MemorySource } from '@prisma/client';
 
-@Processor(EMBEDDING_QUEUE)
+@Processor(EMBEDDING_QUEUE, { concurrency: 2 })
 export class EmbeddingQueueProcessor extends WorkerHost {
   private readonly logger = new Logger(EmbeddingQueueProcessor.name);
 

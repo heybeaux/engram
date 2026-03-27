@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmbeddingProvider } from './embedding-provider.interface';
+import { EmbeddingProvider, EmbedOptions } from './embedding-provider.interface';
 import { LocalEmbedProvider } from './local-embed.provider';
 import { OpenAIEmbedProvider } from './openai-embed.provider';
 import { CloudEnsembleEmbedProvider } from './cloud-ensemble-embed.provider';
@@ -50,6 +50,18 @@ export class EmbeddingService implements OnModuleInit {
    */
   async embedOne(text: string): Promise<number[]> {
     const results = await this.provider.embed([text]);
+    return results[0];
+  }
+
+  /**
+   * Generate embedding with priority and timeout options.
+   * Used by recall path to skip batch queue on engram-embed.
+   */
+  async embedOneWithOptions(
+    text: string,
+    options: EmbedOptions,
+  ): Promise<number[]> {
+    const results = await this.provider.embed([text], options);
     return results[0];
   }
 

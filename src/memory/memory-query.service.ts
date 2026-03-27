@@ -109,8 +109,8 @@ export class MemoryQueryService {
       });
     }
 
-    // 2. Generate query embedding
-    const queryEmbedding = await this.embedding.generate(searchQuery);
+    // 2. Generate query embedding (priority path — skips batch queue)
+    const queryEmbedding = await this.embedding.generateForRecall(searchQuery);
 
     const subjectTypeFilter = this.buildSubjectTypeFilter(dto);
     const visibilityFilter = this.buildVisibilityFilter(dto);

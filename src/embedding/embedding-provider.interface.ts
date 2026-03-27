@@ -6,6 +6,13 @@
  */
 export const EMBEDDING_PROVIDER_TOKEN = 'EMBEDDING_PROVIDER';
 
+export interface EmbedOptions {
+  /** Priority level — 'recall' skips batch queue on engram-embed */
+  priority?: 'recall' | 'batch';
+  /** Request timeout in milliseconds */
+  timeoutMs?: number;
+}
+
 export interface EmbeddingProvider {
   /** Provider identifier */
   readonly name: string;
@@ -14,7 +21,7 @@ export interface EmbeddingProvider {
    * Generate embeddings for one or more texts.
    * Returns one embedding vector per input text.
    */
-  embed(texts: string[]): Promise<number[][]>;
+  embed(texts: string[], options?: EmbedOptions): Promise<number[][]>;
 
   /** Model name used for embeddings */
   getModelName(): string;

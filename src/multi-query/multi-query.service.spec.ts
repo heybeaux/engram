@@ -27,6 +27,7 @@ describe('MultiQueryService', () => {
 
   const mockEmbedding = {
     generate: jest.fn(),
+    generateForRecall: jest.fn(),
     search: jest.fn(),
   };
 
@@ -92,6 +93,7 @@ describe('MultiQueryService', () => {
 
     mockExpansion.expand.mockResolvedValue(mockExpansionResult);
     mockEmbedding.generate.mockResolvedValue(Array(768).fill(0.1));
+    mockEmbedding.generateForRecall.mockResolvedValue(Array(768).fill(0.1));
     mockEmbedding.search.mockResolvedValue([
       { id: 'mem_1', score: 0.95 },
       { id: 'mem_2', score: 0.85 },
@@ -159,7 +161,7 @@ describe('MultiQueryService', () => {
       await service.search('test query', 'user_123');
 
       // Should be called once per variant
-      expect(mockEmbedding.generate).toHaveBeenCalledTimes(3);
+      expect(mockEmbedding.generateForRecall).toHaveBeenCalledTimes(3);
     });
 
     it('should search vector store for each variant', async () => {

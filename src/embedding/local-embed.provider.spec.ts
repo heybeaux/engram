@@ -113,6 +113,66 @@ describe('LocalEmbedProvider', () => {
         'Invalid response',
       );
     });
+
+    it('should send X-Priority header when priority option is set', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ embedding: [0.1, 0.2] }],
+        }),
+      });
+
+      await provider.embed(['recall query'], { priority: 'recall' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8080/v1/embeddings',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Priority': 'recall',
+          },
+        }),
+      );
+    });
+
+    it('should not send X-Priority header when no priority option', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ embedding: [0.1, 0.2] }],
+        }),
+      });
+
+      await provider.embed(['test']);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8080/v1/embeddings',
+        expect.objectContaining({
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+
+    it('should abort request when timeout expires', async () => {
+      jest.useFakeTimers();
+      mockFetch.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            if (init.signal) {
+              init.signal.addEventListener('abort', () =>
+                reject(new DOMException('Aborted', 'AbortError')),
+              );
+            }
+          }),
+      );
+
+      const promise = provider.embed(['slow'], { timeoutMs: 100 });
+      jest.advanceTimersByTime(100);
+
+      await expect(promise).rejects.toThrow();
+      jest.useRealTimers();
+    });
   });
 
   describe('healthCheck', () => {
