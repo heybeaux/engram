@@ -47,6 +47,7 @@ describe('DreamCycleQueueProcessor', () => {
   let tracker: any;
   let pendingStage: any;
   let tieringStage: any;
+  let consolidationStage: any;
   let patternsStage: any;
   let driftStage: any;
   let identityStage: any;
@@ -79,7 +80,7 @@ describe('DreamCycleQueueProcessor', () => {
 
     pendingStage = { run: jest.fn() };
     tieringStage = { run: jest.fn() };
-    const consolidationStage = { run: jest.fn().mockResolvedValue({ consolidated: 0 }) };
+    consolidationStage = { run: jest.fn().mockResolvedValue({ consolidated: 0 }) };
     patternsStage = { run: jest.fn() };
     driftStage = { run: jest.fn() };
     identityStage = { run: jest.fn() };
