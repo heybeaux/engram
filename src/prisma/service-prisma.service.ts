@@ -24,7 +24,13 @@ export class ServicePrismaService
     const connectionString =
       process.env.DATABASE_URL_SERVICE || process.env.DATABASE_URL;
     const adapter = new PrismaPg({ connectionString });
-    super({ adapter });
+    super({
+      adapter,
+      transactionOptions: {
+        maxWait: 10000,
+        timeout: 120000,
+      },
+    });
   }
 
   async onModuleInit() {
