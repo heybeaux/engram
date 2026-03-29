@@ -41,6 +41,8 @@ Engram is a memory layer for AI agents — store, recall, and evolve memories wi
 - 🛡️ **Safety-critical detection** — 16 patterns for allergies, medications, legal directives
 - ⏰ **Temporal reasoning** — understands "yesterday," "last week," natural language time
 - 📊 **Fog Index** — cognitive health scoring to monitor memory drift
+- 📅 **Agent Timeline** — date-anchored chapters, arcs, events, and decisions for structured agent history
+- 📈 **Retrieval Signals** — query logging, latency tracking, and bandit arm propensity for recall optimization
 
 ## Quick Start
 
@@ -123,6 +125,19 @@ Engram is built on NestJS with PostgreSQL + pgvector for storage. The system inc
 - **Dream Cycle** — 4-stage consolidation: dedup → staleness → patterns → report
 - **engram-embed** — Local Rust embedding server with Metal GPU acceleration (~10ms per vector)
 - **Dashboard** — Next.js app for memory browsing, knowledge graph visualization, and system monitoring
+
+### Module Overview (57 modules)
+
+| Category | Modules |
+|----------|---------|
+| **Core Memory** | `memory`, `consolidation`, `summarization`, `correction`, `deduplication`, `hierarchy`, `memory-access-log`, `memory-pool` |
+| **Search & Retrieval** | `multi-query`, `ensemble`, `embedding`, `reembedding`, `vector`, `prefetch`, `scoped-context`, `fog-index`, `retrieval-signals` |
+| **Identity & Agents** | `identity`, `agent`, `agent-recall`, `agent-session`, `entity-profile`, `delegation`, `anticipatory` |
+| **Timeline & Sessions** | `timeline`, `session-indexing` |
+| **Infrastructure** | `account`, `prisma`, `storage`, `llm`, `common`, `health`, `monitoring`, `rate-limit`, `queue`, `events`, `utils`, `instance` |
+| **Sync & Integration** | `cloud-sync`, `cloud-link`, `import`, `import-v2`, `inbound-email`, `webhooks` |
+| **Analytics & Insights** | `analytics`, `awareness`, `dashboard`, `auto`, `graph`, `clustering`, `eval` |
+| **Billing & Auth** | `billing`, `stripe`, `challenge`, `teams`, `feedback`, `scripts` |
 
 See the [Architecture Documentation](./docs/ARCHITECTURE.md) for the full technical breakdown.
 
