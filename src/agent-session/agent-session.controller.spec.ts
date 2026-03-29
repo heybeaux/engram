@@ -6,7 +6,7 @@ import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 
 describe('AgentSessionController', () => {
   let controller: AgentSessionController;
-  let service: jest.Mocked<Partial<AgentSessionService>>;
+  let service: any;
 
   const mockSession = {
     id: 'as-1',

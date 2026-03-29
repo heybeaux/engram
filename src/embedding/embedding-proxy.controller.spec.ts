@@ -5,7 +5,7 @@ import { ApiKeyGuard } from '../common/guards/api-key.guard';
 
 describe('EmbeddingProxyController', () => {
   let controller: EmbeddingProxyController;
-  let embeddingService: jest.Mocked<Partial<EmbeddingService>>;
+  let embeddingService: any;
 
   beforeEach(async () => {
     embeddingService = {

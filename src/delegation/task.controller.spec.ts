@@ -6,7 +6,7 @@ import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 
 describe('TaskController', () => {
   let controller: TaskController;
-  let service: jest.Mocked<Partial<TaskService>>;
+  let service: any;
 
   const mockTask = {
     id: 'task-1',

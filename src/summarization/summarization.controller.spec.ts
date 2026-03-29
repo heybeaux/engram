@@ -5,7 +5,7 @@ import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 
 describe('SummarizationController', () => {
   let controller: SummarizationController;
-  let service: jest.Mocked<Partial<SummarizationService>>;
+  let service: any;
 
   beforeEach(async () => {
     service = {

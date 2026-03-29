@@ -6,7 +6,7 @@ import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 
 describe('AwarenessSourceController', () => {
   let controller: AwarenessSourceController;
-  let service: jest.Mocked<Partial<AwarenessSourceService>>;
+  let service: any;
 
   const mockSource = {
     id: 'src-1',
