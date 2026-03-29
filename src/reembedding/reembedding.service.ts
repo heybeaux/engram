@@ -9,6 +9,7 @@ import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from '../memory/embedding.service';
 import { EmbeddingService as EmbeddingProviderService } from '../embedding/embedding.service';
+import { rlsContext } from '../prisma/rls-context';
 import {
   ContextEnricherService,
   MemoryWithRelations,
@@ -153,16 +154,21 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
     this.persistJob(job).catch(() => {});
     this.persistCurrentJob(jobId).catch(() => {});
 
-    // Start processing asynchronously
-    this.runJob(jobId).catch((error) => {
-      this.logger.error(`[ReembeddingService] Job ${jobId} failed:`, error);
-      const failedJob = this.jobs.get(jobId);
-      if (failedJob) {
-        failedJob.status = ReembeddingJobStatus.FAILED;
-        failedJob.error = error.message;
-        failedJob.completedAt = new Date();
-        this.persistJob(failedJob).catch(() => {});
-      }
+    // Start processing asynchronously — run OUTSIDE the current AsyncLocalStorage
+    // context so the RLS transaction from the HTTP request (already committed
+    // by the time this callback runs) does not leak into the job's DB queries.
+    rlsContext.run(undefined as any, () => {
+      this.runJob(jobId).catch((error) => {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        this.logger.error(`[ReembeddingService] Job ${jobId} failed: ${errMsg}`);
+        const failedJob = this.jobs.get(jobId);
+        if (failedJob) {
+          failedJob.status = ReembeddingJobStatus.FAILED;
+          failedJob.error = errMsg;
+          failedJob.completedAt = new Date();
+          this.persistJob(failedJob).catch(() => {});
+        }
+      });
     });
 
     return this.toDto(job);
@@ -300,11 +306,12 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
       if (!healthy) {
         const provider = this.embeddingProvider.getProviderName();
         throw new Error(
-          `Embedding provider '${provider}' is not reachable. ` +
+          `Embedding provider '${provider}' health check failed. ` +
             (provider === 'local'
               ? 'The local engram-embed server (port 8080) is not running. ' +
                 'Set EMBEDDING_PROVIDER=cloud-ensemble for cloud deployments.'
-              : 'Check provider configuration and API keys.'),
+              : 'Check OPENAI_API_KEY and COHERE_API_KEY are set and quota is not exhausted. ' +
+                'See logs for per-model error details.'),
         );
       }
 

@@ -45,7 +45,18 @@ export class CloudEnsembleEmbedProvider implements EmbeddingProvider {
   }
 
   async healthCheck(): Promise<boolean> {
+    // If not yet initialized (e.g. first request race), try initializing now
     if (!this.cloudEnsemble.isAvailable()) {
+      this.logger.warn(
+        'CloudEnsembleService not available — attempting lazy initialize',
+      );
+      await this.cloudEnsemble.initialize();
+    }
+
+    if (!this.cloudEnsemble.isAvailable()) {
+      this.logger.error(
+        'CloudEnsembleService unavailable after initialize — check OPENAI_API_KEY',
+      );
       return false;
     }
 
@@ -54,9 +65,16 @@ export class CloudEnsembleEmbedProvider implements EmbeddingProvider {
         'health check',
         'document',
       );
-      return response.embeddings.length > 0;
+      if (response.embeddings.length === 0) {
+        const errs = response.errors?.map((e) => `${e.model}: ${e.error}`).join(', ');
+        this.logger.error(
+          `Health check: all models failed — ${errs ?? 'unknown error'}`,
+        );
+        return false;
+      }
+      return true;
     } catch (err) {
-      this.logger.warn(`Health check failed: ${err}`);
+      this.logger.warn(`Health check failed: ${err instanceof Error ? err.message : err}`);
       return false;
     }
   }
