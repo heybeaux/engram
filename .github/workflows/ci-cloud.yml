@@ -129,7 +129,7 @@ jobs:
       - name: Test — core modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPattern='src/(memory|identity|account|common|app\.controller)'
+            --testPathPatterns='src/(memory|identity|account|common|app\.controller)'
 
   # ── 4b. Test shard — intelligence ────────────────────────────────────────
   test-intelligence:
@@ -173,7 +173,7 @@ jobs:
       - name: Test — intelligence modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPattern='src/(deduplication|awareness|multi-query|consolidation|prefetch|retrieval-signals|graph|clustering|hierarchy|ensemble)'
+            --testPathPatterns='src/(deduplication|awareness|multi-query|consolidation|prefetch|retrieval-signals|graph|clustering|hierarchy|ensemble)'
 
   # ── 4c. Test shard — cloud-edition features ───────────────────────────────
   test-cloud:
@@ -217,7 +217,7 @@ jobs:
       - name: Test — cloud-edition modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPattern='src/(cloud-link|cloud-sync|instance|webhooks|analytics|monitoring|stripe|reembedding)'
+            --testPathPatterns='src/(cloud-link|cloud-sync|instance|webhooks|analytics|monitoring|stripe|reembedding)'
 
   # ── 4d. Test shard — remaining features ──────────────────────────────────
   test-features:
@@ -261,7 +261,7 @@ jobs:
       - name: Test — remaining feature modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPattern='src/(llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|eval|dashboard)'
+            --testPathPatterns='src/(llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|eval|dashboard)'
 
   # ── 5. Gate ───────────────────────────────────────────────────────────────
   tests-passed:

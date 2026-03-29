@@ -136,8 +136,8 @@ jobs:
       - name: Test — core modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPattern='src/(memory|identity|account|common|app\.controller)' \
-            --testPathIgnorePatterns='cloud-link|cloud-sync'
+            --testPathPatterns='src/(memory|identity|account|common|app\.controller)' \
+            --testPathIgnorePattern='cloud-link|cloud-sync'
 
   # ── 4b. Test shard — intelligence (recall, dedup, awareness, ensemble) ───
   test-intelligence:
@@ -181,7 +181,7 @@ jobs:
       - name: Test — intelligence modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPattern='src/(deduplication|awareness|multi-query|consolidation|prefetch|retrieval-signals|graph|clustering|hierarchy)'
+            --testPathPatterns='src/(deduplication|awareness|multi-query|consolidation|prefetch|retrieval-signals|graph|clustering|hierarchy)'
 
   # ── 4c. Test shard — features (agent, llm, import, health, etc.) ─────────
   test-features:
@@ -225,8 +225,8 @@ jobs:
       - name: Test — feature modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPattern='src/(llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|instance|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|webhooks)' \
-            --testPathIgnorePatterns='cloud-link|cloud-sync|ensemble|stripe|analytics|monitoring|eval|reembedding|webhook'
+            --testPathPatterns='src/(llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|instance|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|webhooks)' \
+            --testPathIgnorePattern='cloud-link|cloud-sync|ensemble|stripe|analytics|monitoring|eval|reembedding|webhook'
 
   # ── 5. Gate — all tests must pass ────────────────────────────────────────
   tests-passed:
