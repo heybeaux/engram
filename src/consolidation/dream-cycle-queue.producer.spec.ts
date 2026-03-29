@@ -84,15 +84,16 @@ describe('DreamCycleQueueProducer', () => {
       expect(identityJob).toBeDefined();
     });
 
-    it('should nest PATTERNS under IDENTITY', async () => {
+    it('should nest PATTERNS under IDENTITY (via DRIFT → CLUSTERING)', async () => {
       await producer.enqueue('user-1');
       const call = mockFlowProducer.add.mock.calls[0][0];
       const identityJob = call.children.find(
         (c: any) => c.name === DREAM_CYCLE_JOBS.IDENTITY,
       );
-      const patternsJob = identityJob.children.find(
-        (c: any) => c.name === DREAM_CYCLE_JOBS.PATTERNS,
-      );
+      // IDENTITY → DRIFT → CLUSTERING → PATTERNS
+      const driftJob = identityJob?.children?.find((c: any) => c.name === DREAM_CYCLE_JOBS.DRIFT);
+      const clusteringJob = driftJob?.children?.find((c: any) => c.name === DREAM_CYCLE_JOBS.CLUSTERING);
+      const patternsJob = clusteringJob?.children?.find((c: any) => c.name === DREAM_CYCLE_JOBS.PATTERNS);
       expect(patternsJob).toBeDefined();
     });
 

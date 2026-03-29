@@ -7,7 +7,7 @@ import { Logger } from '@nestjs/common';
 
 describe('DreamCycleSchedulerService', () => {
   let service: DreamCycleSchedulerService;
-  let dreamCycle: { run: jest.Mock };
+  let dreamCycle: { run: jest.Mock; runAsync: jest.Mock };
   let configValues: Record<string, string>;
   let logSpy: jest.SpyInstance;
   let errorSpy: jest.SpyInstance;
@@ -20,7 +20,7 @@ describe('DreamCycleSchedulerService', () => {
       DREAM_CYCLE_TZ: 'UTC',
     };
 
-    dreamCycle = { run: jest.fn() };
+    dreamCycle = { run: jest.fn(), runAsync: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -89,26 +89,21 @@ describe('DreamCycleSchedulerService', () => {
 
   describe('handleDreamCycleCron', () => {
     it('should call dreamCycle.run and log success', async () => {
-      dreamCycle.run.mockResolvedValue({
-        status: 'COMPLETED',
-        duplicatesMerged: 5,
-        memoriesArchived: 3,
-        patternsCreated: 2,
-      });
+      dreamCycle.runAsync.mockResolvedValue({ runId: 'run-123', mode: 'queued' });
 
       await service.handleDreamCycleCron();
 
-      expect(dreamCycle.run).toHaveBeenCalledTimes(1);
+      expect(dreamCycle.runAsync).toHaveBeenCalledTimes(1);
       expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('status=COMPLETED'),
+        expect.stringContaining('runId=run-123'),
       );
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('merged=5'));
+      
     });
 
     it('should log error when dreamCycle.run throws', async () => {
       const error = new Error('Database connection lost');
       error.stack = 'Error: Database connection lost\n    at test';
-      dreamCycle.run.mockRejectedValue(error);
+      dreamCycle.runAsync.mockRejectedValue(error);
 
       await service.handleDreamCycleCron();
 
@@ -144,7 +139,7 @@ describe('DreamCycleSchedulerService', () => {
       const disabledService = module.get(DreamCycleSchedulerService);
       await disabledService.handleDreamCycleCron();
 
-      expect(dreamCycle.run).not.toHaveBeenCalled();
+      expect(dreamCycle.runAsync).not.toHaveBeenCalled();
     });
   });
 });

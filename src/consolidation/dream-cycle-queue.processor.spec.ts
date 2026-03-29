@@ -167,7 +167,7 @@ describe('DreamCycleQueueProcessor', () => {
       );
 
       expect(patternsStage.run).toHaveBeenCalledWith('user-1', false, 50);
-      expect(result).toEqual({ patternsCreated: 7 });
+      expect(result).toEqual(expect.objectContaining({ patternsCreated: 7 }));
     });
 
     it('should default maxLlmCalls to 50 when undefined', async () => {
@@ -227,7 +227,7 @@ describe('DreamCycleQueueProcessor', () => {
     it('should return COMPLETED status', async () => {
       const result = await processor.process(makeJob(DREAM_CYCLE_JOBS.REPORT));
 
-      expect(result).toEqual({ status: 'COMPLETED', runId: 'run-1' });
+      expect(result).toEqual(expect.objectContaining({ status: 'COMPLETED', runId: 'run-1' }));
       expect(tracker.completeStage).toHaveBeenCalled();
     });
   });
