@@ -94,7 +94,8 @@ jobs:
           path: dist
           key: dist-local-${{ github.sha }}
 
-  # ── 4a. Test shard — core (memory, identity, account, common) ───────────
+  # ── 4a. Test shard — core (memory, common) ─────────────────────────────
+  # memory has 41 specs + common; identity/account moved to features shard
   test-core:
     name: Test / core
     runs-on: ubuntu-latest
@@ -136,7 +137,7 @@ jobs:
       - name: Test — core modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(memory|identity|account|common|app\.controller)' \
+            --testPathPatterns='src/(memory|common|app\.controller)' \
             --testPathIgnorePattern='cloud-link|cloud-sync'
 
   # ── 4b. Test shard — intelligence (recall, dedup, awareness, ensemble) ───
@@ -225,7 +226,7 @@ jobs:
       - name: Test — feature modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|instance|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|webhooks)' \
+            --testPathPatterns='src/(identity|account|llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|instance|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|webhooks)' \
             --testPathIgnorePattern='cloud-link|cloud-sync|ensemble|stripe|analytics|monitoring|eval|reembedding|webhook'
 
   # ── 5. Gate — all tests must pass ────────────────────────────────────────
