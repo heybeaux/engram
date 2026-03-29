@@ -63,14 +63,14 @@ describe('SessionIndexingController', () => {
     });
 
     it('should parse limit and offset query params', async () => {
-      service.getSessionMemories.mockResolvedValue([]);
+      service.getSessionMemories.mockResolvedValue({ sessionId: 's1', memories: [], total: 0 } as any);
 
       await controller.getSessionMemories(userId, 's1', '10', '5');
       expect(service.getSessionMemories).toHaveBeenCalledWith(userId, 's1', 10, 5);
     });
 
     it('should handle only limit provided', async () => {
-      service.getSessionMemories.mockResolvedValue([]);
+      service.getSessionMemories.mockResolvedValue({ sessionId: 's1', memories: [], total: 0 } as any);
 
       await controller.getSessionMemories(userId, 's1', '20');
       expect(service.getSessionMemories).toHaveBeenCalledWith(userId, 's1', 20, undefined);
