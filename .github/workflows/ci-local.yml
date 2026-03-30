@@ -135,13 +135,13 @@ jobs:
         run: npx prisma migrate deploy
       - name: Test — memory module
         run: |
-          set -o pipefail
-          npx jest --no-coverage --forceExit --ci \
-            --testPathPatterns='src/memory'
+          # Run jest; on completion, kill the entire process subtree
+          setsid npx jest --no-coverage --forceExit --ci \
+            --testPathPatterns='src/memory' &
+          JEST_PID=$!
+          wait $JEST_PID
           STATUS=$?
-          # Force-kill any lingering jest workers
-          pkill -9 -f "jest-worker" 2>/dev/null || true
-          pkill -9 -f "ts-jest" 2>/dev/null || true
+          kill -- -$(ps -o pgid= -p $JEST_PID 2>/dev/null | tr -d ' ') 2>/dev/null || true
           exit $STATUS
 
   # ── 4b. Test shard — common + app bootstrap
@@ -187,12 +187,12 @@ jobs:
         run: npx prisma migrate deploy
       - name: Test — intelligence modules
         run: |
-          set -o pipefail
-          npx jest --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(deduplication|awareness|multi-query|consolidation|prefetch|retrieval-signals|graph|clustering|hierarchy)'
+          setsid npx jest --no-coverage --forceExit --ci \
+            --testPathPatterns='src/(deduplication|awareness|multi-query|consolidation|prefetch|retrieval-signals|graph|clustering|hierarchy)' &
+          JEST_PID=$!
+          wait $JEST_PID
           STATUS=$?
-          pkill -9 -f "jest-worker" 2>/dev/null || true
-          pkill -9 -f "ts-jest" 2>/dev/null || true
+          kill -- -$(ps -o pgid= -p $JEST_PID 2>/dev/null | tr -d ' ') 2>/dev/null || true
           exit $STATUS
 
   # ── 4c. Test shard — features (agent, llm, import, health, etc.) ─────────
@@ -236,13 +236,13 @@ jobs:
         run: npx prisma migrate deploy
       - name: Test — feature modules
         run: |
-          set -o pipefail
-          npx jest --no-coverage --forceExit --ci \
+          setsid npx jest --no-coverage --forceExit --ci \
             --testPathPatterns='src/(common|app\.controller|identity|account|llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|instance|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|webhooks)' \
-            --testPathIgnorePattern='cloud-link|cloud-sync|ensemble|stripe|analytics|monitoring|eval|reembedding|webhook'
+            --testPathIgnorePattern='cloud-link|cloud-sync|ensemble|stripe|analytics|monitoring|eval|reembedding|webhook' &
+          JEST_PID=$!
+          wait $JEST_PID
           STATUS=$?
-          pkill -9 -f "jest-worker" 2>/dev/null || true
-          pkill -9 -f "ts-jest" 2>/dev/null || true
+          kill -- -$(ps -o pgid= -p $JEST_PID 2>/dev/null | tr -d ' ') 2>/dev/null || true
           exit $STATUS
 
   # ── 5. Gate — all tests must pass ────────────────────────────────────────
