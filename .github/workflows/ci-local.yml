@@ -139,48 +139,6 @@ jobs:
             --testPathPatterns='src/memory'
 
   # ── 4b. Test shard — common + app bootstrap
-  test-core:
-    name: Test / core
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    needs: install
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: engram_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s --health-timeout 5s --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s --health-timeout 5s --health-retries 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - name: Restore node_modules
-        uses: actions/cache/restore@v4
-        with:
-          path: node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - name: Generate Prisma client
-        run: npx prisma generate
-      - name: Run migrations
-        run: npx prisma migrate deploy
-      - name: Test — common + app
-        run: |
-          pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(common|app\.controller)'
 
   # ── 4b. Test shard — intelligence (recall, dedup, awareness, ensemble) ───
   test-intelligence:
@@ -268,14 +226,14 @@ jobs:
       - name: Test — feature modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(identity|account|llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|instance|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|webhooks)' \
+            --testPathPatterns='src/(common|app\.controller|identity|account|llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|instance|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|webhooks)' \
             --testPathIgnorePattern='cloud-link|cloud-sync|ensemble|stripe|analytics|monitoring|eval|reembedding|webhook'
 
   # ── 5. Gate — all tests must pass ────────────────────────────────────────
   tests-passed:
     name: All tests passed
     runs-on: ubuntu-latest
-    needs: [static, build, test-memory, test-core, test-intelligence, test-features]
+    needs: [static, build, test-memory, test-intelligence, test-features]
     if: always()
     steps:
       - name: Check all jobs succeeded
@@ -283,7 +241,6 @@ jobs:
           if [[ "${{ needs.static.result }}" != "success" || \
                 "${{ needs.build.result }}" != "success" || \
                 "${{ needs.test-memory.result }}" != "success" || \
-                "${{ needs.test-core.result }}" != "success" || \
                 "${{ needs.test-intelligence.result }}" != "success" || \
                 "${{ needs.test-features.result }}" != "success" ]]; then
             echo "One or more jobs failed"
