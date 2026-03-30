@@ -68,12 +68,19 @@ export class NightlyReembedService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    // Check for interrupted jobs on startup
-    const checkpoint = await this.checkpointService.findActiveCheckpoint();
-    if (checkpoint) {
+    try {
+      // Check for interrupted jobs on startup
+      const checkpoint = await this.checkpointService.findActiveCheckpoint();
+      if (checkpoint) {
+        this.logger.warn(
+          `Found interrupted job ${checkpoint.jobId}. ` +
+            `Run manually with resumeJobId to continue.`,
+        );
+      }
+    } catch (err) {
+      // Don't crash the server if DB isn't ready during startup
       this.logger.warn(
-        `Found interrupted job ${checkpoint.jobId}. ` +
-          `Run manually with resumeJobId to continue.`,
+        `Failed to check reembed checkpoint on startup: ${err.message}`,
       );
     }
   }

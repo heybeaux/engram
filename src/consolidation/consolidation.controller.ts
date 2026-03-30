@@ -23,6 +23,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { DreamCycleQueueProducer } from './dream-cycle-queue.producer';
+import { UserId } from '../common/decorators/user-id.decorator';
 
 @ApiTags('Consolidation')
 @UseGuards(ApiKeyOrJwtGuard)
@@ -78,13 +79,29 @@ export class ConsolidationController {
 
   @Post('generate-context')
   async generateContextEndpoint(
+    @Req() req: any,
+    @UserId() userId: string | null,
     @Query('includeStale') includeStale?: string,
     @Query('tokenBudget') tokenBudget?: string,
-    @Body() body?: GenerateContextOptions,
+    @Body() body?: Omit<GenerateContextOptions, 'accountId' | 'userId'>,
   ): Promise<GenerateContextResult> {
+    // accountId is always resolved from the API key — it's the primary scope.
+    // userId is optional narrowing: only pass it when the caller explicitly
+    // provided X-AM-User-ID, otherwise query all users in the account.
+    // The guard always resolves a default user even without the header, so we
+    // check the raw header to distinguish "explicit" from "guard fallback".
+    const accountId: string | undefined =
+      req.accountId ?? req.agent?.accountId ?? undefined;
+    const explicitUserHeader = req.headers?.['x-am-user-id'] as
+      | string
+      | undefined;
+
     const opts: GenerateContextOptions = {
       ...body,
-      agentId: body?.agentId ?? '',
+      accountId,
+      // Only narrow to userId when the caller explicitly sent X-AM-User-ID
+      userId: explicitUserHeader ? (userId ?? undefined) : undefined,
+      agentId: body?.agentId ?? undefined, // legacy fallback
     };
     if (includeStale === 'true' || includeStale === '1') {
       opts.includeStale = true;
