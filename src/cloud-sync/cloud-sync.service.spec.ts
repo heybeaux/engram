@@ -81,8 +81,8 @@ describe('CloudSyncService', () => {
         upsert: jest.fn().mockResolvedValue({}),
       },
       agent: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'cloud-agent-1', accountId: 'acc-1' }),
         create: jest.fn(),
-        findUnique: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
