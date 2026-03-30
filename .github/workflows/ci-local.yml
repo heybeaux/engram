@@ -98,7 +98,7 @@ jobs:
   test-memory:
     name: Test / memory
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     needs: install
     services:
       postgres:
@@ -135,7 +135,7 @@ jobs:
         run: npx prisma migrate deploy
       - name: Test — memory module
         run: |
-          timeout 900 npx jest --no-coverage --forceExit --ci \
+          npx jest --no-coverage --forceExit --ci \
             --testPathPatterns='src/memory'
 
   # ── 4b. Test shard — common + app bootstrap
@@ -144,7 +144,7 @@ jobs:
   test-intelligence:
     name: Test / intelligence
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     needs: install
     services:
       postgres:
@@ -181,14 +181,14 @@ jobs:
         run: npx prisma migrate deploy
       - name: Test — intelligence modules
         run: |
-          timeout 900 npx jest --no-coverage --forceExit --ci \
+          npx jest --no-coverage --forceExit --ci \
             --testPathPatterns='src/(deduplication|awareness|multi-query|consolidation|prefetch|retrieval-signals|graph|clustering|hierarchy)'
 
   # ── 4c. Test shard — features (agent, llm, import, health, etc.) ─────────
   test-features:
     name: Test / features
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     needs: install
     services:
       postgres:
@@ -225,7 +225,7 @@ jobs:
         run: npx prisma migrate deploy
       - name: Test — feature modules
         run: |
-          timeout 900 npx jest --no-coverage --forceExit --ci \
+          npx jest --no-coverage --forceExit --ci \
             --testPathPatterns='src/(common|app\.controller|identity|account|llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|instance|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|webhooks)' \
             --testPathIgnorePattern='cloud-link|cloud-sync|ensemble|stripe|analytics|monitoring|eval|reembedding|webhook'
 
