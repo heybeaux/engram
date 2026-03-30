@@ -87,11 +87,55 @@ jobs:
       - name: Build
         run: pnpm run build
 
-  # ── 4a. Test shard — core + local-edition tests ──────────────────────────
+  # ── 4a. Test shard — memory (large module, needs own slot) ───────────────
+  test-memory:
+    name: Test / memory
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: install
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: engram_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Restore node_modules
+        uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Run migrations
+        run: npx prisma migrate deploy
+      - name: Test — memory module
+        run: |
+          pnpm test -- --no-coverage --forceExit --ci \
+            --testPathPatterns='src/memory'
+
+  # ── 4b. Test shard — core (identity, account, common) ────────────────────
   test-core:
     name: Test / core
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     needs: install
     services:
       postgres:
@@ -129,7 +173,7 @@ jobs:
       - name: Test — core modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(memory|identity|account|common|app\.controller)'
+            --testPathPatterns='src/(identity|account|common|app\.controller)'
 
   # ── 4b. Test shard — intelligence ────────────────────────────────────────
   test-intelligence:
@@ -267,13 +311,14 @@ jobs:
   tests-passed:
     name: All tests passed
     runs-on: ubuntu-latest
-    needs: [static, build, test-core, test-intelligence, test-cloud, test-features]
+    needs: [static, build, test-memory, test-core, test-intelligence, test-cloud, test-features]
     if: always()
     steps:
       - name: Check all jobs succeeded
         run: |
           if [[ "${{ needs.static.result }}" != "success" || \
                 "${{ needs.build.result }}" != "success" || \
+                "${{ needs.test-memory.result }}" != "success" || \
                 "${{ needs.test-core.result }}" != "success" || \
                 "${{ needs.test-intelligence.result }}" != "success" || \
                 "${{ needs.test-cloud.result }}" != "success" || \
