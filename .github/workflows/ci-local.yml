@@ -199,7 +199,7 @@ jobs:
   test-features:
     name: Test / features
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs: install
     services:
       postgres:
