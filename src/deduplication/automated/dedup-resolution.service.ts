@@ -368,7 +368,7 @@ export class DedupResolutionService {
           raw: `Resolved contradiction: "${weaker.raw}" superseded by "${stronger.raw}" because ${reason}`,
           layer: 'INSIGHT',
           memoryType: 'LESSON',
-          source: 'SYSTEM_INFERENCE',
+          source: 'SYSTEM',
           importanceScore: Math.max(
             stronger.importanceScore,
             weaker.importanceScore,
