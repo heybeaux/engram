@@ -3,6 +3,7 @@ import { MemoryService } from './memory.service';
 import { MemoryController } from './memory.controller';
 import { MemoryDedupService } from './memory-dedup.service';
 import { MemoryQueryService } from './memory-query.service';
+import { MemoryQueryContextService } from './memory-query-context.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { MemoryGraphService } from './memory-graph.service';
 import { MemoryExportService } from './memory-export.service';
@@ -44,6 +45,7 @@ import { QueueModule } from '../queue/queue.module';
     MemoryService,
     MemoryDedupService,
     MemoryQueryService,
+    MemoryQueryContextService,
     MemoryPipelineService,
     MemoryGraphService,
     MemoryExportService,

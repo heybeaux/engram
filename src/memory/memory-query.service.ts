@@ -8,12 +8,8 @@ import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
 import {
   AnticipatoryService,
-  AnticipatoryRunResult,
 } from '../anticipatory/anticipatory.service';
-import {
-  MultiQueryMetadataDto,
-  ResultExplanationDto,
-} from '../multi-query/dto/multi-query.dto';
+import { ResultExplanationDto } from '../multi-query/dto/multi-query.dto';
 import { Memory, MemoryLayer, SubjectType } from '@prisma/client';
 import {
   MemoryWithExtraction,
@@ -21,6 +17,7 @@ import {
   QueryResult,
   ContextResult,
 } from './memory.types';
+import { MemoryQueryContextService } from './memory-query-context.service';
 
 @Injectable()
 export class MemoryQueryService {
@@ -29,6 +26,7 @@ export class MemoryQueryService {
     private prisma: PrismaService,
     private embedding: EmbeddingService,
     private temporalParser: TemporalParserService,
+    private contextService: MemoryQueryContextService,
     @Optional() private multiQueryService?: MultiQueryService,
     @Optional() private memoryPoolService?: MemoryPoolService,
     @Optional() private memoryAccessLogService?: MemoryAccessLogService,
@@ -192,9 +190,6 @@ export class MemoryQueryService {
     }
 
     // ── Active Insight Surfacing ──────────────────────────────────────
-    // Inject high-confidence, unacknowledged INSIGHT memories that are
-    // semantically relevant to the query. Insights get boosted to appear
-    // near the top of results so agents actually see them.
     scoredMemories = await this.surfaceInsights(
       scoredMemories,
       Array.isArray(userId) ? userId : [userId],
@@ -205,7 +200,9 @@ export class MemoryQueryService {
 
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
-      result = (await this.attachChains(scoredMemories)) as MemoryWithScore[];
+      result = (await this.contextService.attachChains(
+        scoredMemories,
+      )) as MemoryWithScore[];
     }
 
     const resultIds = result.map((m) => m.id);
@@ -232,7 +229,7 @@ export class MemoryQueryService {
       }
     }
 
-    // v1.6: Anticipatory Recall — run in parallel-ish (after standard recall)
+    // v1.6: Anticipatory Recall
     let anticipatoryMeta:
       | import('../anticipatory/dto/anticipatory.dto').AnticipatoryMeta
       | undefined;
@@ -276,15 +273,6 @@ export class MemoryQueryService {
 
   /**
    * Surface relevant INSIGHT memories by injecting them into recall results.
-   *
-   * Finds unacknowledged, high-confidence insights and boosts their score
-   * so they appear near the top of results. Insights that aren't semantically
-   * relevant to the current query are excluded.
-   *
-   * @param existingResults - Current recall results
-   * @param userIds - User IDs to scope the insight query
-   * @param query - The original search query text
-   * @param limit - Max total results to return
    */
   private async surfaceInsights(
     existingResults: MemoryWithScore[],
@@ -294,14 +282,12 @@ export class MemoryQueryService {
     cachedQueryEmbedding?: number[],
   ): Promise<MemoryWithScore[]> {
     try {
-      // Find recent, high-confidence INSIGHT memories
       const insights = await this.prisma.memory.findMany({
         where: {
           userId: { in: userIds },
           layer: 'INSIGHT',
           deletedAt: null,
-          importanceScore: { gte: 0.6 }, // confidence threshold
-          // Only surface insights from the last 14 days
+          importanceScore: { gte: 0.6 },
           createdAt: { gt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
         },
         include: { extraction: true },
@@ -311,12 +297,9 @@ export class MemoryQueryService {
 
       if (insights.length === 0) return existingResults;
 
-      // HEY-135: Reuse cached query embedding to avoid redundant API call (~500ms saved)
       const queryEmbedding =
         cachedQueryEmbedding ?? (await this.embedding.generate(query));
 
-      // HEY-135: Use vector search to find semantic similarity instead of
-      // re-embedding each insight individually (saves N embedding API calls, ~1-2s)
       const insightIds = new Set(insights.map((i) => i.id));
       const insightScoreMap = new Map<string, number>();
 
@@ -332,20 +315,16 @@ export class MemoryQueryService {
         }
       }
 
-      // Filter by relevance using vector search scores
       const relevantInsights: MemoryWithScore[] = [];
       const existingIds = new Set(existingResults.map((r) => r.id));
 
       for (const insight of insights) {
-        // Skip if already in results
         if (existingIds.has(insight.id)) continue;
 
         const similarity = insightScoreMap.get(insight.id);
         if (similarity === undefined) continue;
 
-        // Only surface if moderately relevant (> 0.3 similarity)
         if (similarity > 0.3) {
-          // Boost score: base similarity + confidence bonus
           const boostedScore = similarity + insight.importanceScore * 0.3;
           relevantInsights.push({
             ...insight,
@@ -356,7 +335,6 @@ export class MemoryQueryService {
 
       if (relevantInsights.length === 0) return existingResults;
 
-      // Merge: insert insights into results, maintaining sort order
       const merged = [...existingResults, ...relevantInsights]
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
         .slice(0, limit);
@@ -367,7 +345,6 @@ export class MemoryQueryService {
 
       return merged;
     } catch (error) {
-      // Never let insight surfacing break recall
       this.logger.warn(
         `[Recall] Insight surfacing failed, skipping: ${(error as Error)?.message || error}`,
         (error as Error)?.stack,
@@ -440,7 +417,9 @@ export class MemoryQueryService {
 
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
-      result = (await this.attachChains(scoredMemories)) as MemoryWithScore[];
+      result = (await this.contextService.attachChains(
+        scoredMemories,
+      )) as MemoryWithScore[];
     }
 
     const resultIds = result.map((m) => m.id);
@@ -480,7 +459,7 @@ export class MemoryQueryService {
       );
     }
 
-    // v1.6: Anticipatory Recall — also runs on multi-query path
+    // v1.6: Anticipatory Recall
     let anticipatoryMeta2:
       | import('../anticipatory/dto/anticipatory.dto').AnticipatoryMeta
       | undefined;
@@ -515,266 +494,43 @@ export class MemoryQueryService {
   }
 
   /**
-   * Load context for session start
+   * Load context for session start — delegates to MemoryQueryContextService
    */
   async loadContext(
     userId: string,
     dto: LoadContextDto,
   ): Promise<ContextResult> {
-    const layers: ContextResult['layers'] = {
-      identity: 0,
-      project: 0,
-      session: 0,
-    };
-    const memories: Memory[] = [];
-    const evictions: Array<{ id: string; reason: string }> = [];
-
-    const LAYER_BUDGETS = {
-      identity: dto.maxTokens ? Math.floor(dto.maxTokens * 0.44) : 800,
-      project: dto.maxTokens ? Math.floor(dto.maxTokens * 0.33) : 600,
-      session: dto.maxTokens ? Math.floor(dto.maxTokens * 0.22) : 400,
-    };
-    const CONSTRAINT_RESERVE = Math.min(
-      200,
-      Math.floor(LAYER_BUDGETS.identity * 0.25),
-    );
-
-    // Fire all independent layer queries in parallel for lower latency
-    const identityPromise = this.prisma.memory.findMany({
-      where: {
-        userId,
-        layer: MemoryLayer.IDENTITY,
-        subjectType: SubjectType.USER,
-        deletedAt: null,
-        supersededById: null,
-        userHidden: false,
-      },
-      orderBy: [
-        { effectiveScore: 'desc' },
-        { confidence: 'desc' },
-        { priority: 'asc' },
-        { userPinned: 'desc' },
-        { createdAt: 'desc' },
-      ],
-      take: 200,
-    });
-
-    const projectPromise = dto.projectId
-      ? this.prisma.memory.findMany({
-          where: {
-            userId,
-            projectId: dto.projectId,
-            layer: MemoryLayer.PROJECT,
-            deletedAt: null,
-            supersededById: null,
-            userHidden: false,
-          },
-          orderBy: [
-            { effectiveScore: 'desc' },
-            { confidence: 'desc' },
-            { priority: 'asc' },
-            { userPinned: 'desc' },
-            { createdAt: 'desc' },
-          ],
-          take: 100,
-        })
-      : Promise.resolve([]);
-
-    const sessionPromise = this.prisma.memory.findMany({
-      where: {
-        userId,
-        layer: MemoryLayer.SESSION,
-        deletedAt: null,
-        supersededById: null,
-        userHidden: false,
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      },
-      orderBy: [
-        { effectiveScore: 'desc' },
-        { confidence: 'desc' },
-        { priority: 'asc' },
-        { createdAt: 'desc' },
-      ],
-      take: 100,
-    });
-
-    const agentPromise = dto.agentId
-      ? this.prisma.memory.findMany({
-          where: {
-            agentId: dto.agentId,
-            subjectType: SubjectType.AGENT,
-            deletedAt: null,
-            supersededById: null,
-            userHidden: false,
-          },
-          orderBy: [
-            { effectiveScore: 'desc' },
-            { priority: 'asc' },
-            { createdAt: 'desc' },
-          ],
-          take: 20,
-        })
-      : Promise.resolve([]);
-
-    const [
-      identityCandidates,
-      projectCandidates,
-      sessionCandidates,
-      agentMemories,
-    ] = await Promise.all([
-      identityPromise,
-      projectPromise,
-      sessionPromise,
-      agentPromise,
-    ]);
-
-    // 1. Process IDENTITY layer
-    const { selected: identityMemories, evicted: identityEvicted } =
-      this.selectMemoriesForBudget(
-        identityCandidates,
-        LAYER_BUDGETS.identity,
-        CONSTRAINT_RESERVE,
-      );
-    memories.push(...identityMemories);
-    layers.identity = identityMemories.length;
-    evictions.push(
-      ...identityEvicted.map((m) => ({ id: m.id, reason: 'identity_budget' })),
-    );
-
-    // 2. Process PROJECT layer
-    if (dto.projectId && projectCandidates.length > 0) {
-      const { selected: projectMemories, evicted: projectEvicted } =
-        this.selectMemoriesForBudget(
-          projectCandidates,
-          LAYER_BUDGETS.project,
-          0,
-        );
-      memories.push(...projectMemories);
-      layers.project = projectMemories.length;
-      evictions.push(
-        ...projectEvicted.map((m) => ({ id: m.id, reason: 'project_budget' })),
-      );
-    }
-
-    // 3. Process SESSION layer
-    const { selected: sessionMemories, evicted: sessionEvicted } =
-      this.selectMemoriesForBudget(sessionCandidates, LAYER_BUDGETS.session, 0);
-    memories.push(...sessionMemories);
-    layers.session = sessionMemories.length;
-    evictions.push(
-      ...sessionEvicted.map((m) => ({ id: m.id, reason: 'session_budget' })),
-    );
-
-    // 4. Process agent self-memories
-    if (agentMemories.length > 0) {
-      memories.push(...agentMemories);
-      layers.agent = agentMemories.length;
-    }
-
-    // 5. Format
-    const context = this.formatContext(memories, dto.maxTokens ?? 4000);
-
-    if (evictions.length > 0) {
-      this.logger.log('[Memory] Context evictions:', {
-        userId,
-        totalEvicted: evictions.length,
-        byReason: evictions.reduce(
-          (acc, e) => {
-            acc[e.reason] = (acc[e.reason] || 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>,
-        ),
-      });
-    }
-
-    return {
-      context: context.text,
-      tokenCount: context.tokens,
-      memoriesIncluded: memories.length,
-      layers,
-    };
+    return this.contextService.loadContext(userId, dto);
   }
 
   /**
-   * Select memories that fit within a token budget
+   * Select memories that fit within a token budget — delegates to MemoryQueryContextService
    */
   selectMemoriesForBudget(
     candidates: Memory[],
     budget: number,
     constraintReserve: number,
   ): { selected: Memory[]; evicted: Memory[] } {
-    const selected: Memory[] = [];
-    const evicted: Memory[] = [];
-    let usedTokens = 0;
-
-    const estimateTokens = (m: Memory) => Math.ceil(m.raw.length / 4);
-
-    // Phase 0: Safety-critical
-    const safetyCritical = candidates.filter((m) => m.safetyCritical);
-    for (const memory of safetyCritical) {
-      const tokens = estimateTokens(memory);
-      selected.push(memory);
-      usedTokens += tokens;
-    }
-
-    // Phase 1: CONSTRAINTS
-    const constraints = candidates.filter(
-      (m) => m.priority === 1 && !m.safetyCritical,
+    return this.contextService.selectMemoriesForBudget(
+      candidates,
+      budget,
+      constraintReserve,
     );
-    let constraintTokens = 0;
-
-    for (const memory of constraints) {
-      const tokens = estimateTokens(memory);
-      if (
-        constraintTokens + tokens <= constraintReserve ||
-        constraintReserve === 0
-      ) {
-        selected.push(memory);
-        constraintTokens += tokens;
-        usedTokens += tokens;
-      } else if (usedTokens + tokens <= budget) {
-        selected.push(memory);
-        usedTokens += tokens;
-      } else {
-        evicted.push(memory);
-      }
-    }
-
-    // Phase 2: Fill remaining
-    for (const memory of candidates) {
-      if (selected.includes(memory)) continue;
-      const tokens = estimateTokens(memory);
-      if (usedTokens + tokens <= budget) {
-        selected.push(memory);
-        usedTokens += tokens;
-      } else {
-        evicted.push(memory);
-      }
-    }
-
-    return { selected, evicted };
   }
 
   /**
-   * Build subject type filter for queries
-   */
-  /**
-   * HEY-174: Build visibility filter for cross-agent memory sharing.
-   * When visibility filter is provided, applies scoping rules:
-   * - PRIVATE: only the querying user's own memories
-   * - TEAM: memories visible to the team (same account)
-   * - PUBLIC: memories visible to everyone
-   * When no filter is provided, defaults to showing own private + team + public.
+   * Build visibility filter for cross-agent memory sharing.
    */
   buildVisibilityFilter(dto: QueryMemoryDto): Record<string, any> {
     if (dto.visibility && dto.visibility.length > 0) {
       return { visibility: { in: dto.visibility } };
     }
-    // Default: no filter (backward compatible — all memories for the queried userId)
     return {};
   }
 
+  /**
+   * Build subject type filter for queries
+   */
   buildSubjectTypeFilter(dto: QueryMemoryDto): Record<string, any> {
     const filter: Record<string, any> = {};
 
@@ -800,109 +556,13 @@ export class MemoryQueryService {
     return filter;
   }
 
-  private async attachChains(
-    memories: MemoryWithExtraction[],
-    maxDepth: number = 3,
-  ): Promise<MemoryWithExtraction[]> {
-    const memoryIds = memories.map((m) => m.id);
-    if (memoryIds.length === 0) return memories;
-
-    const chainLinks = await this.prisma.memoryChainLink.findMany({
-      where: {
-        OR: [{ sourceId: { in: memoryIds } }, { targetId: { in: memoryIds } }],
-      },
-      include: {
-        source: true,
-        target: true,
-      },
-    });
-
-    if (chainLinks.length === 0) return memories;
-
-    // Build chain map per memory
-    const chainMap = new Map<
-      string,
-      Array<{ memory: any; linkType: string; confidence: number }>
-    >();
-
-    for (const link of chainLinks) {
-      for (const memoryId of memoryIds) {
-        if (link.sourceId === memoryId) {
-          const arr = chainMap.get(memoryId) ?? [];
-          arr.push({
-            memory: link.target,
-            linkType: link.linkType,
-            confidence: link.confidence,
-          });
-          chainMap.set(memoryId, arr);
-        }
-        if (link.targetId === memoryId) {
-          const arr = chainMap.get(memoryId) ?? [];
-          arr.push({
-            memory: link.source,
-            linkType: link.linkType,
-            confidence: link.confidence,
-          });
-          chainMap.set(memoryId, arr);
-        }
-      }
-    }
-
-    return memories.map((m) => ({
-      ...m,
-      chainedMemories: chainMap.get(m.id) ?? [],
-    }));
-  }
-
+  /**
+   * Format context — delegates to MemoryQueryContextService
+   */
   formatContext(
     memories: Memory[],
     maxTokens: number,
   ): { text: string; tokens: number } {
-    const lines: string[] = [];
-    let estimatedTokens = 0;
-
-    const identity = memories.filter((m) => m.layer === MemoryLayer.IDENTITY);
-    const project = memories.filter((m) => m.layer === MemoryLayer.PROJECT);
-    const session = memories.filter((m) => m.layer === MemoryLayer.SESSION);
-
-    if (identity.length > 0) {
-      lines.push('## User Identity');
-      for (const m of identity) {
-        const line = `- ${m.raw}`;
-        const tokens = line.split(/\s+/).length;
-        if (estimatedTokens + tokens > maxTokens) break;
-        lines.push(line);
-        estimatedTokens += tokens;
-      }
-      lines.push('');
-    }
-
-    if (project.length > 0) {
-      lines.push('## Current Project');
-      for (const m of project) {
-        const line = `- ${m.raw}`;
-        const tokens = line.split(/\s+/).length;
-        if (estimatedTokens + tokens > maxTokens) break;
-        lines.push(line);
-        estimatedTokens += tokens;
-      }
-      lines.push('');
-    }
-
-    if (session.length > 0) {
-      lines.push('## Recent Context');
-      for (const m of session) {
-        const line = `- ${m.raw}`;
-        const tokens = line.split(/\s+/).length;
-        if (estimatedTokens + tokens > maxTokens) break;
-        lines.push(line);
-        estimatedTokens += tokens;
-      }
-    }
-
-    return {
-      text: lines.join('\n'),
-      tokens: estimatedTokens,
-    };
+    return this.contextService.formatContext(memories, maxTokens);
   }
 }

@@ -1,4 +1,5 @@
 import { MemoryQueryService } from './memory-query.service';
+import { MemoryQueryContextService } from './memory-query-context.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
 import { TemporalParserService } from './temporal/temporal-parser.service';
@@ -11,6 +12,7 @@ describe('MemoryQueryService', () => {
   let prisma: jest.Mocked<PrismaService>;
   let embedding: jest.Mocked<EmbeddingService>;
   let temporalParser: jest.Mocked<TemporalParserService>;
+  let contextService: jest.Mocked<MemoryQueryContextService>;
   let multiQueryService: jest.Mocked<MultiQueryService>;
   let memoryPoolService: jest.Mocked<MemoryPoolService>;
   let memoryAccessLogService: jest.Mocked<MemoryAccessLogService>;
@@ -58,10 +60,18 @@ describe('MemoryQueryService', () => {
       logRecalled: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    contextService = {
+      loadContext: jest.fn().mockResolvedValue({}),
+      selectMemoriesForBudget: jest.fn().mockReturnValue({ selected: [], evicted: [] }),
+      formatContext: jest.fn().mockReturnValue({ text: '', tokens: 0 }),
+      attachChains: jest.fn().mockImplementation((memories: any) => Promise.resolve(memories)),
+    } as any;
+
     service = new MemoryQueryService(
       prisma,
       embedding,
       temporalParser,
+      contextService,
       multiQueryService,
       memoryPoolService,
       memoryAccessLogService,
@@ -193,7 +203,7 @@ describe('MemoryQueryService', () => {
 
   describe('shouldUseMultiQuery', () => {
     it('should return false when multiQueryService is not available', () => {
-      const svc = new MemoryQueryService(prisma, embedding, temporalParser);
+      const svc = new MemoryQueryService(prisma, embedding, temporalParser, contextService);
       expect(svc.shouldUseMultiQuery({} as any)).toBe(false);
     });
 
