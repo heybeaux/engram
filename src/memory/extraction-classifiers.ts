@@ -147,6 +147,9 @@ export function normalizeMemoryType(
     'LESSON',
     'TASK_OUTCOME',
     'SELF_ASSESSMENT',
+    'DECISION',
+    'OUTCOME',
+    'GOAL',
   ];
 
   if (validTypes.includes(normalized as MemoryType)) {
@@ -161,6 +164,9 @@ export function normalizeMemoryType(
     EVENTS: 'EVENT',
     LESSONS: 'LESSON',
     PREF: 'PREFERENCE',
+    DECISIONS: 'DECISION',
+    OUTCOMES: 'OUTCOME',
+    GOALS: 'GOAL',
   };
 
   if (mappings[normalized]) {
@@ -285,6 +291,27 @@ export function basicMemoryTypeClassification(raw: string): MemoryType {
     /\b(wrong|incorrect|mistake|shouldn't have|should have)\b/i.test(raw)
   ) {
     return 'LESSON';
+  }
+  if (
+    /\b(decided|chose|went with|opted for|selected|decision was|made the call)\b/i.test(
+      raw,
+    )
+  ) {
+    return 'DECISION';
+  }
+  if (
+    /\b(resulted in|outcome was|turned out|succeeded|failed|consequence was|end result)\b/i.test(
+      raw,
+    )
+  ) {
+    return 'OUTCOME';
+  }
+  if (
+    /\b(goal is|want to|plan to|aim to|objective|aspire to|target is|working toward)\b/i.test(
+      raw,
+    )
+  ) {
+    return 'GOAL';
   }
   if (
     /\b(remind|todo|task|need to|should|must|deadline|by tomorrow|by next)\b/i.test(

@@ -14,6 +14,9 @@ import {
   DreamCyclePendingStage,
   DreamCycleTieringStage,
   DreamCycleConsolidationStage,
+  DreamCycleTimelineSynthesisStage,
+  DreamCycleImportanceRescoreStage,
+  DreamCycleArchivalStage,
 } from './stages';
 import * as os from 'os';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
@@ -27,10 +30,13 @@ const DREAM_CYCLE_LOCK_KEY = 294967;
 export type DreamCycleStage =
   | 'pending'
   | 'tiering'
+  | 'timeline'
   | 'patterns'
   | 'clustering'
   | 'drift'
   | 'identity'
+  | 'importance-rescore'
+  | 'archival'
   | 'report';
 
 export interface DreamCycleOptions {
@@ -60,10 +66,13 @@ export interface DreamCycleResult {
 const ALL_STAGES: DreamCycleStage[] = [
   'pending',
   'tiering',
+  'timeline',
   'patterns',
   'clustering',
   'drift',
   'identity',
+  'importance-rescore',
+  'archival',
   'report',
 ];
 
@@ -81,6 +90,9 @@ export class DreamCycleService {
     private patternsStage: DreamCyclePatternsStage,
     private driftStage: DreamCycleDriftStage,
     private identityStage: DreamCycleIdentityStage,
+    private timelineSynthesisStage: DreamCycleTimelineSynthesisStage,
+    private importanceRescoreStage: DreamCycleImportanceRescoreStage,
+    private archivalStage: DreamCycleArchivalStage,
     private tracker: DreamCycleRunTrackerService,
     @Optional() private generateContextService?: GenerateContextService,
     @Optional() private clusteringService?: ClusteringService,
@@ -406,6 +418,41 @@ export class DreamCycleService {
         }
       }
 
+      // Stage 2.8: Timeline synthesis (ENG-46)
+      if (stages.includes('timeline') && llmCallsUsed < this.maxLlmCalls) {
+        this.log('Stage 2.8: Timeline synthesis');
+        const timelineStart = new Date();
+        const timelineRecord = await this.tracker.startStage(
+          runId,
+          'timeline',
+          totalMemories,
+        );
+        try {
+          const timelineResult = await this.timelineSynthesisStage.run(
+            userId,
+            dryRun,
+            this.maxLlmCalls - llmCallsUsed,
+          );
+          await this.tracker.completeStage(
+            timelineRecord.id,
+            timelineResult.timelinesCreated + timelineResult.timelinesUpdated,
+            timelineStart,
+          );
+          llmCallsUsed += timelineResult.llmCalls;
+          stageDetails.timeline = timelineResult;
+          this.log('Stage 2.8 complete', timelineResult);
+        } catch (err) {
+          await this.tracker.errorStage(
+            timelineRecord.id,
+            err as Error,
+            timelineStart,
+          );
+          const msg = `Timeline synthesis stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
       // Stage 3: Pattern extraction
       if (stages.includes('patterns') && llmCallsUsed < this.maxLlmCalls) {
         this.log('Stage 3: Pattern extraction');
@@ -548,6 +595,66 @@ export class DreamCycleService {
         }
       }
 
+      // Stage 3.9: Importance re-scoring (ENG-119)
+      if (stages.includes('importance-rescore')) {
+        this.log('Stage 3.9: Importance re-scoring');
+        const rescoreStart = new Date();
+        const rescoreRecord = await this.tracker.startStage(
+          runId,
+          'importance-rescore',
+          totalMemories,
+        );
+        try {
+          const rescoreResult = await this.importanceRescoreStage.run(
+            userId,
+            dryRun,
+          );
+          await this.tracker.completeStage(rescoreRecord.id, 0, rescoreStart);
+          stageDetails['importance-rescore'] = rescoreResult;
+          this.log('Stage 3.9 complete', rescoreResult);
+        } catch (err) {
+          await this.tracker.errorStage(
+            rescoreRecord.id,
+            err as Error,
+            rescoreStart,
+          );
+          const msg = `Importance re-scoring stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
+      // Stage 3.10: Archival of low-importance memories (ENG-123)
+      if (stages.includes('archival')) {
+        this.log('Stage 3.10: Archival of low-importance memories');
+        const archivalStart = new Date();
+        const archivalRecord = await this.tracker.startStage(
+          runId,
+          'archival',
+          totalMemories,
+        );
+        try {
+          const archivalResult = await this.archivalStage.run(userId, dryRun);
+          await this.tracker.completeStage(
+            archivalRecord.id,
+            archivalResult.archived,
+            archivalStart,
+          );
+          memoriesArchived += archivalResult.archived;
+          stageDetails.archival = archivalResult;
+          this.log('Stage 3.10 complete', archivalResult);
+        } catch (err) {
+          await this.tracker.errorStage(
+            archivalRecord.id,
+            err as Error,
+            archivalStart,
+          );
+          const msg = `Archival stage failed: ${err instanceof Error ? err.message : String(err)}`;
+          errors.push(msg);
+          this.log(msg, undefined, 'error');
+        }
+      }
+
       // Stage 4: Generate report
       if (stages.includes('report')) {
         this.log('Stage 4: Generating consolidation report');
@@ -570,16 +677,29 @@ export class DreamCycleService {
       const contextWritePath = this.config.get<string>(
         'DREAM_CONTEXT_WRITE_PATH',
       );
+      // DREAM_CONTEXT_AGENT_ID is deprecated — accountId is now sufficient.
+      // userId is passed as an optional narrowing hint so the context is
+      // scoped to this specific user's run (not all account users).
       const contextAgentId = this.config.get<string>('DREAM_CONTEXT_AGENT_ID');
-      if (
-        generateContextEnabled &&
-        contextAgentId &&
-        this.generateContextService
-      ) {
+      if (generateContextEnabled && this.generateContextService) {
         this.log('Stage 5: Generate context');
         try {
+          // Resolve accountId for this user so generate-context can scope
+          // by account (API key model: accountId is sufficient, userId optional)
+          let contextAccountId: string | undefined;
+          if (userId && userId !== 'default') {
+            const userRecord = await this.prisma.user.findUnique({
+              where: { id: userId },
+              select: { accountId: true },
+            });
+            contextAccountId = userRecord?.accountId ?? undefined;
+          }
+
           const contextResult = await this.generateContextService.generate({
-            agentId: contextAgentId,
+            accountId: contextAccountId,
+            // Pass userId as narrowing hint so the context is for this user
+            userId: userId !== 'default' ? userId : undefined,
+            agentId: contextAgentId, // legacy fallback only
             writePath: contextWritePath,
             dryRun,
           });

@@ -39,6 +39,7 @@ describe('ReembeddingService', () => {
     memoryExtraction: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      upsert: jest.fn(),
     },
   };
 
@@ -249,7 +250,7 @@ describe('ReembeddingService', () => {
       expect(result).toBeDefined();
       expect(mockEmbedding.generate).not.toHaveBeenCalled();
       expect(mockEmbedding.store).not.toHaveBeenCalled();
-      expect(mockPrisma.memoryExtraction.update).not.toHaveBeenCalled();
+      expect(mockPrisma.memoryExtraction.upsert).not.toHaveBeenCalled();
     });
 
     it('should generate and store new embedding when not dry run', async () => {
@@ -266,7 +267,7 @@ describe('ReembeddingService', () => {
       mockPrisma.memoryExtraction.findUnique.mockResolvedValue(null);
       mockEmbedding.generate.mockResolvedValue([0.1, 0.2, 0.3]);
       mockEmbedding.store.mockResolvedValue('embed_123');
-      mockPrisma.memoryExtraction.update.mockResolvedValue({});
+      mockPrisma.memoryExtraction.upsert.mockResolvedValue({});
 
       const result = await service.reembedMemory('mem_123', false);
 
@@ -282,15 +283,24 @@ describe('ReembeddingService', () => {
           layer: MemoryLayer.IDENTITY,
         }),
       );
-      expect(mockPrisma.memoryExtraction.update).toHaveBeenCalledWith({
-        where: { memoryId: 'mem_123' },
-        data: expect.objectContaining({
-          rawJson: expect.objectContaining({
-            embeddingVersion: 1,
-            enrichmentVersion: '1.0.0',
+      expect(mockPrisma.memoryExtraction.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { memoryId: 'mem_123' },
+          update: expect.objectContaining({
+            rawJson: expect.objectContaining({
+              embeddingVersion: 1,
+              enrichmentVersion: '1.0.0',
+            }),
+          }),
+          create: expect.objectContaining({
+            memoryId: 'mem_123',
+            rawJson: expect.objectContaining({
+              embeddingVersion: 1,
+              enrichmentVersion: '1.0.0',
+            }),
           }),
         }),
-      });
+      );
     });
   });
 

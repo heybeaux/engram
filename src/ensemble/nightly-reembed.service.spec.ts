@@ -32,6 +32,7 @@ describe('NightlyReembedService', () => {
           { model: 'bge-base', embedding: [0.1, 0.2], dimensions: 1536 },
         ],
       }),
+      getConfiguredModelIds: jest.fn().mockReturnValue([]),
     };
     driftService = {
       measureBatchDrift: jest

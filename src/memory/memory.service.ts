@@ -15,7 +15,15 @@ import {
   BulkTextResult,
 } from './dto/bulk.dto';
 import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
+import {
+  FindContradictionsDto,
+  FindContradictionsResult,
+} from './dto/find-contradictions.dto';
 import { UpdateMemoryDto, CorrectMemoryDto } from './dto/update-memory.dto';
+import {
+  FindFailuresDto,
+  FindFailuresResultDto,
+} from './dto/find-failures.dto';
 
 // Extracted services
 import { MemoryQueryService } from './memory-query.service';
@@ -96,6 +104,26 @@ export class MemoryService {
     dto: QueryMemoryDto,
   ): Promise<QueryResult> {
     return this.queryService.recall(userId, dto);
+  }
+
+  /**
+   * ENG-116: Find failures related to a goal — delegates to MemoryQueryService
+   */
+  async findFailures(
+    userId: string | string[] | null,
+    dto: FindFailuresDto,
+  ): Promise<FindFailuresResultDto> {
+    return this.queryService.findFailures(userId, dto);
+  }
+
+  /**
+   * Find potential contradictions — delegates to MemoryQueryService
+   */
+  async findContradictions(
+    userId: string | string[] | null,
+    dto: FindContradictionsDto,
+  ): Promise<FindContradictionsResult> {
+    return this.queryService.findContradictions(userId, dto);
   }
 
   /**

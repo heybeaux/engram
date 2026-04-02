@@ -442,11 +442,19 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
 
     const existingJson = (extraction?.rawJson as any) ?? {};
 
-    await this.prisma.memoryExtraction.update({
+    await this.prisma.memoryExtraction.upsert({
       where: { memoryId },
-      data: {
+      update: {
         rawJson: {
           ...existingJson,
+          embeddingVersion: version,
+          enrichmentVersion: enrichment.metadata.enrichmentVersion,
+          lastReembeddedAt: enrichment.metadata.enrichedAt.toISOString(),
+        },
+      },
+      create: {
+        memoryId,
+        rawJson: {
           embeddingVersion: version,
           enrichmentVersion: enrichment.metadata.enrichmentVersion,
           lastReembeddedAt: enrichment.metadata.enrichedAt.toISOString(),

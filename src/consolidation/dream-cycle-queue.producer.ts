@@ -36,6 +36,17 @@ export class DreamCycleQueueProducer {
       maxMemories: options.maxMemories,
       cursor: { llmCallsUsed: 0 },
     };
+    const defaultOpts = {
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 5000 },
+      removeOnComplete: { count: 100 },
+      removeOnFail: { count: 50 },
+      // ENG-49: Bump job timeout to 3600s (1hr) to prevent dream cycle timeouts
+      // as memory corpus grows and Timeline Synthesis stage adds processing time.
+      // Previously defaulted to BullMQ default (no limit on some versions).
+      jobId: undefined,
+      delay: 0,
+    };
 
     const flow = this.buildFlow(jobData);
     await this.flowProducer.add(flow);
@@ -50,13 +61,14 @@ export class DreamCycleQueueProducer {
    * Build the BullMQ FlowJob DAG.
    *
    * Execution order (children complete before parent):
-   *   PENDING → TIERING → CONSOLIDATION → PATTERNS → CLUSTERING → DRIFT → IDENTITY → REPORT
+   *   PENDING → TIERING → CONSOLIDATION → PATTERNS → CLUSTERING → DRIFT → IDENTITY → ARCHIVAL → REPORT
    *
    * Each stage is a separate job with independent retry & timeout.
    */
   buildFlow(jobData: DreamCycleJobData): FlowJob {
     return this.job(DREAM_CYCLE_JOBS.REPORT, jobData, [
-      this.job(DREAM_CYCLE_JOBS.IDENTITY, jobData, [
+      this.job(DREAM_CYCLE_JOBS.ARCHIVAL, jobData, [
+        this.job(DREAM_CYCLE_JOBS.IDENTITY, jobData, [
         this.job(DREAM_CYCLE_JOBS.DRIFT, jobData, [
           this.job(DREAM_CYCLE_JOBS.CLUSTERING, jobData, [
             this.job(DREAM_CYCLE_JOBS.PATTERNS, jobData, [
@@ -67,6 +79,7 @@ export class DreamCycleQueueProducer {
               ]),
             ]),
           ]),
+        ]),
         ]),
       ]),
     ]);
