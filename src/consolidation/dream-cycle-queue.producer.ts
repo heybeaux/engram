@@ -61,13 +61,14 @@ export class DreamCycleQueueProducer {
    * Build the BullMQ FlowJob DAG.
    *
    * Execution order (children complete before parent):
-   *   PENDING → TIERING → CONSOLIDATION → PATTERNS → CLUSTERING → DRIFT → IDENTITY → REPORT
+   *   PENDING → TIERING → CONSOLIDATION → PATTERNS → CLUSTERING → DRIFT → IDENTITY → ARCHIVAL → REPORT
    *
    * Each stage is a separate job with independent retry & timeout.
    */
   buildFlow(jobData: DreamCycleJobData): FlowJob {
     return this.job(DREAM_CYCLE_JOBS.REPORT, jobData, [
-      this.job(DREAM_CYCLE_JOBS.IDENTITY, jobData, [
+      this.job(DREAM_CYCLE_JOBS.ARCHIVAL, jobData, [
+        this.job(DREAM_CYCLE_JOBS.IDENTITY, jobData, [
         this.job(DREAM_CYCLE_JOBS.DRIFT, jobData, [
           this.job(DREAM_CYCLE_JOBS.CLUSTERING, jobData, [
             this.job(DREAM_CYCLE_JOBS.PATTERNS, jobData, [
@@ -78,6 +79,7 @@ export class DreamCycleQueueProducer {
               ]),
             ]),
           ]),
+        ]),
         ]),
       ]),
     ]);

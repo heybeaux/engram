@@ -240,6 +240,7 @@ describe('DedupPipelineService', () => {
           processed: 0,
           autoMerged: 0,
           autoConsolidated: 0,
+          contradictionsResolved: 0,
           queued: 0,
           skipped: 0,
           errors: 0,

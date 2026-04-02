@@ -178,6 +178,9 @@ export class AnalyticsService {
       'TASK',
       'EVENT',
       'LESSON',
+      'DECISION',
+      'OUTCOME',
+      'GOAL',
     ];
 
     for (const row of result) {
@@ -194,6 +197,9 @@ export class AnalyticsService {
             LESSON: 0,
             TASK_OUTCOME: 0,
             SELF_ASSESSMENT: 0,
+            DECISION: 0,
+            OUTCOME: 0,
+            GOAL: 0,
           },
           total: 0,
         });

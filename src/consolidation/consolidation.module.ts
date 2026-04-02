@@ -15,6 +15,8 @@ import {
   DreamCycleTieringStage,
   DreamCycleConsolidationStage,
   DreamCycleTimelineSynthesisStage,
+  DreamCycleImportanceRescoreStage,
+  DreamCycleArchivalStage,
 } from './stages';
 import { MemoryModule } from '../memory/memory.module';
 import { LLMModule } from '../llm/llm.module';
@@ -70,6 +72,8 @@ const bullExports = hasRedis ? [DreamCycleQueueProducer] : [];
     DreamCycleTieringStage,
     DreamCycleConsolidationStage,
     DreamCycleTimelineSynthesisStage,
+    DreamCycleImportanceRescoreStage,
+    DreamCycleArchivalStage,
     GenerateContextService,
     DreamCycleRunTrackerService,
     HealthMetricsService,

@@ -51,6 +51,12 @@ Classify this memory into exactly ONE type:
 
 - "LESSON": A mistake, correction, or learning. The user corrected the agent, an error occurred and was resolved, or an explicit lesson was stated. Contains what went wrong, why, and what should have happened. Keywords: "that's wrong", "actually", "don't do that again", "lesson learned", "mistake", "I told you". Ask: "Is this about learning from a failure or correction?"
 
+- "DECISION": A choice that was made. Decisions are retained longer because they have downstream consequences. Keywords: "decided", "chose", "went with", "opted for", "selected", "made the call". Ask: "Is this about a choice that was made?"
+
+- "OUTCOME": The result of an action or decision. Often linked to a prior DECISION. Keywords: "resulted in", "outcome was", "turned out", "succeeded", "failed", "consequence". Ask: "Is this about what happened as a result of an action?"
+
+- "GOAL": An intended objective that is active until resolved or abandoned. Keywords: "goal is", "want to", "plan to", "aim to", "objective", "aspire to", "target". Ask: "Is this an objective the user is working toward?"
+
 Important distinctions:
 - "I'm allergic to peanuts" → CONSTRAINT (safety-critical)
 - "I don't like peanuts" → PREFERENCE (not safety-critical)
@@ -64,9 +70,12 @@ Important distinctions:
 - "Remember: always check which repo you're in before committing" → LESSON (explicit lesson)
 - "The deploy failed because we forgot to run migrations" → LESSON (error + learning)
 - "Never deploy on Fridays" → CONSTRAINT (hard rule, not experiential)
+- "We decided to go with PostgreSQL" → DECISION (a choice was made)
+- "The migration succeeded without issues" → OUTCOME (result of an action)
+- "I want to learn Rust this year" → GOAL (intended objective)
 
 Output these classification fields:
-- "memoryType": One of: CONSTRAINT, PREFERENCE, FACT, TASK, EVENT, LESSON
+- "memoryType": One of: CONSTRAINT, PREFERENCE, FACT, TASK, EVENT, LESSON, DECISION, OUTCOME, GOAL
 - "typeConfidence": A number 0.0-1.0 indicating classification confidence
 
 If memoryType is LESSON, also extract these fields:

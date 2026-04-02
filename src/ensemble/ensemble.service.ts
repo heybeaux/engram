@@ -207,6 +207,14 @@ export class EnsembleService implements OnModuleInit {
   }
 
   /**
+   * Get the model IDs that EnsembleService has configured (from env/cloud init).
+   * Used by nightly-reembed to avoid querying DB defaults that don't match cloud providers.
+   */
+  getConfiguredModelIds(): ModelId[] {
+    return [...this.config.models];
+  }
+
+  /**
    * Check if ensemble is enabled
    */
   isEnabled(): boolean {
