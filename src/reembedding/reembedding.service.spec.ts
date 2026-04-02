@@ -292,6 +292,13 @@ describe('ReembeddingService', () => {
               enrichmentVersion: '1.0.0',
             }),
           }),
+          create: expect.objectContaining({
+            memoryId: 'mem_123',
+            rawJson: expect.objectContaining({
+              embeddingVersion: 1,
+              enrichmentVersion: '1.0.0',
+            }),
+          }),
         }),
       );
     });

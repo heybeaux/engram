@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MemoryService, MemoryWithExtraction } from './memory.service';
 import { MemoryQueryService } from './memory-query.service';
+import { MemoryFailureService } from './memory-failure.service';
+import { MemoryContradictionService } from './memory-contradiction.service';
 import { MemoryGraphService } from './memory-graph.service';
 import { MemoryExportService } from './memory-export.service';
 import { MemoryWriteService } from './memory-write.service';
@@ -40,6 +42,8 @@ describe('MemoryService', () => {
   let mockWriteService: any;
   let mockLifecycleService: any;
   let mockQueryService: any;
+  let mockFailureService: any;
+  let mockContradictionService: any;
   let mockGraphService: any;
   let mockExportService: any;
 
@@ -82,6 +86,15 @@ describe('MemoryService', () => {
       formatContext: jest.fn().mockReturnValue({ text: '', tokens: 0 }),
     };
 
+    mockFailureService = {
+      findFailures: jest.fn().mockResolvedValue({ failures: [], total: 0, goal: '', latencyMs: 0 }),
+      attachChains: jest.fn().mockImplementation((memories) => Promise.resolve(memories)),
+    };
+
+    mockContradictionService = {
+      findContradictions: jest.fn().mockResolvedValue({ sourceId: null, sourceText: '', contradictions: [], total: 0, latencyMs: 0 }),
+    };
+
     mockGraphService = {
       getGraphData: jest
         .fn()
@@ -100,6 +113,8 @@ describe('MemoryService', () => {
       providers: [
         MemoryService,
         { provide: MemoryQueryService, useValue: mockQueryService },
+        { provide: MemoryFailureService, useValue: mockFailureService },
+        { provide: MemoryContradictionService, useValue: mockContradictionService },
         { provide: MemoryGraphService, useValue: mockGraphService },
         { provide: MemoryExportService, useValue: mockExportService },
         { provide: MemoryWriteService, useValue: mockWriteService },

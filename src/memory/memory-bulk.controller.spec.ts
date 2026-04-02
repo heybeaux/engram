@@ -430,6 +430,16 @@ describe('MemoryBulkController', () => {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
       );
     });
+
+    it('should handle empty memories array', async () => {
+      mockMemoryJobQueue.createBatch.mockReturnValue('job-empty');
+      const dto = { memories: [] } as any;
+
+      const result = await controller.importMemoriesAsync(userId, dto);
+
+      expect(result.count).toBe(0);
+      expect(result.status).toBe('processing');
+    });
   });
 
   // ── getEmbeddingStatus ─────────────────────────────────────────────────────
