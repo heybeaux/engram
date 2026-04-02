@@ -8,6 +8,7 @@ export const DREAM_CYCLE_JOBS = {
   CLUSTERING: 'dream-cycle:clustering',
   DRIFT: 'dream-cycle:drift',
   IDENTITY: 'dream-cycle:identity',
+  ARCHIVAL: 'dream-cycle:archival',
   REPORT: 'dream-cycle:report',
 } as const;
 
@@ -49,5 +50,6 @@ export const DREAM_CYCLE_STAGE_TIMEOUTS: Record<DreamCycleJobName, number> = {
   [DREAM_CYCLE_JOBS.CLUSTERING]: 900_000, // 15 min — vector math
   [DREAM_CYCLE_JOBS.DRIFT]: 600_000, // 10 min — analysis
   [DREAM_CYCLE_JOBS.IDENTITY]: 1_200_000, // 20 min — LLM identity
+  [DREAM_CYCLE_JOBS.ARCHIVAL]: 600_000, // 10 min — pure DB
   [DREAM_CYCLE_JOBS.REPORT]: 120_000, // 2 min  — aggregation only
 };

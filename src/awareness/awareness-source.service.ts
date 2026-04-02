@@ -37,9 +37,11 @@ export class AwarenessSourceService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     try {
       await this.loadFromDb();
-    } catch (error) {
+    } catch (err) {
+      // Don't crash the entire server if DB isn't ready yet during startup.
+      // Awareness is non-critical — it can load lazily on first access.
       this.logger.warn(
-        `Failed to load signal sources on init (DB may not be ready): ${error.message}`,
+        `Failed to load awareness state on startup (will retry on first access): ${err.message}`,
       );
     }
   }

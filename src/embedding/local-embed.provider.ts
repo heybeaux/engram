@@ -95,7 +95,11 @@ export class LocalEmbedProvider implements EmbeddingProvider {
   async healthCheck(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      // Increased from 5s → 30s: engram-embed /health can be delayed when
+      // the embed queue is busy (CPU-bound inference on same Tokio threads).
+      // The real fix is spawn_blocking in engram-embed, but this prevents
+      // false "down" reports in the meantime.
+      const timeout = setTimeout(() => controller.abort(), 30_000);
 
       const response = await fetch(`${this.baseUrl}/health`, {
         method: 'GET',

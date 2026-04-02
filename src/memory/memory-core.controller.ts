@@ -290,6 +290,91 @@ export class MemoryCoreController {
   }
 
   // =========================================================================
+  // ARCHIVAL
+  // =========================================================================
+
+  /**
+   * GET /v1/memories/archived
+   * List archived memories with pagination
+   */
+  @Get('memories/archived')
+  @ApiOperation({
+    summary: 'List archived memories',
+    description:
+      'List memories that have been archived by the dream cycle, with pagination.',
+  })
+  async listArchivedMemories(
+    @UserId() userId: string,
+    @Query('limit') limitStr?: string,
+    @Query('offset') offsetStr?: string,
+  ): Promise<{
+    memories: any[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const limit = Math.min(
+      Math.max(parseInt(limitStr || '25', 10) || 25, 1),
+      100,
+    );
+    const offset = Math.max(parseInt(offsetStr || '0', 10) || 0, 0);
+
+    const where = {
+      userId,
+      deletedAt: null,
+      searchable: false,
+      archivedReason: { not: null },
+    };
+
+    const [memories, total] = await Promise.all([
+      this.prisma.memory.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip: offset,
+        take: limit,
+        include: { extraction: true },
+      }),
+      this.prisma.memory.count({ where }),
+    ]);
+
+    return { memories, total, limit, offset };
+  }
+
+  /**
+   * POST /v1/memories/:id/unarchive
+   * Restore an archived memory to active/searchable state
+   */
+  @Post('memories/:id/unarchive')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Unarchive a memory',
+    description:
+      'Restore an archived memory, setting searchable=true and clearing archivedReason.',
+  })
+  async unarchiveMemory(
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ): Promise<{ id: string; searchable: boolean; archivedReason: string | null }> {
+    const memory = await this.prisma.memory.findFirst({
+      where: { id, userId, deletedAt: null },
+    });
+    if (!memory) {
+      throw new NotFoundException(`Memory ${id} not found`);
+    }
+
+    const updated = await this.prisma.memory.update({
+      where: { id },
+      data: { searchable: true, archivedReason: null },
+    });
+
+    return {
+      id: updated.id,
+      searchable: updated.searchable,
+      archivedReason: updated.archivedReason,
+    };
+  }
+
+  // =========================================================================
   // FEEDBACK
   // =========================================================================
 

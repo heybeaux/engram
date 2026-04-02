@@ -68,6 +68,9 @@ importers:
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
+      body-parser:
+        specifier: ^2.2.2
+        version: 2.2.2
       bullmq:
         specifier: ^5.71.0
         version: 5.71.0
