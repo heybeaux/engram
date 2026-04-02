@@ -36,6 +36,7 @@ import {
 import { RecallWeightService } from './recall-weight.service';
 import { MemoryQueryRankingService } from './memory-query-ranking.service';
 import { MemoryQueryContextService } from './memory-query-context.service';
+import { MemoryFailureService } from './memory-failure.service';
 
 @Injectable()
 export class MemoryQueryService {
@@ -52,6 +53,7 @@ export class MemoryQueryService {
     @Optional() private memoryAccessLogService?: MemoryAccessLogService,
     @Optional() private anticipatoryService?: AnticipatoryService,
     @Optional() private queryLogService?: QueryLogService,
+    @Optional() private memoryFailureService?: MemoryFailureService,
   ) {}
 
   /**
@@ -441,7 +443,7 @@ export class MemoryQueryService {
 
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
-      result = (await this.attachChains(scoredMemories)) as MemoryWithScore[];
+      result = (await this.memoryFailureService?.attachChains(scoredMemories) ?? scoredMemories) as MemoryWithScore[];
     }
 
     const resultIds = result.map((m) => m.id);
@@ -598,7 +600,7 @@ export class MemoryQueryService {
 
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
-      result = (await this.attachChains(scoredMemories)) as MemoryWithScore[];
+      result = (await this.memoryFailureService?.attachChains(scoredMemories) ?? scoredMemories) as MemoryWithScore[];
     }
 
     const resultIds = result.map((m) => m.id);
