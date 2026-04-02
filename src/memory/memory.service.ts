@@ -27,6 +27,8 @@ import {
 
 // Extracted services
 import { MemoryQueryService } from './memory-query.service';
+import { MemoryFailureService } from './memory-failure.service';
+import { MemoryContradictionService } from './memory-contradiction.service';
 import { MemoryGraphService } from './memory-graph.service';
 import { MemoryExportService } from './memory-export.service';
 import { MemoryWriteService } from './memory-write.service';
@@ -50,6 +52,8 @@ export class MemoryService {
   private readonly logger = new Logger(MemoryService.name);
   constructor(
     private queryService: MemoryQueryService,
+    private failureService: MemoryFailureService,
+    private contradictionService: MemoryContradictionService,
     private graphService: MemoryGraphService,
     private exportService: MemoryExportService,
     private writeService: MemoryWriteService,
@@ -113,7 +117,7 @@ export class MemoryService {
     userId: string | string[] | null,
     dto: FindFailuresDto,
   ): Promise<FindFailuresResultDto> {
-    return this.queryService.findFailures(userId, dto);
+    return this.failureService.findFailures(userId, dto);
   }
 
   /**
@@ -123,7 +127,7 @@ export class MemoryService {
     userId: string | string[] | null,
     dto: FindContradictionsDto,
   ): Promise<FindContradictionsResult> {
-    return this.queryService.findContradictions(userId, dto);
+    return this.contradictionService.findContradictions(userId, dto);
   }
 
   /**

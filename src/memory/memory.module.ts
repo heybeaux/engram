@@ -7,6 +7,8 @@ import { MemoryAdminController } from './memory-admin.controller';
 import { MemoryCoreController } from './memory-core.controller';
 import { MemoryDedupService } from './memory-dedup.service';
 import { MemoryQueryService } from './memory-query.service';
+import { MemoryFailureService } from './memory-failure.service';
+import { MemoryContradictionService } from './memory-contradiction.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { MemoryGraphService } from './memory-graph.service';
 import { MemoryExportService } from './memory-export.service';
@@ -91,6 +93,8 @@ const bullExports = hasRedis ? [EmbeddingQueueProducer] : [];
     MemoryService,
     MemoryDedupService,
     MemoryQueryService,
+    MemoryFailureService,
+    MemoryContradictionService,
     MemoryQueryRankingService,
     MemoryQueryContextService,
     MemoryWriteService,

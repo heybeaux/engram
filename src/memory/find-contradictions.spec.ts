@@ -1,8 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { MemoryQueryService } from './memory-query.service';
+import { MemoryContradictionService } from './memory-contradiction.service';
 
-describe('MemoryQueryService.findContradictions', () => {
-  let service: MemoryQueryService;
+describe('MemoryContradictionService.findContradictions', () => {
+  let service: MemoryContradictionService;
   let mockPrisma: any;
   let mockEmbedding: any;
 
@@ -23,14 +23,9 @@ describe('MemoryQueryService.findContradictions', () => {
       generateForRecall: jest.fn().mockResolvedValue(fakeEmbedding),
     };
 
-    // Instantiate with minimal deps — only prisma + embedding are needed
-    service = new MemoryQueryService(
+    service = new MemoryContradictionService(
       mockPrisma,
       mockEmbedding,
-      null as any, // temporalParser
-      null as any, // recallWeightService
-      null as any, // rankingService
-      null as any, // contextService
     );
   });
 

@@ -1,18 +1,14 @@
-import { MemoryQueryService } from './memory-query.service';
-import { MemoryQueryRankingService } from './memory-query-ranking.service';
-import { MemoryQueryContextService } from './memory-query-context.service';
+import { MemoryFailureService } from './memory-failure.service';
 import { MemoryQueryController } from './memory-query.controller';
 import { MemoryService } from './memory.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
-import { TemporalParserService } from './temporal/temporal-parser.service';
-import { RecallWeightService } from './recall-weight.service';
 import { FindFailuresDto } from './dto/find-failures.dto';
 
 describe('findFailures (ENG-116)', () => {
   // ─── Service tests ─────────────────────────────────────────────
-  describe('MemoryQueryService.findFailures', () => {
-    let service: MemoryQueryService;
+  describe('MemoryFailureService.findFailures', () => {
+    let service: MemoryFailureService;
     let prisma: jest.Mocked<PrismaService>;
     let embedding: jest.Mocked<EmbeddingService>;
 
@@ -36,32 +32,9 @@ describe('findFailures (ENG-116)', () => {
         search: jest.fn().mockResolvedValue([]),
       } as any;
 
-      const temporalParser = {
-        parse: jest.fn().mockReturnValue({
-          semanticQuery: 'test query',
-          temporalFilter: null,
-        }),
-      } as any as TemporalParserService;
-
-      const recallWeightService = {
-        recallWeight: jest.fn().mockReturnValue(1.0),
-      } as any as RecallWeightService;
-
-      const rankingService = new MemoryQueryRankingService(
+      service = new MemoryFailureService(
         prisma,
         embedding,
-        recallWeightService,
-      );
-
-      const contextService = new MemoryQueryContextService(prisma);
-
-      service = new MemoryQueryService(
-        prisma,
-        embedding,
-        temporalParser,
-        recallWeightService,
-        rankingService,
-        contextService,
       );
     });
 
