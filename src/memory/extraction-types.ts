@@ -61,6 +61,9 @@ export const MEMORY_TYPE_PRIORITY: Record<MemoryType, number> = {
   EVENT: 4,
   TASK_OUTCOME: 3,
   SELF_ASSESSMENT: 3,
+  DECISION: 2,
+  OUTCOME: 3,
+  GOAL: 2,
 };
 
 export interface EntityWithType {

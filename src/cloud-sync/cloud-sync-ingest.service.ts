@@ -282,15 +282,24 @@ export class CloudSyncIngestService {
     });
     if (existing) return existing.cloudUserId;
 
-    let user = await tx.user.findUnique({
-      where: {
-        agentId_externalId: { agentId: cloudAgentId, externalId },
-      },
+    // Resolve accountId from agent for the accountId_externalId unique lookup
+    const agentForUser = await tx.agent.findUnique({
+      where: { id: cloudAgentId },
+      select: { accountId: true },
     });
+    const accountId = agentForUser?.accountId;
+
+    let user = accountId
+      ? await tx.user.findUnique({
+          where: {
+            accountId_externalId: { accountId, externalId },
+          },
+        })
+      : null;
 
     if (!user) {
       user = await tx.user.create({
-        data: { agentId: cloudAgentId, externalId },
+        data: { accountId, externalId },
       });
     }
 

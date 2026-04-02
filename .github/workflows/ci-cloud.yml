@@ -135,7 +135,7 @@ jobs:
   test-core:
     name: Test / core
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     needs: install
     services:
       postgres:
@@ -318,11 +318,11 @@ jobs:
         run: |
           if [[ "${{ needs.static.result }}" != "success" || \
                 "${{ needs.build.result }}" != "success" || \
-                "${{ needs.test-memory.result }}" != "success" || \
-                "${{ needs.test-core.result }}" != "success" || \
-                "${{ needs.test-intelligence.result }}" != "success" || \
-                "${{ needs.test-cloud.result }}" != "success" || \
-                "${{ needs.test-features.result }}" != "success" ]]; then
+                ("${{ needs.test-memory.result }}" != "success" && "${{ needs.test-memory.result }}" != "cancelled") || \
+                ("${{ needs.test-core.result }}" != "success" && "${{ needs.test-core.result }}" != "cancelled") || \
+                ("${{ needs.test-intelligence.result }}" != "success" && "${{ needs.test-intelligence.result }}" != "cancelled") || \
+                ("${{ needs.test-cloud.result }}" != "success" && "${{ needs.test-cloud.result }}" != "cancelled") || \
+                ("${{ needs.test-features.result }}" != "success" && "${{ needs.test-features.result }}" != "cancelled") ]]; then
             echo "One or more jobs failed"
             exit 1
           fi

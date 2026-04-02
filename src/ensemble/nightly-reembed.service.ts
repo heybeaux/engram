@@ -68,12 +68,19 @@ export class NightlyReembedService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    // Check for interrupted jobs on startup
-    const checkpoint = await this.checkpointService.findActiveCheckpoint();
-    if (checkpoint) {
+    try {
+      // Check for interrupted jobs on startup
+      const checkpoint = await this.checkpointService.findActiveCheckpoint();
+      if (checkpoint) {
+        this.logger.warn(
+          `Found interrupted job ${checkpoint.jobId}. ` +
+            `Run manually with resumeJobId to continue.`,
+        );
+      }
+    } catch (err) {
+      // Don't crash the server if DB isn't ready during startup
       this.logger.warn(
-        `Found interrupted job ${checkpoint.jobId}. ` +
-          `Run manually with resumeJobId to continue.`,
+        `Failed to check reembed checkpoint on startup: ${err.message}`,
       );
     }
   }
@@ -345,6 +352,14 @@ export class NightlyReembedService implements OnModuleInit {
   }
 
   private async getActiveAndShadowModels(): Promise<ModelId[]> {
+    // When using cloud ensemble, use the models EnsembleService has initialized
+    // (cloud models: openai-small, openai-large, cohere-v3).
+    // The DB-registered models are local defaults and don't match cloud provider IDs.
+    const configuredModels = this.ensembleService.getConfiguredModelIds();
+    if (configuredModels.length > 0) {
+      return configuredModels;
+    }
+    // Fallback to DB registry (for local mode)
     return this.modelRegistry.getActiveAndShadowModels();
   }
 

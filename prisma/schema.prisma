@@ -246,6 +246,10 @@ model Memory {
   dedupCandidates1 DedupCandidate[] @relation("DedupCandidate1")
   dedupCandidates2 DedupCandidate[] @relation("DedupCandidate2")
 
+  // Memory Edges (ENG-120): typed graph relationships
+  outgoingEdges MemoryEdge[] @relation("MemoryEdgesSource")
+  incomingEdges MemoryEdge[] @relation("MemoryEdgesTarget")
+
   @@index([clusterId])
   @@index([userId, layer])
   @@index([userId, createdAt])
@@ -661,6 +665,9 @@ enum MemoryType {
   LESSON // Priority 1: Mistakes, corrections, and learnings
   TASK_OUTCOME // Priority 3: Structured task completion records
   SELF_ASSESSMENT // Priority 3: Agent self-evaluation records
+  DECISION // Priority 2: Choices that were made (retained longer — decisions have consequences)
+  OUTCOME // Priority 3: Results of actions (linked to decisions)
+  GOAL // Priority 2: Intended objectives (active until resolved or abandoned)
 }
 
 /// Subject type - who/what is this memory about?
@@ -2344,4 +2351,29 @@ model Timeline {
   @@index([agentId, agentLocalDate(sort: Desc)])
   @@index([arcId])
   @@map("timelines")
+}
+
+/// ENG-120: Typed graph relationships between memories
+model MemoryEdge {
+  id            String    @id @default(uuid())
+  sourceId      String    @map("source_id")
+  targetId      String    @map("target_id")
+  edgeType      String    @map("edge_type")
+  weight        Float     @default(0.5)
+  confidence    Float     @default(0.5)
+  temporalStart DateTime? @map("temporal_start")
+  temporalEnd   DateTime? @map("temporal_end")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  createdBy     String?   @map("created_by")
+  metadata      Json      @default("{}")
+  agentId       String    @map("agent_id")
+
+  source Memory @relation("MemoryEdgesSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target Memory @relation("MemoryEdgesTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId])
+  @@index([targetId])
+  @@index([edgeType])
+  @@index([agentId])
+  @@map("memory_edges")
 }

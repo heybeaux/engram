@@ -104,5 +104,5 @@ jobs:
             echo "No spec changes."
           else
             git commit -m "chore: update API spec [skip ci]"
-            git push
+            git push || echo 'Push skipped (protected branch)'
           fi

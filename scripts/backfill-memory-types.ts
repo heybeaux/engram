@@ -25,6 +25,9 @@ const TYPE_PRIORITY: Record<MemoryType, number> = {
   EVENT: 4,
   TASK_OUTCOME: 3,
   SELF_ASSESSMENT: 3,
+  DECISION: 2,
+  OUTCOME: 3,
+  GOAL: 2,
 };
 
 // Classification prompt
@@ -41,14 +44,23 @@ TASK - Action items, todos, reminders, deadlines
   
 FACT - Biographical data, relationships, technical facts, general knowledge
   Examples: "works at Acme Corp", "has a daughter named Stella", "uses TypeScript"
-  
+
 EVENT - Time-bound occurrences, meetings, conversations, historical events
   Examples: "had a meeting yesterday about the project", "demo happened on Feb 1"
+
+DECISION - A choice that was made, with downstream consequences
+  Examples: "decided to go with PostgreSQL", "chose React over Vue", "opted for microservices"
+
+OUTCOME - Result of an action or decision
+  Examples: "the migration succeeded", "deployment failed due to timeout", "resulted in 30% speedup"
+
+GOAL - An intended objective, active until resolved or abandoned
+  Examples: "want to learn Rust this year", "goal is to reduce latency by 50%", "plan to migrate to K8s"
 
 Memory to classify:
 "{memory}"
 
-Respond with ONLY the type name (CONSTRAINT, PREFERENCE, TASK, FACT, or EVENT) and a confidence score 0-100.
+Respond with ONLY the type name (CONSTRAINT, PREFERENCE, TASK, FACT, EVENT, DECISION, OUTCOME, or GOAL) and a confidence score 0-100.
 Format: TYPE|CONFIDENCE
 
 Example responses:
@@ -149,6 +161,9 @@ async function main() {
     EVENT: 0,
     TASK_OUTCOME: 0,
     SELF_ASSESSMENT: 0,
+    DECISION: 0,
+    OUTCOME: 0,
+    GOAL: 0,
   };
 
   let processed = 0;

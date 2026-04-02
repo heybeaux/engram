@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { generateContentHash } from '../common/content-hash.util';
 import { SyncPushDto, SyncPushResponse } from './dto/sync-push.dto';
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 10; // Reduced from 50 — Railway cloud has 100KB body limit; 10 memories+embeddings stays ~20KB
 const BATCH_DELAY_MS = 200;
 const MAX_SYNC_DURATION_MS = 12 * 60 * 60 * 1000; // 12 hours
 

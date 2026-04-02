@@ -28,6 +28,9 @@ jest.mock('./stages/dream-cycle-drift.stage', () => ({
 jest.mock('./stages/dream-cycle-identity.stage', () => ({
   DreamCycleIdentityStage: jest.fn(),
 }));
+jest.mock('./stages/dream-cycle-archival.stage', () => ({
+  DreamCycleArchivalStage: jest.fn(),
+}));
 jest.mock('@nestjs/bullmq', () => ({
   Processor: () => (target: any) => target,
   WorkerHost: class WorkerHost {
@@ -51,6 +54,7 @@ describe('DreamCycleQueueProcessor', () => {
   let patternsStage: any;
   let driftStage: any;
   let identityStage: any;
+  let archivalStage: any;
 
   const baseJobData = {
     runId: 'run-1',
@@ -84,6 +88,7 @@ describe('DreamCycleQueueProcessor', () => {
     patternsStage = { run: jest.fn() };
     driftStage = { run: jest.fn() };
     identityStage = { run: jest.fn() };
+    archivalStage = { run: jest.fn().mockResolvedValue({ archived: 0 }) };
 
     processor = new DreamCycleQueueProcessor(
       prisma,
@@ -94,6 +99,7 @@ describe('DreamCycleQueueProcessor', () => {
       patternsStage,
       driftStage,
       identityStage,
+      archivalStage,
     );
   });
 

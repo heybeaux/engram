@@ -75,10 +75,22 @@ describe('DreamCycleQueueProducer', () => {
       expect(call.queueName).toBe(DREAM_CYCLE_QUEUE);
     });
 
-    it('should nest IDENTITY under REPORT as a child', async () => {
+    it('should nest ARCHIVAL under REPORT as a child', async () => {
       await producer.enqueue('user-1');
       const call = mockFlowProducer.add.mock.calls[0][0];
-      const identityJob = call.children.find(
+      const archivalJob = call.children.find(
+        (c: any) => c.name === DREAM_CYCLE_JOBS.ARCHIVAL,
+      );
+      expect(archivalJob).toBeDefined();
+    });
+
+    it('should nest IDENTITY under ARCHIVAL as a child', async () => {
+      await producer.enqueue('user-1');
+      const call = mockFlowProducer.add.mock.calls[0][0];
+      const archivalJob = call.children.find(
+        (c: any) => c.name === DREAM_CYCLE_JOBS.ARCHIVAL,
+      );
+      const identityJob = archivalJob?.children?.find(
         (c: any) => c.name === DREAM_CYCLE_JOBS.IDENTITY,
       );
       expect(identityJob).toBeDefined();
@@ -87,7 +99,10 @@ describe('DreamCycleQueueProducer', () => {
     it('should nest PATTERNS under IDENTITY (via DRIFT → CLUSTERING)', async () => {
       await producer.enqueue('user-1');
       const call = mockFlowProducer.add.mock.calls[0][0];
-      const identityJob = call.children.find(
+      const archivalJob = call.children.find(
+        (c: any) => c.name === DREAM_CYCLE_JOBS.ARCHIVAL,
+      );
+      const identityJob = archivalJob?.children?.find(
         (c: any) => c.name === DREAM_CYCLE_JOBS.IDENTITY,
       );
       // IDENTITY → DRIFT → CLUSTERING → PATTERNS
@@ -97,10 +112,13 @@ describe('DreamCycleQueueProducer', () => {
       expect(patternsJob).toBeDefined();
     });
 
-    it('should include DRIFT as sibling of PATTERNS under IDENTITY', async () => {
+    it('should include DRIFT under IDENTITY', async () => {
       await producer.enqueue('user-1');
       const call = mockFlowProducer.add.mock.calls[0][0];
-      const identityJob = call.children.find(
+      const archivalJob = call.children.find(
+        (c: any) => c.name === DREAM_CYCLE_JOBS.ARCHIVAL,
+      );
+      const identityJob = archivalJob?.children?.find(
         (c: any) => c.name === DREAM_CYCLE_JOBS.IDENTITY,
       );
       const driftJob = identityJob.children.find(
