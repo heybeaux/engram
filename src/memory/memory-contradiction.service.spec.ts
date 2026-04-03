@@ -12,7 +12,7 @@ const mockPrisma = {
 };
 
 const mockEmbedding = {
-  generateForRecall: jest.fn(),
+  generate: jest.fn(),
 };
 
 const MOCK_EMBEDDING = Array.from({ length: 1536 }, (_, i) => i * 0.001);
@@ -32,7 +32,7 @@ describe('MemoryContradictionService', () => {
     }).compile();
 
     service = module.get<MemoryContradictionService>(MemoryContradictionService);
-    mockEmbedding.generateForRecall.mockResolvedValue(MOCK_EMBEDDING);
+    mockEmbedding.generate.mockResolvedValue(MOCK_EMBEDDING);
   });
 
   const mockContradictionRow = {
@@ -126,7 +126,7 @@ describe('MemoryContradictionService', () => {
 
       await service.findContradictions('user-1', dto);
 
-      expect(mockEmbedding.generateForRecall).not.toHaveBeenCalled();
+      expect(mockEmbedding.generate).not.toHaveBeenCalled();
     });
 
     it('should generate embedding if stored embedding is missing', async () => {
@@ -136,7 +136,7 @@ describe('MemoryContradictionService', () => {
 
       await service.findContradictions('user-1', dto);
 
-      expect(mockEmbedding.generateForRecall).toHaveBeenCalledWith('Coffee is good for health');
+      expect(mockEmbedding.generate).toHaveBeenCalledWith('Coffee is good for health');
     });
 
     it('should exclude source memory from results', async () => {
@@ -171,7 +171,7 @@ describe('MemoryContradictionService', () => {
 
       await service.findContradictions('user-1', { text: 'Some assertion' });
 
-      expect(mockEmbedding.generateForRecall).toHaveBeenCalledWith('Some assertion');
+      expect(mockEmbedding.generate).toHaveBeenCalledWith('Some assertion');
       expect(mockPrisma.memory.findUnique).not.toHaveBeenCalled();
     });
 
@@ -324,7 +324,7 @@ describe('MemoryContradictionService', () => {
 
   describe('error propagation', () => {
     it('should propagate embedding errors', async () => {
-      mockEmbedding.generateForRecall.mockRejectedValue(
+      mockEmbedding.generate.mockRejectedValue(
         new Error('Embedding service timeout'),
       );
 

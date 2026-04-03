@@ -11,7 +11,7 @@ const mockPrisma = {
 };
 
 const mockEmbedding = {
-  generateForRecall: jest.fn(),
+  generate: jest.fn(),
 };
 
 const MOCK_EMBEDDING = Array.from({ length: 1536 }, (_, i) => i * 0.001);
@@ -31,7 +31,7 @@ describe('MemoryFailureService', () => {
     }).compile();
 
     service = module.get<MemoryFailureService>(MemoryFailureService);
-    mockEmbedding.generateForRecall.mockResolvedValue(MOCK_EMBEDDING);
+    mockEmbedding.generate.mockResolvedValue(MOCK_EMBEDDING);
   });
 
   // ===================== findFailures =====================
@@ -77,7 +77,7 @@ describe('MemoryFailureService', () => {
       const result = await service.findFailures('user-1', baseDto);
 
       expect(result.failures).toHaveLength(1);
-      expect(mockEmbedding.generateForRecall).toHaveBeenCalledWith('deploy the API');
+      expect(mockEmbedding.generate).toHaveBeenCalledWith('deploy the API');
     });
 
     it('should work with no userId (account-wide search)', async () => {
@@ -158,7 +158,7 @@ describe('MemoryFailureService', () => {
     });
 
     it('should propagate embedding errors', async () => {
-      mockEmbedding.generateForRecall.mockRejectedValue(new Error('Embedding service unavailable'));
+      mockEmbedding.generate.mockRejectedValue(new Error('Embedding service unavailable'));
 
       await expect(
         service.findFailures('user-1', baseDto),
