@@ -30,7 +30,7 @@ export class MemoryFailureService {
     const minSimilarity = dto.minSimilarity ?? 0.7;
 
     // 1. Generate embedding for the goal text
-    const goalEmbedding = await this.embedding.generateForRecall(dto.goal);
+    const goalEmbedding = await this.embedding.generate(dto.goal);
 
     // 2. Build failure keywords list
     const defaultKeywords = [

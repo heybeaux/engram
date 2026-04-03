@@ -7,7 +7,7 @@ export class MemoryEdgesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createEdge(dto: CreateMemoryEdgeDto, agentId: string) {
-    return this.prisma.memoryEdge.create({
+    return (this.prisma as any).memoryEdge.create({
       data: {
         sourceId: dto.sourceId,
         targetId: dto.targetId,
@@ -46,7 +46,7 @@ export class MemoryEdgesService {
       where.OR = [{ sourceId: memoryId }, { targetId: memoryId }];
     }
 
-    return this.prisma.memoryEdge.findMany({
+    return (this.prisma as any).memoryEdge.findMany({
       where,
       include: { source: true, target: true },
       orderBy: { createdAt: 'desc' },
@@ -54,7 +54,7 @@ export class MemoryEdgesService {
   }
 
   async deleteEdge(id: string, agentId: string) {
-    const edge = await this.prisma.memoryEdge.findFirst({
+    const edge = await (this.prisma as any).memoryEdge.findFirst({
       where: { id, agentId },
     });
 
@@ -62,7 +62,7 @@ export class MemoryEdgesService {
       throw new NotFoundException(`Edge ${id} not found`);
     }
 
-    return this.prisma.memoryEdge.delete({ where: { id } });
+    return (this.prisma as any).memoryEdge.delete({ where: { id } });
   }
 
   async findRelated(
@@ -96,7 +96,7 @@ export class MemoryEdgesService {
         where.edgeType = { in: edgeTypes };
       }
 
-      const edges = await this.prisma.memoryEdge.findMany({
+      const edges = await (this.prisma as any).memoryEdge.findMany({
         where,
         include: { source: true, target: true },
       });
