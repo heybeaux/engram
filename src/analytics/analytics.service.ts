@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { MemoryType, MemoryLayer } from '@prisma/client';
+import { Prisma, MemoryType, MemoryLayer } from '@prisma/client';
 import {
   TimelineQueryDto,
   TimelineResponse,
@@ -16,6 +16,31 @@ import {
   LayerTrendPoint,
 } from './dto/breakdown-query.dto';
 import { AnalyticsSummaryResponse } from './dto/summary.dto';
+
+/** Allowlisted values for date_trunc interval argument */
+const VALID_DATE_TRUNC_INTERVALS = ['hour', 'day', 'week', 'month'] as const;
+type DateTruncInterval = (typeof VALID_DATE_TRUNC_INTERVALS)[number];
+
+/**
+ * Validate that an interval string is one of the known-safe values.
+ * This prevents injection via the date_trunc() literal argument which
+ * cannot be parameterized in PostgreSQL.
+ *
+ * Rejects null, undefined, empty string, and any value not in the allowlist.
+ * Must be called BEFORE the value is used in any SQL construction.
+ */
+function validateInterval(value: unknown): DateTruncInterval {
+  if (
+    value == null ||
+    typeof value !== 'string' ||
+    !VALID_DATE_TRUNC_INTERVALS.includes(value as DateTruncInterval)
+  ) {
+    throw new BadRequestException(
+      `Invalid interval value: ${String(value)}. Must be one of: ${VALID_DATE_TRUNC_INTERVALS.join(', ')}`,
+    );
+  }
+  return value as DateTruncInterval;
+}
 
 @Injectable()
 export class AnalyticsService {
@@ -42,6 +67,12 @@ export class AnalyticsService {
   ): Promise<TimelineResponse> {
     const { granularity = 'day', cumulative = false } = dto;
 
+    // Build the date_trunc interval — validated against allowlist to prevent injection.
+    // date_trunc() requires a literal string argument in PostgreSQL (cannot be parameterized),
+    // so we validate against the allowlist first. Any value not in the allowlist throws
+    // BadRequestException rather than silently defaulting, ensuring defense-in-depth.
+    const intervalLiteral = validateInterval(granularity);
+
     // Default date range
     const end = dto.end ? new Date(dto.end) : new Date();
     const start = dto.start
@@ -60,32 +91,24 @@ export class AnalyticsService {
       };
     }
 
-    // Build the date_trunc interval
-    const interval =
-      granularity === 'hour' ? 'hour' : granularity === 'week' ? 'week' : 'day';
-
-    // Raw SQL for time-series aggregation
-    // Note: date_trunc requires literal interval, use Prisma.raw for the interval
-    const intervalLiteral =
-      interval === 'hour' ? 'hour' : interval === 'week' ? 'week' : 'day';
-    const result = await this.prisma.$queryRawUnsafe<
+    // Raw SQL for time-series aggregation using parameterized $queryRaw.
+    // date_trunc requires a literal interval string — we use the allowlist-validated
+    // intervalLiteral via Prisma.sql to ensure it's never a raw user string.
+    const result = await this.prisma.$queryRaw<
       Array<{ timestamp: Date; count: bigint }>
     >(
-      `
-      SELECT 
-        date_trunc('${intervalLiteral}', created_at) AS timestamp,
+      Prisma.sql`
+      SELECT
+        date_trunc(${intervalLiteral}, created_at) AS timestamp,
         COUNT(*) AS count
       FROM memories
-      WHERE user_id = ANY($1)
+      WHERE user_id = ANY(${userIds})
         AND deleted_at IS NULL
-        AND created_at >= $2
-        AND created_at <= $3
-      GROUP BY date_trunc('${intervalLiteral}', created_at)
+        AND created_at >= ${start}
+        AND created_at <= ${end}
+      GROUP BY date_trunc(${intervalLiteral}, created_at)
       ORDER BY timestamp ASC
     `,
-      userIds,
-      start,
-      end,
     );
 
     // Convert to response format
@@ -119,6 +142,11 @@ export class AnalyticsService {
   ): Promise<TypeBreakdownResponse> {
     const { granularity = 'week' } = dto;
 
+    // Validate interval against allowlist before using in SQL (cannot be parameterized in date_trunc).
+    // Passing granularity directly ensures injection strings are rejected rather than silently
+    // defaulting to 'day', providing defense-in-depth.
+    const intervalLiteral = validateInterval(granularity);
+
     const end = dto.end ? new Date(dto.end) : new Date();
     const start = dto.start
       ? new Date(dto.start)
@@ -134,34 +162,23 @@ export class AnalyticsService {
       };
     }
 
-    const interval =
-      granularity === 'month'
-        ? 'month'
-        : granularity === 'week'
-          ? 'week'
-          : 'day';
-
-    // Get time-series data by type
-    const intervalLiteral = interval;
-    const result = await this.prisma.$queryRawUnsafe<
+    // Get time-series data by type using parameterized $queryRaw.
+    const result = await this.prisma.$queryRaw<
       Array<{ timestamp: Date; memory_type: MemoryType | null; count: bigint }>
     >(
-      `
-      SELECT 
-        date_trunc('${intervalLiteral}', created_at) AS timestamp,
+      Prisma.sql`
+      SELECT
+        date_trunc(${intervalLiteral}, created_at) AS timestamp,
         memory_type,
         COUNT(*) AS count
       FROM memories
-      WHERE user_id = ANY($1)
+      WHERE user_id = ANY(${userIds})
         AND deleted_at IS NULL
-        AND created_at >= $2
-        AND created_at <= $3
-      GROUP BY date_trunc('${intervalLiteral}', created_at), memory_type
+        AND created_at >= ${start}
+        AND created_at <= ${end}
+      GROUP BY date_trunc(${intervalLiteral}, created_at), memory_type
       ORDER BY timestamp ASC, memory_type
     `,
-      userIds,
-      start,
-      end,
     );
 
     // Group by timestamp
@@ -246,6 +263,13 @@ export class AnalyticsService {
   ): Promise<LayerDistributionResponse> {
     const { includeTrend = true, granularity = 'week' } = dto;
 
+    // Validate the interval early — before any DB access — so injection strings
+    // are rejected at the service boundary regardless of the includeTrend flag.
+    // Only performed when trend data is requested (granularity only matters then).
+    if (includeTrend) {
+      validateInterval(granularity);
+    }
+
     const userIds = await this.getUserIdsForAgent(agentId);
 
     if (userIds.length === 0) {
@@ -260,7 +284,7 @@ export class AnalyticsService {
     const layerCounts = await this.prisma.$queryRaw<
       Array<{ layer: MemoryLayer; count: bigint }>
     >`
-      SELECT 
+      SELECT
         layer,
         COUNT(*) AS count
       FROM memories
@@ -297,27 +321,26 @@ export class AnalyticsService {
     if (includeTrend) {
       const end = new Date();
       const start = this.getDefaultStartDate(granularity, end, 90);
-      const intervalLiteral = granularity === 'week' ? 'week' : 'day';
+      // Validate interval against allowlist before using in SQL (cannot be parameterized in date_trunc).
+      // Passing granularity directly ensures injection strings are rejected up front.
+      const intervalLiteral = validateInterval(granularity);
 
-      const trendResult = await this.prisma.$queryRawUnsafe<
+      const trendResult = await this.prisma.$queryRaw<
         Array<{ timestamp: Date; layer: MemoryLayer; count: bigint }>
       >(
-        `
-        SELECT 
-          date_trunc('${intervalLiteral}', created_at) AS timestamp,
+        Prisma.sql`
+        SELECT
+          date_trunc(${intervalLiteral}, created_at) AS timestamp,
           layer,
           COUNT(*) AS count
         FROM memories
-        WHERE user_id = ANY($1)
+        WHERE user_id = ANY(${userIds})
           AND deleted_at IS NULL
-          AND created_at >= $2
-          AND created_at <= $3
-        GROUP BY date_trunc('${intervalLiteral}', created_at), layer
+          AND created_at >= ${start}
+          AND created_at <= ${end}
+        GROUP BY date_trunc(${intervalLiteral}, created_at), layer
         ORDER BY timestamp ASC
       `,
-        userIds,
-        start,
-        end,
       );
 
       const byTimestamp = new Map<string, LayerTrendPoint>();

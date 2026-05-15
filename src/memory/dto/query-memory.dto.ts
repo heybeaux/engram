@@ -8,6 +8,7 @@ import {
   ValidateNested,
   Min,
   Max,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -22,6 +23,7 @@ export class QueryMemoryDto {
     example: 'What are the user preferences?',
   })
   @IsString()
+  @MaxLength(2000, { message: 'Query must not exceed 2000 characters' })
   query: string;
 
   @ApiPropertyOptional({

@@ -138,8 +138,13 @@ export class PgVectorProvider implements VectorProvider {
     // Determine whether to include legacy fallback (UNION ALL on memories.embedding)
     const skipFallback = await this.shouldSkipLegacyFallback();
 
+    // Clamp limit to a safe positive integer before interpolation into SQL.
+    // LIMIT cannot be a bound parameter in this dynamic query construction;
+    // Math.trunc guarantees it is a plain integer with no injection potential.
+    const safeLimit = Math.max(1, Math.trunc(limit));
+
     const primaryQuery = `
-        SELECT 
+        SELECT
           m.id,
           1 - (me.embedding <=> $1::vector) as score
         FROM memories m
@@ -149,7 +154,7 @@ export class PgVectorProvider implements VectorProvider {
           AND ${memoryWhereClause}
           AND me.embedding IS NOT NULL
         ORDER BY me.embedding <=> $1::vector
-        LIMIT ${limit}`;
+        LIMIT ${safeLimit}`;
 
     const fallbackQuery = `
       UNION ALL
@@ -166,12 +171,12 @@ export class PgVectorProvider implements VectorProvider {
             WHERE me.memory_id = m.id AND me.model_id = $2
           )
         ORDER BY m.embedding <=> $1::vector
-        LIMIT ${limit}
+        LIMIT ${safeLimit}
       )`;
 
     const query = skipFallback
       ? `${primaryQuery} `
-      : `(${primaryQuery}) ${fallbackQuery} ORDER BY score DESC LIMIT ${limit}`;
+      : `(${primaryQuery}) ${fallbackQuery} ORDER BY score DESC LIMIT ${safeLimit}`;
 
     // Search ensemble embeddings first, optionally fall back to inline column
     const results = await this.prisma.$queryRawUnsafe<
