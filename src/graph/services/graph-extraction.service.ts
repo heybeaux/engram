@@ -446,14 +446,35 @@ export class GraphExtractionService {
       }
     }
 
-    // 4. Create new entity
-    entity = await this.entityService.create({
-      userId,
-      name: extracted.name,
-      type: extracted.type,
-      aliases: extracted.aliases.map((a) => a.toLowerCase()),
-      firstSeenMemoryId: memoryId,
-    });
+    // 4. Create new entity — GIN-43: guard against a concurrent writer that
+    //    races between the findByName check above and the create below.
+    //    If another task (same user, same entity name+type) wins the race and
+    //    commits first we will receive a unique constraint violation (P2002).
+    //    In that case we re-fetch the row the other writer created and treat
+    //    it as "not created by us" (created: false).
+    try {
+      entity = await this.entityService.create({
+        userId,
+        name: extracted.name,
+        type: extracted.type,
+        aliases: extracted.aliases.map((a) => a.toLowerCase()),
+        firstSeenMemoryId: memoryId,
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        // Another concurrent writer already inserted this entity — fetch it.
+        const raced = await this.entityService.findByName(
+          userId,
+          extracted.name,
+          extracted.type,
+        );
+        if (raced) {
+          await this.entityService.incrementMentionCount(raced.id);
+          return { entity: raced, created: false };
+        }
+      }
+      throw err;
+    }
 
     // 5. Create embedding for new entity
     await this.createEntityEmbedding(entity);

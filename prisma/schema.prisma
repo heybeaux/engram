@@ -173,6 +173,13 @@ model Memory {
   supersededById   String?                @map("superseded_by_id")
   supersededAt     DateTime?              @map("superseded_at")
   consolidatedInto String?                @map("consolidated_into")
+
+  // GIN-43: Optimistic concurrency version counter.
+  // Incremented on every write. Callers that supply a stale version will
+  // receive a Prisma "Record to update not found" (P2025) error, which the
+  // service layer translates into a ConflictException (409).
+  version Int @default(0)
+
   createdAt        DateTime               @default(now()) @map("created_at")
   updatedAt        DateTime               @updatedAt @map("updated_at")
   deletedAt        DateTime?              @map("deleted_at")

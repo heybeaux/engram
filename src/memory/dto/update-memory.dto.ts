@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsNumber,
   IsObject,
+  IsInt,
   Min,
   Max,
 } from 'class-validator';
@@ -58,6 +59,21 @@ export class UpdateMemoryDto {
   @Min(0)
   @Max(1)
   importanceScore?: number;
+
+  /**
+   * GIN-43: Optimistic concurrency token.
+   *
+   * When supplied, the update is only applied if the stored `version` still
+   * matches. A mismatch means another writer modified the record first, and
+   * the server responds with HTTP 409 Conflict so the caller can re-fetch
+   * and retry.
+   *
+   * Omit this field for fire-and-forget / last-write-wins behaviour.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
 
   /**
    * Update extracted fields (5W1H)
