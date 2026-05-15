@@ -82,6 +82,7 @@ describe('ContextEnricherService', () => {
       supersededById: null,
       supersededAt: null,
       consolidatedInto: null,
+      version: 0,
       archivedReason: null,
       clusterId: null,
       embeddingStatus: 'PENDING' as any,
