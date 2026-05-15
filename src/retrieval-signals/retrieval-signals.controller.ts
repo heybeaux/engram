@@ -1,7 +1,9 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
+  Query,
   Req,
   HttpCode,
   HttpStatus,
@@ -10,6 +12,10 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { RetrievalSignalsService } from './retrieval-signals.service';
 import { FeedbackDto, FeedbackSignalType } from './dto/feedback.dto';
+import {
+  RetrievalLogQueryDto,
+  RetrievalLogResult,
+} from './dto/retrieval-log-query.dto';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { RetrievalSignalType } from '@prisma/client';
 
@@ -59,5 +65,31 @@ export class RetrievalSignalsController {
     });
 
     return { signalId };
+  }
+
+  @Get('retrieval-log')
+  @HttpCode(HttpStatus.OK)
+  @ApiTags('search')
+  @ApiOperation({
+    summary: 'Recent retrieval queries with attached signals',
+    description:
+      'Returns recent retrieval-log entries for the requesting account, joined with any RetrievalSignal rows attached to each query. Used by Ginnung cockpit to render the Engram "recent retrievals" panel. Per-result similarity scores live in the original query response (memories[*].score), not in this log.',
+  })
+  async listRecentQueries(
+    @Query() query: RetrievalLogQueryDto,
+    @Req() req: any,
+  ): Promise<{ logs: RetrievalLogResult[] }> {
+    const accountId =
+      req.accountId ?? req.agent?.accountId ?? req.user?.accountId;
+    if (!accountId) {
+      return { logs: [] };
+    }
+
+    const logs = await this.retrievalSignalsService.getRecentQueries(accountId, {
+      limit: query.limit,
+      since: query.since ? new Date(query.since) : undefined,
+    });
+
+    return { logs };
   }
 }
