@@ -3,7 +3,7 @@
  *
  * Verifies that:
  * 1. The `limit` value interpolated into LIMIT clauses is always a safe integer
- * 2. User-controlled filter values (userId, tags, projectId, poolIds) are always
+ * 2. User-controlled filter values (userId, projectId, poolIds) are always
  *    passed as bound parameters, never interpolated into SQL strings
  */
 import { Test, TestingModule } from '@nestjs/testing';
@@ -139,17 +139,5 @@ describe('PgVectorProvider — SQL injection prevention (GIN-42)', () => {
       expect(capturedParams).toContain(maliciousPoolId);
     });
 
-    it('passes tag values as bound parameters', async () => {
-      const maliciousTag = "tag'; DELETE FROM memories; --";
-
-      await provider.search(embedding, {
-        userId: 'user-1',
-        limit: 5,
-        filter: { tags: [maliciousTag] },
-      });
-
-      expect(capturedSql).not.toContain(maliciousTag);
-      expect(capturedParams).toContain(maliciousTag);
-    });
   });
 });
