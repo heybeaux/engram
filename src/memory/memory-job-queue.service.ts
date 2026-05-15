@@ -64,7 +64,18 @@ export class MemoryJobQueueService implements OnModuleDestroy {
   private readonly logger = new Logger(MemoryJobQueueService.name);
   private readonly batches = new Map<string, BatchJob>();
   private readonly pendingJobs: MemoryJob[] = [];
-  private processing = false;
+  /**
+   * Guards the scheduling loop against re-entrant concurrent calls.
+   * Only one logical "tick" of processNext may run at a time; subsequent
+   * callers set this flag and return immediately, knowing the running tick
+   * will pick up the work before it exits.
+   *
+   * GIN-37: Without this flag, multiple concurrent `.finally()` callbacks
+   * each enter the while-loop simultaneously, all reading a stale activeCount
+   * before any of them has incremented it — causing more than `concurrency`
+   * jobs to be dispatched at once (double-dispatch race).
+   */
+  private _scheduling = false;
   private concurrency = 3;
   private activeCount = 0;
   private processor?: (job: MemoryJob) => Promise<void>;
@@ -221,16 +232,39 @@ export class MemoryJobQueueService implements OnModuleDestroy {
     };
   }
 
-  private async processNext(): Promise<void> {
-    if (this.shutdownRequested || !this.processor) return;
+  private processNext(): void {
+    // Non-reentrant: if the scheduling loop is already running, signal that
+    // it should re-check for work when it finishes its current pass (by not
+    // returning early from the outer loop below) rather than spinning up a
+    // second concurrent loop that would race on activeCount.
+    if (this._scheduling) return;
 
-    while (this.activeCount < this.concurrency && this.pendingJobs.length > 0) {
-      const job = this.pendingJobs.shift()!;
-      this.activeCount++;
-      this.runJob(job).finally(() => {
-        this.activeCount--;
-        this.processNext();
-      });
+    this._scheduling = true;
+    try {
+      while (
+        !this.shutdownRequested &&
+        this.processor &&
+        this.activeCount < this.concurrency &&
+        this.pendingJobs.length > 0
+      ) {
+        const job = this.pendingJobs.shift()!;
+        // Increment synchronously before any await so that subsequent
+        // synchronous re-entries (from other .finally() callbacks that are
+        // queued as microtasks) see the updated count.
+        this.activeCount++;
+        this.runJob(job).finally(() => {
+          this.activeCount--;
+          // Release the guard before re-entering so that this call becomes
+          // the new owner of the scheduling loop.
+          this._scheduling = false;
+          this.processNext();
+        });
+      }
+    } finally {
+      // If we didn't hand off ownership via a .finally() callback (e.g. the
+      // loop exited because the queue is empty or we hit the concurrency cap),
+      // release the guard here.
+      this._scheduling = false;
     }
   }
 
