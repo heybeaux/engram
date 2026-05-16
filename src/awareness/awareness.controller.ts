@@ -45,19 +45,24 @@ export class AwarenessController {
     const take = limit ? Math.min(parseInt(limit, 10), 100) : 50;
     const skip = offset ? parseInt(offset, 10) : 0;
 
-    // Scope insights to the requesting account
-    const accountUsers = await this.prisma.user.findMany({
-      where: { accountId: agent.accountId, deletedAt: null },
-      select: { id: true },
-    });
-    const accountUserIds = accountUsers.map((u) => u.id);
+    // Scope insights to the requesting account when we have one. RLS still
+    // gates by account at the DB layer; this explicit filter just makes the
+    // intent clear. When no agent context is available (e.g. instance-key-only
+    // auth path), fall back to RLS-only filtering instead of 500ing.
+    const where: any = { layer: 'INSIGHT', deletedAt: null };
+    if (agent?.accountId) {
+      const accountUsers = await this.prisma.user.findMany({
+        where: { accountId: agent.accountId, deletedAt: null },
+        select: { id: true },
+      });
+      const accountUserIds = accountUsers.map((u) => u.id);
+      if (accountUserIds.length > 0) {
+        where.userId = { in: accountUserIds };
+      }
+    }
 
     const memories = await this.prisma.memory.findMany({
-      where: {
-        layer: 'INSIGHT',
-        deletedAt: null,
-        userId: { in: accountUserIds },
-      },
+      where,
       orderBy: { createdAt: 'desc' },
       take,
       skip,
