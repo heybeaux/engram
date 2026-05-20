@@ -81,10 +81,6 @@ export class ElasticsearchService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    if (process.env.NODE_ENV === 'test') {
-      return;
-    }
-
     const url = this.configService.get<string>('ELASTICSEARCH_URL');
     if (!url) {
       throw new Error(
@@ -100,6 +96,7 @@ export class ElasticsearchService implements OnModuleInit {
     } catch (err) {
       throw new Error(
         `[ES] Cluster unreachable at ${url}: ${(err as Error).message}`,
+        { cause: err },
       );
     }
 

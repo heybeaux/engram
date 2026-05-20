@@ -160,6 +160,7 @@ describe('MemoryQueryService', () => {
       expect(memoryPoolService.getAccessiblePoolIds).toHaveBeenCalledWith(
         'session-1',
         userId,
+        undefined,
       );
       expect(result.memories).toHaveLength(0);
     });
