@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { rlsContext } from '../prisma/rls-context';
 
 export interface QueryLogEntry {
   queryText: string;
@@ -20,9 +21,12 @@ export class QueryLogService {
    * Log a query for re-ranker training. Fire-and-forget.
    */
   logQuery(entry: QueryLogEntry): void {
-    this.writeQueryLog(entry).catch((err) => {
-      this.logger.warn(`Failed to log query: ${err.message}`, err.stack);
-    });
+    // Fire-and-forget outlives the request's RLS transaction; escape inherited tx.
+    void rlsContext.run(undefined as any, () =>
+      this.writeQueryLog(entry).catch((err) => {
+        this.logger.warn(`Failed to log query: ${err.message}`, err.stack);
+      }),
+    );
   }
 
   /**

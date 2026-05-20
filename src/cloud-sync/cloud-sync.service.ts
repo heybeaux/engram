@@ -3,6 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaService } from '../prisma/prisma.service';
+import { rlsContext } from '../prisma/rls-context';
 import { CloudLinkService } from '../cloud-link/cloud-link.service';
 import { MemoryCreatedEvent } from '../events/event-types';
 import { decrypt } from '../common/encryption.util';
@@ -244,40 +245,43 @@ export class CloudSyncService {
 
   @OnEvent('memory.created')
   async handleMemoryCreated(event: MemoryCreatedEvent): Promise<void> {
-    try {
-      const link = await this.prisma.cloudLink.findFirst({
-        where: { autoSync: true },
-      });
-      if (!link) return;
-
-      const apiKey = link.cloudSyncKey
-        ? this.decryptApiKey(link.cloudSyncKey)
-        : this.decryptApiKey(link.cloudApiKey);
-      const memory = await this.prisma.memory.findUnique({
-        where: { id: event.memoryId },
-        include: { extraction: true, entities: { include: { entity: true } } },
-      });
-      if (!memory || memory.deletedAt) return;
-
-      if (!memory.contentHash) {
-        const contentHash = generateContentHash(memory.raw);
-        await this.prisma.memory.update({
-          where: { id: memory.id },
-          data: { contentHash },
+    // Escape any inherited AsyncLocalStorage tx from the request that emitted the event.
+    await rlsContext.run(undefined as any, async () => {
+      try {
+        const link = await this.prisma.cloudLink.findFirst({
+          where: { autoSync: true },
         });
-        (memory as any).contentHash = contentHash;
-      }
+        if (!link) return;
 
-      await this.pushService.syncBatchToCloud(
-        [memory],
-        apiKey,
-        link.instanceId,
-      );
-    } catch (error: any) {
-      this.logger.warn(
-        `Auto-sync failed for memory ${event.memoryId}: ${error.message}`,
-      );
-    }
+        const apiKey = link.cloudSyncKey
+          ? this.decryptApiKey(link.cloudSyncKey)
+          : this.decryptApiKey(link.cloudApiKey);
+        const memory = await this.prisma.memory.findUnique({
+          where: { id: event.memoryId },
+          include: { extraction: true, entities: { include: { entity: true } } },
+        });
+        if (!memory || memory.deletedAt) return;
+
+        if (!memory.contentHash) {
+          const contentHash = generateContentHash(memory.raw);
+          await this.prisma.memory.update({
+            where: { id: memory.id },
+            data: { contentHash },
+          });
+          (memory as any).contentHash = contentHash;
+        }
+
+        await this.pushService.syncBatchToCloud(
+          [memory],
+          apiKey,
+          link.instanceId,
+        );
+      } catch (error: any) {
+        this.logger.warn(
+          `Auto-sync failed for memory ${event.memoryId}: ${error.message}`,
+        );
+      }
+    });
   }
 
   // =========================================================================

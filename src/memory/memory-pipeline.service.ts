@@ -1,5 +1,6 @@
 import { Injectable, Optional, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { rlsContext } from '../prisma/rls-context';
 import {
   ExtractionService,
   ExtractionContext,
@@ -245,15 +246,16 @@ export class MemoryPipelineService {
     }
 
     // 4b. Attach to entity profiles (fire-and-forget)
+    // Escape inherited tx — this outlives the caller's $transaction.
     if (this.attachmentPipeline) {
-      void this.attachmentPipeline
-        .onMemoryCreated(memoryId, userId)
-        .catch((err) => {
+      const pipeline = this.attachmentPipeline;
+      void rlsContext.run(undefined as any, () =>
+        pipeline.onMemoryCreated(memoryId, userId).catch((err) => {
           this.logger.warn(
-            `[Memory] Entity profile attachment failed for ${memoryId}:`,
-            err instanceof Error ? err.message : err,
+            `[Memory] Entity profile attachment failed for ${memoryId}: ${err instanceof Error ? err.message : err}`,
           );
-        });
+        }),
+      );
     }
 
     // 5. Generate and store embedding (Phase 2 — resilient, HEY-345)
@@ -285,16 +287,16 @@ export class MemoryPipelineService {
       }
     }
 
-    // 9. Process hierarchical embeddings
+    // 9. Process hierarchical embeddings (fire-and-forget — escape inherited tx)
     if (this.hierarchyService?.isEnabled()) {
-      this.hierarchyService
-        .processMemory(memoryId, raw, userId)
-        .catch((err) => {
+      const hierarchy = this.hierarchyService;
+      void rlsContext.run(undefined as any, () =>
+        hierarchy.processMemory(memoryId, raw, userId).catch((err) => {
           this.logger.error(
-            `[Memory] Hierarchy processing failed for ${memoryId}:`,
-            err,
+            `[Memory] Hierarchy processing failed for ${memoryId}: ${err instanceof Error ? err.message : err}`,
           );
-        });
+        }),
+      );
     }
   }
 
@@ -327,9 +329,9 @@ export class MemoryPipelineService {
       this.embeddingRetryQueue.delete(memoryId);
       return true;
     } catch (embedError) {
+      const msg = embedError instanceof Error ? embedError.message : String(embedError);
       this.logger.warn(
-        `[Memory] Embedding failed for ${memoryId} — queued for retry:`,
-        embedError instanceof Error ? embedError.message : embedError,
+        `[Memory] Embedding failed for ${memoryId} — queued for retry: ${msg}`,
       );
 
       // Mark as FAILED in DB

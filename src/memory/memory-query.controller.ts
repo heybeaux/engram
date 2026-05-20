@@ -109,8 +109,10 @@ export class MemoryQueryController {
     @Req() req: any,
     @Res({ passthrough: true }) res: Response,
     @Query('agentId') agentId?: string,
+    @Query('scope') scope?: string,
   ): Promise<QueryResult> {
-    const accountUserIds = await this.resolveAccountUserIds(req, agentId);
+    const accountUserIds =
+      scope === 'user' ? null : await this.resolveAccountUserIds(req, agentId);
     const result = await this.memoryService.recall(
       accountUserIds || userId,
       dto,
