@@ -18,6 +18,7 @@ import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { EmbeddingService } from '../../src/memory/embedding.service';
+import { ElasticsearchService } from '../../src/search/elasticsearch.service';
 import { CachedEmbeddingService } from './cached-embedding.service';
 
 export interface TestApp {
@@ -41,6 +42,13 @@ export async function createTestApp(
   if (overrideEmbedding) {
     builder.overrideProvider(EmbeddingService).useClass(CachedEmbeddingService);
   }
+
+  builder.overrideProvider(ElasticsearchService).useValue({
+    onModuleInit: async () => {},
+    indexMemory: async () => {},
+    deleteMemory: async () => {},
+    keywordSearch: async () => [],
+  });
 
   const moduleRef = await builder.compile();
 
