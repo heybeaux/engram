@@ -86,6 +86,7 @@ export class MemoryQueryService {
         poolIds = await this.memoryPoolService.getAccessiblePoolIds(
           dto.agentSessionKey,
           singleUserId ?? 'default',
+          dto.agentId,
         );
       } catch (err) {
         this.logger.warn(
@@ -235,10 +236,12 @@ export class MemoryQueryService {
       const memoryIds = vectorResults.map((r) => r.id);
 
       // BM25/tsvector hybrid: safety net for exact-keyword queries
+      // Skip inline FTS when in pool-only mode (poolIds set, no userId) — pool JOIN is the auth boundary
       const ftsResultIds = new Set<string>();
+      const skipFts = poolIds && poolIds.length > 0 && !singleUserId;
       try {
         // ENG-109: When no userId, omit user_id filter to search all account memories
-        const ftsResults = singleUserId
+        const ftsResults = skipFts ? [] : singleUserId
           ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
               `SELECT id FROM memories
                WHERE user_id = $1

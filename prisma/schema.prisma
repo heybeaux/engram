@@ -57,6 +57,7 @@ model Agent {
   webhooks       Webhook[]
   account        Account?       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   syncAgentMaps  SyncAgentMap[]
+  poolGrants     PoolGrant[]
 
   @@map("agents")
 }
@@ -186,7 +187,7 @@ model Memory {
   updatedAt      DateTime                 @updatedAt @map("updated_at")
   deletedAt      DateTime?                @map("deleted_at")
   processedAt    DateTime?                @map("processed_at")
-  embedding      Unsupported("vector")?
+  embedding      Unsupported("vector(768)")?
   searchVector   Unsupported("tsvector")? @map("search_vector")
   feedback       Feedback[]
   project        Project?                 @relation(fields: [projectId], references: [id])
@@ -552,20 +553,24 @@ model MemoryPoolMembership {
   @@map("memory_pool_memberships")
 }
 
-/// Grants an agent session access to a shared pool
+/// Grants an agent session or agent identity access to a shared pool
 model PoolGrant {
   id             String         @id @default(cuid())
   poolId         String         @map("pool_id")
-  agentSessionId String         @map("agent_session_id")
+  agentSessionId String?        @map("agent_session_id")
+  agentId        String?        @map("agent_id")
   permission     PoolPermission @default(READ)
   grantedBy      String         @map("granted_by")
   grantedAt      DateTime       @default(now()) @map("granted_at")
   expiresAt      DateTime?      @map("expires_at")
 
-  pool         MemoryPool   @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  agentSession AgentSession @relation(fields: [agentSessionId], references: [id], onDelete: Cascade)
+  pool         MemoryPool    @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  agentSession AgentSession? @relation(fields: [agentSessionId], references: [id], onDelete: Cascade)
+  agent        Agent?        @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   @@unique([poolId, agentSessionId])
+  @@unique([poolId, agentId])
+  @@index([agentId])
   @@map("pool_grants")
 }
 

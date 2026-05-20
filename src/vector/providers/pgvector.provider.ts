@@ -102,9 +102,11 @@ export class PgVectorProvider implements VectorProvider {
     const params: any[] = [embeddingStr, this.searchModel];
     let paramIndex = 3;
 
-    // User ID filter
+    // User ID filter — skip when pool membership JOIN is the auth boundary
     let memoryWhereClause: string;
-    if (userIds.length === 1) {
+    if (options.filter?.poolIds && options.filter.poolIds.length > 0) {
+      memoryWhereClause = `m.deleted_at IS NULL`;
+    } else if (userIds.length === 1) {
       memoryWhereClause = `m.user_id = $${paramIndex} AND m.deleted_at IS NULL`;
       params.push(userIds[0]);
       paramIndex++;

@@ -69,9 +69,11 @@ export class HybridSearchService {
     const params: any[] = [query];
     let paramIndex = 2;
 
-    // User ID filter
+    // User ID filter — skip when pool membership JOIN is the auth boundary
     let whereClause: string;
-    if (userIds.length === 1) {
+    if (options.filter?.poolIds && options.filter.poolIds.length > 0) {
+      whereClause = `m.deleted_at IS NULL`;
+    } else if (userIds.length === 1) {
       whereClause = `m.user_id = $${paramIndex} AND m.deleted_at IS NULL`;
       params.push(userIds[0]);
       paramIndex++;
