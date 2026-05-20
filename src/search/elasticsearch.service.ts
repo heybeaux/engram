@@ -81,6 +81,10 @@ export class ElasticsearchService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+
     const url = this.configService.get<string>('ELASTICSEARCH_URL');
     if (!url) {
       throw new Error(
