@@ -6,6 +6,7 @@ import { ImportanceService } from './importance.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { MemoryLayer, MemorySource, ImportanceHint } from '@prisma/client';
+import { ElasticsearchService } from '../search/elasticsearch.service';
 
 describe('MemoryLifecycleService', () => {
   let service: MemoryLifecycleService;
@@ -14,6 +15,7 @@ describe('MemoryLifecycleService', () => {
   let mockEmbedding: any;
   let mockImportance: any;
   let mockPipelineService: any;
+  let mockElasticsearchService: Partial<ElasticsearchService>;
 
   const mockMemory = {
     id: 'mem-123',
@@ -94,12 +96,18 @@ describe('MemoryLifecycleService', () => {
       linkRelatedMemories: jest.fn().mockResolvedValue(undefined),
     };
 
+    mockElasticsearchService = {
+      indexMemory: jest.fn().mockResolvedValue(undefined),
+      deleteMemory: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new MemoryLifecycleService(
       mockPrisma,
       mockExtraction,
       mockEmbedding,
       mockImportance,
       mockPipelineService,
+      mockElasticsearchService as ElasticsearchService,
     );
   });
 

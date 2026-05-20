@@ -6,6 +6,7 @@ import { ImportanceService } from './importance.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { EmbeddingQueueProducer } from './embedding-queue.producer';
 import { ImportanceHint, MemoryLayer, MemorySource } from '@prisma/client';
+import { ElasticsearchService } from '../search/elasticsearch.service';
 
 describe('MemoryWriteService', () => {
   let service: MemoryWriteService;
@@ -15,6 +16,7 @@ describe('MemoryWriteService', () => {
   let mockImportance: any;
   let mockPipelineService: any;
   let mockEmbeddingQueue: any;
+  let mockElasticsearchService: Partial<ElasticsearchService>;
 
   const mockMemory = {
     id: 'mem-123',
@@ -98,12 +100,17 @@ describe('MemoryWriteService', () => {
       enqueueEmbedding: jest.fn().mockResolvedValue(undefined),
     };
 
+    mockElasticsearchService = {
+      indexMemory: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new MemoryWriteService(
       mockPrisma,
       mockExtraction,
       mockEmbedding,
       mockImportance,
       mockPipelineService,
+      mockElasticsearchService as ElasticsearchService,
       undefined, // correctionService
       undefined, // memoryPoolService
       undefined, // memoryAccessLogService

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { VectorSearchResult, VectorSearchOptions } from './vector.interface';
+import { ElasticsearchService } from '../search/elasticsearch.service';
 
 export interface HybridSearchConfig {
   /** Weight for vector similarity scores (default 0.6) */
@@ -31,6 +32,7 @@ export class HybridSearchService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private elasticsearchService: ElasticsearchService,
   ) {
     this.config = {
       vectorWeight: parseFloat(
@@ -53,9 +55,8 @@ export class HybridSearchService {
   }
 
   /**
-   * Perform full-text search against the memories table.
-   * Uses PostgreSQL's tsvector + plainto_tsquery for ranked text matching.
-   * Falls back to trigram similarity for fuzzy matches when enabled.
+   * Keyword search via Elasticsearch BM25.
+   * ES is required — if the service is unavailable, an error is thrown at startup.
    */
   async textSearch(
     query: string,
@@ -66,102 +67,24 @@ export class HybridSearchService {
       : [options.userId];
     const limit = options.limit || 50;
 
-    const params: any[] = [query];
-    let paramIndex = 2;
-
-    // User ID filter — skip when pool membership JOIN is the auth boundary
-    let whereClause: string;
-    if (options.filter?.poolIds && options.filter.poolIds.length > 0) {
-      whereClause = `m.deleted_at IS NULL`;
-    } else if (userIds.length === 1) {
-      whereClause = `m.user_id = $${paramIndex} AND m.deleted_at IS NULL`;
-      params.push(userIds[0]);
-      paramIndex++;
-    } else {
-      const placeholders = userIds
-        .map((_, i) => `$${paramIndex + i}`)
-        .join(', ');
-      whereClause = `m.user_id IN (${placeholders}) AND m.deleted_at IS NULL`;
-      params.push(...userIds);
-      paramIndex += userIds.length;
-    }
-
-    // Layer filter
-    if (options.filter?.layers && options.filter.layers.length > 0) {
-      const layerPlaceholders = options.filter.layers
-        .map((_, i) => `$${paramIndex + i}::"MemoryLayer"`)
-        .join(', ');
-      whereClause += ` AND m.layer IN (${layerPlaceholders})`;
-      params.push(...options.filter.layers);
-      paramIndex += options.filter.layers.length;
-    }
-
-    // Project filter
-    if (options.filter?.projectId) {
-      whereClause += ` AND m.project_id = $${paramIndex}`;
-      params.push(options.filter.projectId);
-      paramIndex++;
-    }
-
-    // Pool filter
-    let poolJoin = '';
-    if (options.filter?.poolIds && options.filter.poolIds.length > 0) {
-      const poolPlaceholders = options.filter.poolIds
-        .map((_, i) => `$${paramIndex + i}`)
-        .join(', ');
-      poolJoin = `JOIN memory_pool_memberships mpm ON mpm.memory_id = m.id AND mpm.pool_id IN (${poolPlaceholders})`;
-      params.push(...options.filter.poolIds);
-      paramIndex += options.filter.poolIds.length;
-    }
-
-    // Full-text search query with optional trigram fallback
-    // Strategy: try tsvector match first, then trigram similarity as fallback
-    const sql = this.config.enableFuzzy
-      ? `
-        SELECT id, score FROM (
-          -- Full-text matches (highest quality)
-          SELECT m.id, ts_rank_cd(m.search_vector, plainto_tsquery('english', $1)) AS score
-          FROM memories m
-          ${poolJoin}
-          WHERE ${whereClause}
-            AND m.search_vector @@ plainto_tsquery('english', $1)
-
-          UNION ALL
-
-          -- Trigram fuzzy matches (fallback for misspellings, partial matches)
-          SELECT m.id, similarity(m.raw, $1) * 0.5 AS score
-          FROM memories m
-          ${poolJoin}
-          WHERE ${whereClause}
-            AND m.search_vector IS NOT NULL
-            AND similarity(m.raw, $1) > 0.15
-            AND NOT (m.search_vector @@ plainto_tsquery('english', $1))
-        ) combined
-        ORDER BY score DESC
-        LIMIT ${limit}
-      `
-      : `
-        SELECT m.id, ts_rank_cd(m.search_vector, plainto_tsquery('english', $1)) AS score
-        FROM memories m
-        ${poolJoin}
-        WHERE ${whereClause}
-          AND m.search_vector @@ plainto_tsquery('english', $1)
-        ORDER BY score DESC
-        LIMIT ${limit}
-      `;
-
     try {
-      const results = await this.prisma.$queryRawUnsafe<
-        Array<{ id: string; score: number }>
-      >(sql, ...params);
+      const results = await this.elasticsearchService.keywordSearch(
+        query,
+        {
+          userId: userIds,
+          layer: options.filter?.layers,
+          poolIds: options.filter?.poolIds,
+        },
+        limit,
+      );
 
       this.logger.log(
-        `[HybridSearch] text search: ${results.length} results for "${query.substring(0, 50)}"`,
+        `[HybridSearch] ES keyword search: ${results.length} results for "${query.substring(0, 50)}"`,
       );
-      return results.map((r) => ({ id: r.id, score: Number(r.score) }));
+      return results;
     } catch (error) {
       this.logger.warn(
-        `[HybridSearch] text search failed, returning empty: ${(error as Error).message}`,
+        `[HybridSearch] ES keyword search failed, returning empty: ${(error as Error).message}`,
       );
       return [];
     }

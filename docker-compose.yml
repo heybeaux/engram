@@ -15,6 +15,22 @@ services:
       timeout: 5s
       retries: 5
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   api:
     build: .
     environment:
@@ -22,11 +38,14 @@ services:
       DIRECT_URL: postgresql://engram:engram@postgres:5432/engram
       EDITION: local
       EMBEDDING_PROVIDER: local
+      ELASTICSEARCH_URL: http://elasticsearch:9200
       PORT: 3001
     ports:
       - "3001:3001"
     depends_on:
       postgres:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
 
   # ── Optional services (uncomment to enable) ──────────────────
@@ -42,3 +61,4 @@ services:
 
 volumes:
   pgdata:
+  elasticsearch_data:

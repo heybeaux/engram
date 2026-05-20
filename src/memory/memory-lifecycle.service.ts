@@ -23,6 +23,7 @@ import { parseFlexibleDate } from '../utils/date-parser';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { rlsContext } from '../prisma/rls-context';
 import { MemoryWithExtraction } from './memory.types';
+import { ElasticsearchService } from '../search/elasticsearch.service';
 
 @Injectable()
 export class MemoryLifecycleService {
@@ -34,6 +35,7 @@ export class MemoryLifecycleService {
     private embedding: EmbeddingService,
     private importance: ImportanceService,
     private pipelineService: MemoryPipelineService,
+    private elasticsearchService: ElasticsearchService,
     @Optional() private eventEmitter?: EventEmitter2,
   ) {}
 
@@ -128,6 +130,13 @@ export class MemoryLifecycleService {
     this.emitEvent(
       'memory.deleted',
       new MemoryDeletedEvent(memoryId, userId ?? 'unknown'),
+    );
+
+    // Remove from Elasticsearch (fire-and-forget)
+    this.elasticsearchService.deleteMemory(memoryId).catch((err) =>
+      this.logger.warn(
+        `[Memory] ES delete failed for ${memoryId}: ${(err as Error).message}`,
+      ),
     );
   }
 
@@ -306,7 +315,32 @@ export class MemoryLifecycleService {
         });
     }
 
-    return this.getById(memoryId) as Promise<MemoryWithExtraction>;
+    const result = await this.getById(memoryId);
+
+    // Update Elasticsearch index (fire-and-forget)
+    if (result) {
+      setImmediate(() => {
+        this.elasticsearchService
+          .indexMemory({
+            id: result.id,
+            content: result.raw,
+            userId: result.userId,
+            agentId: (result as any).agentId ?? undefined,
+            layer: result.layer,
+            source: result.source,
+            tags: (result as any).tags ?? [],
+            createdAt: result.createdAt,
+            updatedAt: result.updatedAt,
+          })
+          .catch((err) =>
+            this.logger.warn(
+              `[Memory] ES index update failed for ${memoryId}: ${(err as Error).message}`,
+            ),
+          );
+      });
+    }
+
+    return result as MemoryWithExtraction;
   }
 
   /**

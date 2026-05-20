@@ -63,6 +63,7 @@ import { TrajectoryFeedbackModule } from './memory/feedback/feedback.module';
 import { UsageLimitMiddleware } from './common/middleware/usage-limit.middleware';
 import { AuthModule } from './common/auth.module';
 import { PersistenceModule } from './common/persistence/persistence.module';
+import { ElasticsearchModule } from './search/elasticsearch.module';
 
 const EDITION = process.env.EDITION || 'local';
 
@@ -190,11 +191,10 @@ const coreModules = [
   TimelineModule,
   TrajectoryFeedbackModule,
   MemoryEdgesModule,
+  ElasticsearchModule,
 ];
 
 const cloudModules = [
-  ReembeddingModule,
-  EnsembleModule,
   AnalyticsModule,
   MonitoringModule,
   EvalModule,
@@ -204,8 +204,15 @@ const cloudModules = [
   InstanceModule,
 ];
 
+const ensembleModules = [ReembeddingModule, EnsembleModule];
+const ENSEMBLE_ENABLED = process.env.ENSEMBLE_ENABLED === 'true';
+
 @Module({
-  imports: [...coreModules, ...(EDITION === 'cloud' ? cloudModules : [])],
+  imports: [
+    ...coreModules,
+    ...(EDITION === 'cloud' ? cloudModules : []),
+    ...(EDITION === 'cloud' || ENSEMBLE_ENABLED ? ensembleModules : []),
+  ],
   providers: [
     {
       provide: APP_INTERCEPTOR,

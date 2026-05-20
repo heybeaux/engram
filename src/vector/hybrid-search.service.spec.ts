@@ -2,11 +2,19 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { HybridSearchService } from './hybrid-search.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ElasticsearchService } from '../search/elasticsearch.service';
+
+const mockKeywordSearch = jest.fn();
+const mockElasticsearchService = {
+  keywordSearch: mockKeywordSearch,
+};
 
 describe('HybridSearchService', () => {
   let service: HybridSearchService;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HybridSearchService,
@@ -29,10 +37,77 @@ describe('HybridSearchService', () => {
           provide: PrismaService,
           useValue: { $queryRawUnsafe: jest.fn() },
         },
+        {
+          provide: ElasticsearchService,
+          useValue: mockElasticsearchService,
+        },
       ],
     }).compile();
 
     service = module.get<HybridSearchService>(HybridSearchService);
+  });
+
+  describe('textSearch (ES)', () => {
+    it('delegates to ElasticsearchService.keywordSearch', async () => {
+      mockKeywordSearch.mockResolvedValue([
+        { id: 'mem-1', score: 1.0 },
+        { id: 'mem-2', score: 0.5 },
+      ]);
+
+      const results = await service.textSearch('find this', {
+        userId: 'user-1',
+        limit: 10,
+      });
+
+      expect(mockKeywordSearch).toHaveBeenCalledWith(
+        'find this',
+        expect.objectContaining({ userId: ['user-1'] }),
+        10,
+      );
+      expect(results).toHaveLength(2);
+      expect(results[0].id).toBe('mem-1');
+    });
+
+    it('returns empty array when ES throws', async () => {
+      mockKeywordSearch.mockRejectedValue(new Error('ES down'));
+
+      const results = await service.textSearch('query', {
+        userId: 'user-1',
+        limit: 5,
+      });
+
+      expect(results).toEqual([]);
+    });
+
+    it('passes layer filter to ES', async () => {
+      mockKeywordSearch.mockResolvedValue([]);
+
+      await service.textSearch('test', {
+        userId: 'user-1',
+        filter: { layers: ['SESSION', 'CORE'] },
+      });
+
+      expect(mockKeywordSearch).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ layer: ['SESSION', 'CORE'] }),
+        expect.any(Number),
+      );
+    });
+
+    it('passes poolIds filter to ES', async () => {
+      mockKeywordSearch.mockResolvedValue([]);
+
+      await service.textSearch('test', {
+        userId: 'user-1',
+        filter: { poolIds: ['pool-1', 'pool-2'] },
+      });
+
+      expect(mockKeywordSearch).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ poolIds: ['pool-1', 'pool-2'] }),
+        expect.any(Number),
+      );
+    });
   });
 
   describe('fuseResults', () => {

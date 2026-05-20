@@ -29,6 +29,7 @@ import { rlsContext } from '../prisma/rls-context';
 import { HypeService } from './hype.service';
 import { DurabilityClassifierService } from './durability-classifier.service';
 import { MemoryWithExtraction } from './memory.types';
+import { ElasticsearchService } from '../search/elasticsearch.service';
 
 @Injectable()
 export class MemoryWriteService {
@@ -40,6 +41,7 @@ export class MemoryWriteService {
     private embedding: EmbeddingService,
     private importance: ImportanceService,
     private pipelineService: MemoryPipelineService,
+    private elasticsearchService: ElasticsearchService,
     @Optional() private correctionService?: CorrectionService,
     @Optional() private memoryPoolService?: MemoryPoolService,
     @Optional() private memoryAccessLogService?: MemoryAccessLogService,
@@ -243,6 +245,28 @@ export class MemoryWriteService {
         );
       });
     }
+
+    // 12. Index into Elasticsearch (fire-and-forget)
+    setImmediate(() => {
+      this.elasticsearchService
+        .indexMemory({
+          id: memory.id,
+          content: rawContent,
+          userId,
+          agentId: memory.agentId ?? undefined,
+          accountId,
+          layer: memory.layer,
+          source: memory.source,
+          tags: (memory as any).tags ?? [],
+          createdAt: memory.createdAt,
+          updatedAt: memory.updatedAt,
+        })
+        .catch((err) =>
+          this.logger.warn(
+            `[Memory] ES index failed for ${memory.id}: ${(err as Error).message}`,
+          ),
+        );
+    });
 
     return memory;
   }
