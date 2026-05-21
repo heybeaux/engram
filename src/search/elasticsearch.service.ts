@@ -61,6 +61,7 @@ const INDEX_MAPPING: Record<string, any> = {
 export class ElasticsearchService implements OnModuleInit {
   private readonly logger = new Logger(ElasticsearchService.name);
   private client: Client;
+  private enabled = false;
 
   constructor(private readonly configService: ConfigService) {
     const url = this.configService.get<string>('ELASTICSEARCH_URL');
@@ -80,12 +81,17 @@ export class ElasticsearchService implements OnModuleInit {
     });
   }
 
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
   async onModuleInit(): Promise<void> {
     const url = this.configService.get<string>('ELASTICSEARCH_URL');
     if (!url) {
-      throw new Error(
-        'ELASTICSEARCH_URL is required but not set. Elasticsearch is a required dependency.',
+      this.logger.warn(
+        '[ES] ELASTICSEARCH_URL not set — keyword search disabled, falling back to tsvector',
       );
+      return;
     }
 
     try {
@@ -94,13 +100,14 @@ export class ElasticsearchService implements OnModuleInit {
         `[ES] Connected — cluster status: ${health.status}`,
       );
     } catch (err) {
-      throw new Error(
-        `[ES] Cluster unreachable at ${url}: ${(err as Error).message}`,
-        { cause: err },
+      this.logger.warn(
+        `[ES] Cluster unreachable at ${url}: ${(err as Error).message} — keyword search disabled`,
       );
+      return;
     }
 
     await this.ensureIndexTemplate();
+    this.enabled = true;
     this.logger.log('[ES] Initialization complete');
   }
 
@@ -139,6 +146,7 @@ export class ElasticsearchService implements OnModuleInit {
   }
 
   async indexMemory(memory: EsMemoryDocument): Promise<void> {
+    if (!this.enabled) return;
     const index = this.indexName(memory.accountId);
     await this.client.index({
       index,
@@ -160,6 +168,7 @@ export class ElasticsearchService implements OnModuleInit {
   }
 
   async deleteMemory(id: string, accountId?: string): Promise<void> {
+    if (!this.enabled) return;
     const index = this.indexName(accountId);
     try {
       await this.client.delete({ index, id });
@@ -176,6 +185,7 @@ export class ElasticsearchService implements OnModuleInit {
     filters: EsSearchFilters,
     limit: number,
   ): Promise<Array<{ id: string; score: number }>> {
+    if (!this.enabled) return [];
     const index = this.indexName(filters.accountId);
 
     const filterClauses: any[] = [];
