@@ -97,8 +97,7 @@ export class DreamCycleQueueProcessor extends WorkerHost {
     cursor: DreamCycleCursor,
   ): Promise<any> {
     const { userId, dryRun, maxLlmCalls } = job.data;
-    const remainingLlm =
-      (maxLlmCalls ?? 50) - (cursor.llmCallsUsed ?? 0);
+    const remainingLlm = (maxLlmCalls ?? 50) - (cursor.llmCallsUsed ?? 0);
 
     switch (job.name) {
       case DREAM_CYCLE_JOBS.PENDING:

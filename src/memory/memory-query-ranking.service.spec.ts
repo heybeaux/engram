@@ -89,9 +89,9 @@ describe('MemoryQueryRankingService', () => {
 
     it('should boost memories appearing in both vector and graph results', async () => {
       const mockGraphRecallService = {
-        recallViaGraph: jest.fn().mockResolvedValue([
-          { id: 'm1', raw: 'test', score: 0.8 },
-        ]),
+        recallViaGraph: jest
+          .fn()
+          .mockResolvedValue([{ id: 'm1', raw: 'test', score: 0.8 }]),
       } as unknown as GraphRecallService;
 
       const svc = new MemoryQueryRankingService(
@@ -118,9 +118,9 @@ describe('MemoryQueryRankingService', () => {
 
     it('should add new graph-only memories to results', async () => {
       const mockGraphRecallService = {
-        recallViaGraph: jest.fn().mockResolvedValue([
-          { id: 'm2', raw: 'graph only', score: 0.7 },
-        ]),
+        recallViaGraph: jest
+          .fn()
+          .mockResolvedValue([{ id: 'm2', raw: 'graph only', score: 0.7 }]),
       } as unknown as GraphRecallService;
 
       const svc = new MemoryQueryRankingService(
@@ -250,9 +250,7 @@ describe('MemoryQueryRankingService', () => {
 
     it('should use cross-encoder when available', async () => {
       const mockRerankService = {
-        rerank: jest
-          .fn()
-          .mockResolvedValue([{ index: 0, score: 0.95 }]),
+        rerank: jest.fn().mockResolvedValue([{ index: 0, score: 0.95 }]),
       } as unknown as RerankService;
 
       const svc = new MemoryQueryRankingService(
@@ -273,10 +271,7 @@ describe('MemoryQueryRankingService', () => {
       ];
 
       const result = await svc.applyReranking(memories, 'query', 10);
-      expect(mockRerankService.rerank).toHaveBeenCalledWith(
-        'query',
-        ['test'],
-      );
+      expect(mockRerankService.rerank).toHaveBeenCalledWith('query', ['test']);
       expect(result).toHaveLength(1);
     });
 

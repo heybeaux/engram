@@ -6,7 +6,7 @@ const makeCallHandler = (returnValue: any) => ({
   handle: () => of(returnValue),
 });
 
-const makeContext = () => ({} as any);
+const makeContext = () => ({}) as any;
 
 describe('SanitizeInterceptor', () => {
   let interceptor: SanitizeInterceptor;
@@ -64,7 +64,11 @@ describe('SanitizeInterceptor', () => {
   });
 
   it('should not modify non-raw string fields', async () => {
-    const result = await collect({ id: '1', title: '<b>bold</b>', raw: 'clean' });
+    const result = await collect({
+      id: '1',
+      title: '<b>bold</b>',
+      raw: 'clean',
+    });
     expect(result.title).toBe('<b>bold</b>');
     expect(result.raw).toBe('clean');
   });

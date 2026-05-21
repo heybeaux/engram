@@ -329,7 +329,8 @@ export class MemoryPipelineService {
       this.embeddingRetryQueue.delete(memoryId);
       return true;
     } catch (embedError) {
-      const msg = embedError instanceof Error ? embedError.message : String(embedError);
+      const msg =
+        embedError instanceof Error ? embedError.message : String(embedError);
       this.logger.warn(
         `[Memory] Embedding failed for ${memoryId} — queued for retry: ${msg}`,
       );

@@ -6,17 +6,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import {
-  MemoryUpdatedEvent,
-  MemoryDeletedEvent,
-} from '../events/event-types';
+import { MemoryUpdatedEvent, MemoryDeletedEvent } from '../events/event-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ExtractionService, ExtractionContext } from './extraction.service';
 import { EmbeddingService } from './embedding.service';
 import { ImportanceService } from './importance.service';
-import {
-  ExportedMemory,
-} from './dto/export-import.dto';
+import { ExportedMemory } from './dto/export-import.dto';
 import { UpdateMemoryDto, CorrectMemoryDto } from './dto/update-memory.dto';
 import { MemorySource } from '@prisma/client';
 import { parseFlexibleDate } from '../utils/date-parser';
@@ -133,11 +128,13 @@ export class MemoryLifecycleService {
     );
 
     // Remove from Elasticsearch (fire-and-forget)
-    this.elasticsearchService.deleteMemory(memoryId).catch((err) =>
-      this.logger.warn(
-        `[Memory] ES delete failed for ${memoryId}: ${(err as Error).message}`,
-      ),
-    );
+    this.elasticsearchService
+      .deleteMemory(memoryId)
+      .catch((err) =>
+        this.logger.warn(
+          `[Memory] ES delete failed for ${memoryId}: ${(err as Error).message}`,
+        ),
+      );
   }
 
   /**

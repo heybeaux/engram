@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { CreateMemoryDto, CreateMemoryBatchDto } from './dto/create-memory.dto';
 import {
   ExportedMemory,

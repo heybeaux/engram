@@ -34,9 +34,7 @@ describe('ContractController', () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ContractController],
-      providers: [
-        { provide: ContractService, useValue: mockContractService },
-      ],
+      providers: [{ provide: ContractService, useValue: mockContractService }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })
@@ -71,13 +69,19 @@ describe('ContractController', () => {
   describe('findAll', () => {
     it('should return all contracts for the user', async () => {
       const result = await controller.findAll('user-1');
-      expect(mockContractService.findAll).toHaveBeenCalledWith('user-1', undefined);
+      expect(mockContractService.findAll).toHaveBeenCalledWith(
+        'user-1',
+        undefined,
+      );
       expect(result).toEqual([mockContract]);
     });
 
     it('should pass status filter when provided', async () => {
       await controller.findAll('user-1', 'ACTIVE');
-      expect(mockContractService.findAll).toHaveBeenCalledWith('user-1', 'ACTIVE');
+      expect(mockContractService.findAll).toHaveBeenCalledWith(
+        'user-1',
+        'ACTIVE',
+      );
     });
 
     it('should return empty array when no contracts exist', async () => {
@@ -90,7 +94,10 @@ describe('ContractController', () => {
   describe('findOne', () => {
     it('should return a single contract by id', async () => {
       const result = await controller.findOne('user-1', 'contract-1');
-      expect(mockContractService.findOne).toHaveBeenCalledWith('user-1', 'contract-1');
+      expect(mockContractService.findOne).toHaveBeenCalledWith(
+        'user-1',
+        'contract-1',
+      );
       expect(result).toEqual(mockContract);
     });
 
@@ -107,7 +114,11 @@ describe('ContractController', () => {
   describe('update', () => {
     it('should delegate update to service with userId, id, and dto', async () => {
       const dto = { status: 'ACTIVE' };
-      const result = await controller.update('user-1', 'contract-1', dto as any);
+      const result = await controller.update(
+        'user-1',
+        'contract-1',
+        dto as any,
+      );
       expect(mockContractService.update).toHaveBeenCalledWith(
         'user-1',
         'contract-1',

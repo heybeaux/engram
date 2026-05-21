@@ -106,15 +106,22 @@ describe('ProjectStateService', () => {
         raw: 'Minor bug in the display logic',
         createdAt: new Date(),
       });
-      mockPrisma.memory.findMany.mockResolvedValueOnce([criticalIssue, mediumIssue]);
+      mockPrisma.memory.findMany.mockResolvedValueOnce([
+        criticalIssue,
+        mediumIssue,
+      ]);
 
       const result = await service.synthesize(userId, {
         projectName: 'test-project',
       });
 
       expect(result.summary.issues).toHaveLength(2);
-      expect(result.summary.issues.find((i) => i.id === 'issue-1')?.severity).toBe('critical');
-      expect(result.summary.issues.find((i) => i.id === 'issue-2')?.severity).toBe('medium');
+      expect(
+        result.summary.issues.find((i) => i.id === 'issue-1')?.severity,
+      ).toBe('critical');
+      expect(
+        result.summary.issues.find((i) => i.id === 'issue-2')?.severity,
+      ).toBe('medium');
     });
 
     it('should categorize outcomes', async () => {
@@ -168,7 +175,9 @@ describe('ProjectStateService', () => {
       // First call: project memories
       mockPrisma.memory.findMany.mockResolvedValueOnce([projectMem]);
       // Embedding search returns related task
-      mockEmbedding.search.mockResolvedValueOnce([{ id: 'task-1', score: 0.8 }]);
+      mockEmbedding.search.mockResolvedValueOnce([
+        { id: 'task-1', score: 0.8 },
+      ]);
       // Second call: related memories
       mockPrisma.memory.findMany.mockResolvedValueOnce([taskMem]);
 
@@ -283,7 +292,11 @@ describe('ProjectStateService', () => {
         { id: 'high-1', score: 0.8 },
       ]);
       mockPrisma.memory.findMany.mockResolvedValueOnce([
-        makeMemory({ id: 'high-1', raw: 'relevant task', layer: MemoryLayer.TASK }),
+        makeMemory({
+          id: 'high-1',
+          raw: 'relevant task',
+          layer: MemoryLayer.TASK,
+        }),
       ]);
 
       const result = await service.synthesize(userId, {

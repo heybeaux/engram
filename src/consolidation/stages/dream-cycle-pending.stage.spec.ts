@@ -378,7 +378,11 @@ describe('DreamCyclePendingStage', () => {
       // lastDreamedAt should still be updated for tracking
       expect(mockPrisma.memory.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: { in: ['mem-a', 'mem-b'] }, userId: 'user-1', deletedAt: null },
+          where: {
+            id: { in: ['mem-a', 'mem-b'] },
+            userId: 'user-1',
+            deletedAt: null,
+          },
           data: { lastDreamedAt: expect.any(Date) },
         }),
       );

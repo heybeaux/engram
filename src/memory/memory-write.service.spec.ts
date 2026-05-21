@@ -305,7 +305,8 @@ describe('MemoryWriteService', () => {
     });
 
     it('should split long paragraphs on sentence boundaries', () => {
-      const text = 'First sentence. Second sentence. Third sentence. Fourth sentence.';
+      const text =
+        'First sentence. Second sentence. Third sentence. Fourth sentence.';
       const result = service.chunkText(text, 30);
       expect(result.length).toBeGreaterThan(1);
     });

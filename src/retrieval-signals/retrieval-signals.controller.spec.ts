@@ -18,15 +18,15 @@ describe('RetrievalSignalsController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RetrievalSignalsController],
-      providers: [
-        { provide: RetrievalSignalsService, useValue: mockService },
-      ],
+      providers: [{ provide: RetrievalSignalsService, useValue: mockService }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue(mockGuard)
       .compile();
 
-    controller = module.get<RetrievalSignalsController>(RetrievalSignalsController);
+    controller = module.get<RetrievalSignalsController>(
+      RetrievalSignalsController,
+    );
     jest.clearAllMocks();
   });
 

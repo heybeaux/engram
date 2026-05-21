@@ -1,6 +1,9 @@
 import { ConsolidationController } from './consolidation.controller';
 import { DreamCycleService, DreamCycleResult } from './dream-cycle.service';
-import { GenerateContextService, GenerateContextResult } from './generate-context.service';
+import {
+  GenerateContextService,
+  GenerateContextResult,
+} from './generate-context.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DreamCycleQueueProducer } from './dream-cycle-queue.producer';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
@@ -52,8 +55,11 @@ describe('ConsolidationController', () => {
 
   describe('Guard enforcement', () => {
     it('should apply ApiKeyOrJwtGuard at class level', () => {
-      const guards: any[] = Reflect.getMetadata('__guards__', ConsolidationController) ?? [];
-      const names = guards.map((g) => (typeof g === 'function' ? g.name : g?.constructor?.name));
+      const guards: any[] =
+        Reflect.getMetadata('__guards__', ConsolidationController) ?? [];
+      const names = guards.map((g) =>
+        typeof g === 'function' ? g.name : g?.constructor?.name,
+      );
       expect(names).toContain(ApiKeyOrJwtGuard.name);
     });
   });
@@ -115,7 +121,9 @@ describe('ConsolidationController', () => {
 
     it('should propagate service errors', async () => {
       mockDreamCycle.run.mockRejectedValue(new Error('dream cycle failed'));
-      await expect(controller.runDreamCycle()).rejects.toThrow('dream cycle failed');
+      await expect(controller.runDreamCycle()).rejects.toThrow(
+        'dream cycle failed',
+      );
     });
   });
 
@@ -166,7 +174,10 @@ describe('ConsolidationController', () => {
       const req = {};
       await controller.startDreamCycleAsync({} as any, req as any);
 
-      expect(mockQueueProducer.enqueue).toHaveBeenCalledWith('default', expect.any(Object));
+      expect(mockQueueProducer.enqueue).toHaveBeenCalledWith(
+        'default',
+        expect.any(Object),
+      );
     });
 
     it('should throw when queueProducer is not configured', async () => {
@@ -188,10 +199,11 @@ describe('ConsolidationController', () => {
       const req = { user: { id: 'u1' } };
       await controller.startDreamCycleAsync(body as any, req as any);
 
-      expect(mockQueueProducer.enqueue).toHaveBeenCalledWith(
-        'u1',
-        { dryRun: true, maxLlmCalls: 50, maxMemories: 100 },
-      );
+      expect(mockQueueProducer.enqueue).toHaveBeenCalledWith('u1', {
+        dryRun: true,
+        maxLlmCalls: 50,
+        maxMemories: 100,
+      });
     });
   });
 
@@ -208,7 +220,10 @@ describe('ConsolidationController', () => {
       mockGenerateContext.generate.mockResolvedValue(contextResult);
 
       const req = { accountId: 'acc-1', headers: {} };
-      const result = await controller.generateContextEndpoint(req as any, 'user-1');
+      const result = await controller.generateContextEndpoint(
+        req as any,
+        'user-1',
+      );
 
       expect(result).toEqual(contextResult);
       expect(mockGenerateContext.generate).toHaveBeenCalledWith(
@@ -253,7 +268,12 @@ describe('ConsolidationController', () => {
       mockGenerateContext.generate.mockResolvedValue(contextResult);
 
       const req = { accountId: 'acc-1', headers: {} };
-      await controller.generateContextEndpoint(req as any, null, undefined, '4096');
+      await controller.generateContextEndpoint(
+        req as any,
+        null,
+        undefined,
+        '4096',
+      );
 
       expect(mockGenerateContext.generate).toHaveBeenCalledWith(
         expect.objectContaining({ tokenBudget: 4096 }),
@@ -264,7 +284,12 @@ describe('ConsolidationController', () => {
       mockGenerateContext.generate.mockResolvedValue(contextResult);
 
       const req = { accountId: 'acc-1', headers: {} };
-      await controller.generateContextEndpoint(req as any, null, undefined, 'NaN');
+      await controller.generateContextEndpoint(
+        req as any,
+        null,
+        undefined,
+        'NaN',
+      );
 
       const opts = mockGenerateContext.generate.mock.calls[0][0];
       expect(opts.tokenBudget).toBeUndefined();
@@ -274,7 +299,12 @@ describe('ConsolidationController', () => {
       mockGenerateContext.generate.mockResolvedValue(contextResult);
 
       const req = { accountId: 'acc-1', headers: {} };
-      await controller.generateContextEndpoint(req as any, null, undefined, '0');
+      await controller.generateContextEndpoint(
+        req as any,
+        null,
+        undefined,
+        '0',
+      );
 
       const opts = mockGenerateContext.generate.mock.calls[0][0];
       expect(opts.tokenBudget).toBeUndefined();
@@ -296,10 +326,19 @@ describe('ConsolidationController', () => {
 
       const req = { accountId: 'acc-1', headers: {} };
       const body = { agentId: 'agent-x', query: 'What happened?' };
-      await controller.generateContextEndpoint(req as any, null, undefined, undefined, body as any);
+      await controller.generateContextEndpoint(
+        req as any,
+        null,
+        undefined,
+        undefined,
+        body as any,
+      );
 
       expect(mockGenerateContext.generate).toHaveBeenCalledWith(
-        expect.objectContaining({ agentId: 'agent-x', query: 'What happened?' }),
+        expect.objectContaining({
+          agentId: 'agent-x',
+          query: 'What happened?',
+        }),
       );
     });
 
@@ -356,7 +395,9 @@ describe('ConsolidationController', () => {
     });
 
     it('should propagate errors', async () => {
-      mockPrisma.dreamCycleReport.findMany.mockRejectedValue(new Error('DB error'));
+      mockPrisma.dreamCycleReport.findMany.mockRejectedValue(
+        new Error('DB error'),
+      );
       await expect(controller.getReports()).rejects.toThrow('DB error');
     });
   });

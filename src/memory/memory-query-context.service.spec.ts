@@ -47,11 +47,7 @@ describe('MemoryQueryContextService', () => {
         makeMemory('m2', 'short text'), // ~3 tokens
       ];
 
-      const result = service.selectMemoriesForBudget(
-        candidates as any,
-        500,
-        0,
-      );
+      const result = service.selectMemoriesForBudget(candidates as any, 500, 0);
       expect(result.evicted.length).toBeGreaterThan(0);
     });
 

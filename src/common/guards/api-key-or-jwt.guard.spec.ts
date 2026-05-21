@@ -616,7 +616,13 @@ describe('ApiKeyOrJwtGuard', () => {
     it('should normalize externalId to lowercase for instance key path', async () => {
       const user = { id: 'user-1', accountId: 'acc-1', externalId: 'beaux' };
       mockPrisma.instanceApiKey.findUnique.mockResolvedValue({
-        id: 'ik-1', keyHash, accountId: 'acc-1', deletedAt: null, expiresAt: null, scopes: [], account,
+        id: 'ik-1',
+        keyHash,
+        accountId: 'acc-1',
+        deletedAt: null,
+        expiresAt: null,
+        scopes: [],
+        account,
       });
       mockPrisma.agent.findFirst.mockResolvedValue(agent);
       mockPrisma.user.findUnique.mockResolvedValue(user);
@@ -627,7 +633,9 @@ describe('ApiKeyOrJwtGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+        where: {
+          accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' },
+        },
       });
       expect(request.user).toEqual(user);
     });
@@ -635,7 +643,13 @@ describe('ApiKeyOrJwtGuard', () => {
     it('should normalize BEAUX to beaux for instance key path', async () => {
       const user = { id: 'user-1', accountId: 'acc-1', externalId: 'beaux' };
       mockPrisma.instanceApiKey.findUnique.mockResolvedValue({
-        id: 'ik-1', keyHash, accountId: 'acc-1', deletedAt: null, expiresAt: null, scopes: [], account,
+        id: 'ik-1',
+        keyHash,
+        accountId: 'acc-1',
+        deletedAt: null,
+        expiresAt: null,
+        scopes: [],
+        account,
       });
       mockPrisma.agent.findFirst.mockResolvedValue(agent);
       mockPrisma.user.findUnique.mockResolvedValue(user);
@@ -646,14 +660,26 @@ describe('ApiKeyOrJwtGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+        where: {
+          accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' },
+        },
       });
     });
 
     it('should create user with lowercase externalId when not found', async () => {
-      const newUser = { id: 'user-new', accountId: 'acc-1', externalId: 'beaux' };
+      const newUser = {
+        id: 'user-new',
+        accountId: 'acc-1',
+        externalId: 'beaux',
+      };
       mockPrisma.instanceApiKey.findUnique.mockResolvedValue({
-        id: 'ik-1', keyHash, accountId: 'acc-1', deletedAt: null, expiresAt: null, scopes: [], account,
+        id: 'ik-1',
+        keyHash,
+        accountId: 'acc-1',
+        deletedAt: null,
+        expiresAt: null,
+        scopes: [],
+        account,
       });
       mockPrisma.agent.findFirst.mockResolvedValue(agent);
       mockPrisma.user.findUnique.mockResolvedValue(null);
@@ -670,9 +696,20 @@ describe('ApiKeyOrJwtGuard', () => {
     });
 
     it('should resolve default user when no X-AM-User-ID header (instance key)', async () => {
-      const defaultUser = { id: 'user-def', accountId: 'acc-1', externalId: 'default', isDefault: true };
+      const defaultUser = {
+        id: 'user-def',
+        accountId: 'acc-1',
+        externalId: 'default',
+        isDefault: true,
+      };
       mockPrisma.instanceApiKey.findUnique.mockResolvedValue({
-        id: 'ik-1', keyHash, accountId: 'acc-1', deletedAt: null, expiresAt: null, scopes: [], account,
+        id: 'ik-1',
+        keyHash,
+        accountId: 'acc-1',
+        deletedAt: null,
+        expiresAt: null,
+        scopes: [],
+        account,
       });
       mockPrisma.agent.findFirst.mockResolvedValue(agent);
       mockPrisma.user.findFirst.mockResolvedValue(defaultUser);
@@ -692,12 +729,17 @@ describe('ApiKeyOrJwtGuard', () => {
       mockPrisma.user.findUnique.mockResolvedValue(user);
 
       const { ctx } = createMockContext({
-        headers: { authorization: 'Bearer valid-token', 'x-am-user-id': 'Beaux' },
+        headers: {
+          authorization: 'Bearer valid-token',
+          'x-am-user-id': 'Beaux',
+        },
       });
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+        where: {
+          accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' },
+        },
       });
     });
 
@@ -716,7 +758,9 @@ describe('ApiKeyOrJwtGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+        where: {
+          accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' },
+        },
       });
     });
   });

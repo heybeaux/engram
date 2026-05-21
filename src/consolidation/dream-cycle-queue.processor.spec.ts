@@ -84,7 +84,9 @@ describe('DreamCycleQueueProcessor', () => {
 
     pendingStage = { run: jest.fn() };
     tieringStage = { run: jest.fn() };
-    consolidationStage = { run: jest.fn().mockResolvedValue({ consolidated: 0 }) };
+    consolidationStage = {
+      run: jest.fn().mockResolvedValue({ consolidated: 0 }),
+    };
     patternsStage = { run: jest.fn() };
     driftStage = { run: jest.fn() };
     identityStage = { run: jest.fn() };
@@ -95,7 +97,7 @@ describe('DreamCycleQueueProcessor', () => {
       tracker,
       pendingStage,
       tieringStage,
-      consolidationStage as any,
+      consolidationStage,
       patternsStage,
       driftStage,
       identityStage,
@@ -233,7 +235,9 @@ describe('DreamCycleQueueProcessor', () => {
     it('should return COMPLETED status', async () => {
       const result = await processor.process(makeJob(DREAM_CYCLE_JOBS.REPORT));
 
-      expect(result).toEqual(expect.objectContaining({ status: 'COMPLETED', runId: 'run-1' }));
+      expect(result).toEqual(
+        expect.objectContaining({ status: 'COMPLETED', runId: 'run-1' }),
+      );
       expect(tracker.completeStage).toHaveBeenCalled();
     });
   });

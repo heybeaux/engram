@@ -130,7 +130,10 @@ export class DreamCyclePendingStage {
                 'MERGED',
                 'LLM approved merge',
               );
-              await this.updateMemoriesLastDreamedAt(candidate.memoryIds, userId);
+              await this.updateMemoriesLastDreamedAt(
+                candidate.memoryIds,
+                userId,
+              );
             }
             llmMerged++;
           } else {
@@ -141,7 +144,10 @@ export class DreamCyclePendingStage {
                 'REJECTED',
                 'LLM declined merge',
               );
-              await this.updateMemoriesLastDreamedAt(candidate.memoryIds, userId);
+              await this.updateMemoriesLastDreamedAt(
+                candidate.memoryIds,
+                userId,
+              );
             }
             llmRejected++;
           }

@@ -1,5 +1,10 @@
 import 'reflect-metadata';
-import { REQUIRES_PLAN_KEY, REQUIRES_FEATURE_KEY, RequiresPlan, RequiresFeature } from './plan.decorators';
+import {
+  REQUIRES_PLAN_KEY,
+  REQUIRES_FEATURE_KEY,
+  RequiresPlan,
+  RequiresFeature,
+} from './plan.decorators';
 import { PlanType } from './plan.types';
 
 // NestJS SetMetadata attaches metadata TO the decorated function (target[propertyKey]),
@@ -17,7 +22,9 @@ describe('Plan decorators', () => {
         @RequiresPlan(PlanType.TEAM)
         teamEndpoint() {}
       }
-      expect(getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'teamEndpoint')).toBe(PlanType.TEAM);
+      expect(
+        getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'teamEndpoint'),
+      ).toBe(PlanType.TEAM);
     });
 
     it('sets REQUIRES_PLAN_KEY metadata with BUSINESS plan', () => {
@@ -25,7 +32,13 @@ describe('Plan decorators', () => {
         @RequiresPlan(PlanType.BUSINESS)
         businessEndpoint() {}
       }
-      expect(getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'businessEndpoint')).toBe(PlanType.BUSINESS);
+      expect(
+        getMeta(
+          REQUIRES_PLAN_KEY,
+          TestController.prototype,
+          'businessEndpoint',
+        ),
+      ).toBe(PlanType.BUSINESS);
     });
 
     it('sets REQUIRES_PLAN_KEY metadata with DEVELOPER plan', () => {
@@ -33,7 +46,9 @@ describe('Plan decorators', () => {
         @RequiresPlan(PlanType.DEVELOPER)
         devEndpoint() {}
       }
-      expect(getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'devEndpoint')).toBe(PlanType.DEVELOPER);
+      expect(
+        getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'devEndpoint'),
+      ).toBe(PlanType.DEVELOPER);
     });
 
     it('does NOT set REQUIRES_FEATURE_KEY metadata when using RequiresPlan', () => {
@@ -41,7 +56,13 @@ describe('Plan decorators', () => {
         @RequiresPlan(PlanType.TEAM)
         mixedEndpoint() {}
       }
-      expect(getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'mixedEndpoint')).toBeUndefined();
+      expect(
+        getMeta(
+          REQUIRES_FEATURE_KEY,
+          TestController.prototype,
+          'mixedEndpoint',
+        ),
+      ).toBeUndefined();
     });
 
     it('different methods get independent plan metadata', () => {
@@ -52,8 +73,12 @@ describe('Plan decorators', () => {
         @RequiresPlan(PlanType.BUSINESS)
         endpointB() {}
       }
-      expect(getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'endpointA')).toBe(PlanType.DEVELOPER);
-      expect(getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'endpointB')).toBe(PlanType.BUSINESS);
+      expect(
+        getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'endpointA'),
+      ).toBe(PlanType.DEVELOPER);
+      expect(
+        getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'endpointB'),
+      ).toBe(PlanType.BUSINESS);
     });
   });
 
@@ -65,7 +90,9 @@ describe('Plan decorators', () => {
         @RequiresFeature('cloudSync')
         syncEndpoint() {}
       }
-      expect(getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'syncEndpoint')).toBe('cloudSync');
+      expect(
+        getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'syncEndpoint'),
+      ).toBe('cloudSync');
     });
 
     it('sets REQUIRES_FEATURE_KEY for sso feature', () => {
@@ -73,7 +100,9 @@ describe('Plan decorators', () => {
         @RequiresFeature('sso')
         ssoEndpoint() {}
       }
-      expect(getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'ssoEndpoint')).toBe('sso');
+      expect(
+        getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'ssoEndpoint'),
+      ).toBe('sso');
     });
 
     it('does NOT set REQUIRES_PLAN_KEY when using RequiresFeature', () => {
@@ -81,7 +110,9 @@ describe('Plan decorators', () => {
         @RequiresFeature('bulkImport')
         bulkEndpoint() {}
       }
-      expect(getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'bulkEndpoint')).toBeUndefined();
+      expect(
+        getMeta(REQUIRES_PLAN_KEY, TestController.prototype, 'bulkEndpoint'),
+      ).toBeUndefined();
     });
 
     it('different methods get independent feature metadata', () => {
@@ -92,8 +123,16 @@ describe('Plan decorators', () => {
         @RequiresFeature('advancedAnalytics')
         analyticsEndpoint() {}
       }
-      expect(getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'syncEndpoint')).toBe('cloudSync');
-      expect(getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'analyticsEndpoint')).toBe('advancedAnalytics');
+      expect(
+        getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'syncEndpoint'),
+      ).toBe('cloudSync');
+      expect(
+        getMeta(
+          REQUIRES_FEATURE_KEY,
+          TestController.prototype,
+          'analyticsEndpoint',
+        ),
+      ).toBe('advancedAnalytics');
     });
 
     it('handles arbitrary feature flag strings', () => {
@@ -101,7 +140,9 @@ describe('Plan decorators', () => {
         @RequiresFeature('experimental_feature_xyz')
         expEndpoint() {}
       }
-      expect(getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'expEndpoint')).toBe('experimental_feature_xyz');
+      expect(
+        getMeta(REQUIRES_FEATURE_KEY, TestController.prototype, 'expEndpoint'),
+      ).toBe('experimental_feature_xyz');
     });
   });
 

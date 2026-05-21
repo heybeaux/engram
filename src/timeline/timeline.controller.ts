@@ -28,20 +28,14 @@ export class TimelineController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create or upsert a timeline entry' })
   @ApiResponse({ status: 201, description: 'Timeline created/updated.' })
-  async upsert(
-    @Agent() agent: any,
-    @Body() dto: CreateTimelineDto,
-  ) {
+  async upsert(@Agent() agent: any, @Body() dto: CreateTimelineDto) {
     return this.timelineService.upsert(agent.id, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Query timelines by date range' })
   @ApiResponse({ status: 200, description: 'List of timelines.' })
-  async findAll(
-    @Agent() agent: any,
-    @Query() query: QueryTimelineDto,
-  ) {
+  async findAll(@Agent() agent: any, @Query() query: QueryTimelineDto) {
     return this.timelineService.findByDateRange(agent.id, query);
   }
 
@@ -56,10 +50,7 @@ export class TimelineController {
   @Get(':date/deep')
   @ApiOperation({ summary: 'Get timeline with linked memory content' })
   @ApiResponse({ status: 200, description: 'Timeline with resolved memories.' })
-  async findDeep(
-    @Agent() agent: any,
-    @Param('date') date: string,
-  ) {
+  async findDeep(@Agent() agent: any, @Param('date') date: string) {
     const result = await this.timelineService.findByDateDeep(agent.id, date);
     if (!result) {
       throw new NotFoundException(`No timeline found for date ${date}`);
@@ -69,7 +60,11 @@ export class TimelineController {
 
   @Get(':date')
   @ApiOperation({ summary: 'Get single day timeline' })
-  @ApiQuery({ name: 'lod', required: false, enum: ['index', 'summary', 'standard'] })
+  @ApiQuery({
+    name: 'lod',
+    required: false,
+    enum: ['index', 'summary', 'standard'],
+  })
   @ApiResponse({ status: 200, description: 'Single timeline entry.' })
   async findByDate(
     @Agent() agent: any,

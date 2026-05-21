@@ -15,9 +15,7 @@ describe('EmbeddingProxyController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [EmbeddingProxyController],
-      providers: [
-        { provide: EmbeddingService, useValue: embeddingService },
-      ],
+      providers: [{ provide: EmbeddingService, useValue: embeddingService }],
     })
       .overrideGuard(ApiKeyGuard)
       .useValue({ canActivate: () => true })
@@ -39,14 +37,14 @@ describe('EmbeddingProxyController', () => {
       embeddingService.embedOne!.mockResolvedValue([0.1, 0.2, 0.3]);
       embeddingService.getModelName!.mockReturnValue('bge-base-en-v1.5');
 
-      const result = await controller.embeddings({ input: 'hello world' } as any);
+      const result = await controller.embeddings({
+        input: 'hello world',
+      } as any);
 
       expect(embeddingService.embedOne).toHaveBeenCalledWith('hello world');
       expect(result).toEqual({
         object: 'list',
-        data: [
-          { object: 'embedding', embedding: [0.1, 0.2, 0.3], index: 0 },
-        ],
+        data: [{ object: 'embedding', embedding: [0.1, 0.2, 0.3], index: 0 }],
         model: 'bge-base-en-v1.5',
         usage: {
           prompt_tokens: 3, // Math.ceil(11/4) = 3
@@ -56,8 +54,8 @@ describe('EmbeddingProxyController', () => {
     });
 
     it('should embed an array of strings', async () => {
-      embeddingService.embedOne!
-        .mockResolvedValueOnce([0.1, 0.2])
+      embeddingService
+        .embedOne!.mockResolvedValueOnce([0.1, 0.2])
         .mockResolvedValueOnce([0.3, 0.4]);
       embeddingService.getModelName!.mockReturnValue('text-embedding-ada-002');
 

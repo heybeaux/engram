@@ -105,7 +105,11 @@ describe('DreamCycleService - Mutex', () => {
       mockDriftStage as any,
       mockIdentityStage as any,
       { run: jest.fn().mockResolvedValue({ synthesesCreated: 0 }) } as any, // timelineSynthesisStage
-      { run: jest.fn().mockResolvedValue({ rescored: 0, unchanged: 0, avgChange: 0 }) } as any, // importanceRescoreStage
+      {
+        run: jest
+          .fn()
+          .mockResolvedValue({ rescored: 0, unchanged: 0, avgChange: 0 }),
+      } as any, // importanceRescoreStage
       { run: jest.fn().mockResolvedValue({ archived: 0 }) } as any, // archivalStage
       mockTracker as any,
     );

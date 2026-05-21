@@ -25,7 +25,10 @@ function makeConfig(overrides: Partial<MappingConfig> = {}): MappingConfig {
   };
 }
 
-function makeParsedCsv(rowCount: number, headers = ['full_name', 'bio', 'notes']) {
+function makeParsedCsv(
+  rowCount: number,
+  headers = ['full_name', 'bio', 'notes'],
+) {
   const rows = Array.from({ length: rowCount }, (_, i) => ({
     full_name: `Person ${i + 1}`,
     bio: `Bio ${i + 1}`,
@@ -37,15 +40,27 @@ function makeParsedCsv(rowCount: number, headers = ['full_name', 'bio', 'notes']
 function makeMappedRecord(rowNumber: number, withMemory = false): MappedRecord {
   return {
     rowNumber,
-    profile: { name: `Person ${rowNumber}`, type: 'person' as any, description: `Bio ${rowNumber}` },
+    profile: {
+      name: `Person ${rowNumber}`,
+      type: 'person' as any,
+      description: `Bio ${rowNumber}`,
+    },
     attributes: [],
-    memory: withMemory ? { content: `Memory for row ${rowNumber}`, importance: 3 } : undefined,
+    memory: withMemory
+      ? { content: `Memory for row ${rowNumber}`, importance: 3 }
+      : undefined,
   };
 }
 
-function makeMappingResult(count: number, withMemory = false, errors: any[] = []) {
+function makeMappingResult(
+  count: number,
+  withMemory = false,
+  errors: any[] = [],
+) {
   return {
-    records: Array.from({ length: count }, (_, i) => makeMappedRecord(i + 1, withMemory)),
+    records: Array.from({ length: count }, (_, i) =>
+      makeMappedRecord(i + 1, withMemory),
+    ),
     errors,
   };
 }
@@ -106,7 +121,9 @@ describe('ImportPreviewService', () => {
     it('should return empty memories when no records have memory', async () => {
       mockCsvParser.parse.mockReturnValue(makeParsedCsv(2));
       mockCsvParser.validateHeaders.mockReturnValue([]);
-      mockMappingService.applyMapping.mockReturnValue(makeMappingResult(2, false));
+      mockMappingService.applyMapping.mockReturnValue(
+        makeMappingResult(2, false),
+      );
 
       const result = await service.preview(Buffer.from('csv'), makeConfig());
 
@@ -118,7 +135,10 @@ describe('ImportPreviewService', () => {
       mockCsvParser.parse.mockReturnValue(makeParsedCsv(2));
       mockCsvParser.validateHeaders.mockReturnValue([]);
       const errors = [{ rowNumber: 2, message: 'Name column empty' }];
-      mockMappingService.applyMapping.mockReturnValue({ records: [makeMappedRecord(1)], errors });
+      mockMappingService.applyMapping.mockReturnValue({
+        records: [makeMappedRecord(1)],
+        errors,
+      });
 
       const result = await service.preview(Buffer.from('csv'), makeConfig());
 
@@ -129,7 +149,10 @@ describe('ImportPreviewService', () => {
     it('should map profile fields correctly', async () => {
       mockCsvParser.parse.mockReturnValue(makeParsedCsv(1));
       mockCsvParser.validateHeaders.mockReturnValue([]);
-      mockMappingService.applyMapping.mockReturnValue({ records: [makeMappedRecord(1, true)], errors: [] });
+      mockMappingService.applyMapping.mockReturnValue({
+        records: [makeMappedRecord(1, true)],
+        errors: [],
+      });
 
       const result = await service.preview(Buffer.from('csv'), makeConfig());
 
@@ -143,7 +166,10 @@ describe('ImportPreviewService', () => {
     it('should map memory content and importance correctly', async () => {
       mockCsvParser.parse.mockReturnValue(makeParsedCsv(1));
       mockCsvParser.validateHeaders.mockReturnValue([]);
-      mockMappingService.applyMapping.mockReturnValue({ records: [makeMappedRecord(1, true)], errors: [] });
+      mockMappingService.applyMapping.mockReturnValue({
+        records: [makeMappedRecord(1, true)],
+        errors: [],
+      });
 
       const result = await service.preview(Buffer.from('csv'), makeConfig());
 
@@ -174,7 +200,10 @@ describe('ImportPreviewService', () => {
       const config = makeConfig();
       await service.preview(Buffer.from('csv'), config);
 
-      expect(mockCsvParser.validateHeaders).toHaveBeenCalledWith(parsed.headers, config);
+      expect(mockCsvParser.validateHeaders).toHaveBeenCalledWith(
+        parsed.headers,
+        config,
+      );
     });
 
     it('should pass sliced rows (not full dataset) to applyMapping', async () => {
@@ -186,7 +215,10 @@ describe('ImportPreviewService', () => {
       const config = makeConfig();
       await service.preview(Buffer.from('csv'), config);
 
-      expect(mockMappingService.applyMapping).toHaveBeenCalledWith(parsed.rows, config);
+      expect(mockMappingService.applyMapping).toHaveBeenCalledWith(
+        parsed.rows,
+        config,
+      );
     });
 
     it('should return correct stats', async () => {
@@ -199,19 +231,30 @@ describe('ImportPreviewService', () => {
 
       const result = await service.preview(Buffer.from('csv'), makeConfig());
 
-      expect(result.stats).toEqual({ profileCount: 2, memoryCount: 1, errorCount: 1 });
+      expect(result.stats).toEqual({
+        profileCount: 2,
+        memoryCount: 1,
+        errorCount: 1,
+      });
     });
 
     it('should handle empty CSV gracefully', async () => {
       mockCsvParser.parse.mockReturnValue({ headers: ['full_name'], rows: [] });
       mockCsvParser.validateHeaders.mockReturnValue([]);
-      mockMappingService.applyMapping.mockReturnValue({ records: [], errors: [] });
+      mockMappingService.applyMapping.mockReturnValue({
+        records: [],
+        errors: [],
+      });
 
       const result = await service.preview(Buffer.from(''), makeConfig());
 
       expect(result.profiles).toEqual([]);
       expect(result.memories).toEqual([]);
-      expect(result.stats).toEqual({ profileCount: 0, memoryCount: 0, errorCount: 0 });
+      expect(result.stats).toEqual({
+        profileCount: 0,
+        memoryCount: 0,
+        errorCount: 0,
+      });
     });
   });
 
@@ -262,39 +305,49 @@ describe('ImportPreviewService', () => {
       mockCsvParser.parse.mockReturnValue(makeParsedCsv(3, ['wrong_col']));
       mockCsvParser.validateHeaders.mockReturnValue(['full_name', 'bio']);
 
-      await expect(service.preview(Buffer.from('csv'), makeConfig())).rejects.toThrow(BadRequestException);
+      await expect(
+        service.preview(Buffer.from('csv'), makeConfig()),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should include missing column names in the error message', async () => {
       mockCsvParser.parse.mockReturnValue(makeParsedCsv(1, ['other']));
       mockCsvParser.validateHeaders.mockReturnValue(['full_name', 'bio']);
 
-      await expect(service.preview(Buffer.from('csv'), makeConfig())).rejects.toThrow(
-        'CSV is missing mapped columns: full_name, bio',
-      );
+      await expect(
+        service.preview(Buffer.from('csv'), makeConfig()),
+      ).rejects.toThrow('CSV is missing mapped columns: full_name, bio');
     });
 
     it('should throw when exactly one column is missing', async () => {
       mockCsvParser.parse.mockReturnValue(makeParsedCsv(1, ['bio']));
       mockCsvParser.validateHeaders.mockReturnValue(['full_name']);
 
-      await expect(service.preview(Buffer.from('csv'), makeConfig())).rejects.toThrow(
-        'CSV is missing mapped columns: full_name',
-      );
+      await expect(
+        service.preview(Buffer.from('csv'), makeConfig()),
+      ).rejects.toThrow('CSV is missing mapped columns: full_name');
     });
 
     it('should propagate errors thrown by csvParser.parse', async () => {
-      mockCsvParser.parse.mockImplementation(() => { throw new Error('Malformed CSV'); });
+      mockCsvParser.parse.mockImplementation(() => {
+        throw new Error('Malformed CSV');
+      });
 
-      await expect(service.preview(Buffer.from('bad'), makeConfig())).rejects.toThrow('Malformed CSV');
+      await expect(
+        service.preview(Buffer.from('bad'), makeConfig()),
+      ).rejects.toThrow('Malformed CSV');
     });
 
     it('should propagate errors thrown by applyMapping', async () => {
       mockCsvParser.parse.mockReturnValue(makeParsedCsv(1));
       mockCsvParser.validateHeaders.mockReturnValue([]);
-      mockMappingService.applyMapping.mockImplementation(() => { throw new Error('Mapping failure'); });
+      mockMappingService.applyMapping.mockImplementation(() => {
+        throw new Error('Mapping failure');
+      });
 
-      await expect(service.preview(Buffer.from('csv'), makeConfig())).rejects.toThrow('Mapping failure');
+      await expect(
+        service.preview(Buffer.from('csv'), makeConfig()),
+      ).rejects.toThrow('Mapping failure');
     });
   });
 });

@@ -34,7 +34,11 @@ describe('ImportJobService', () => {
     it('should initialize stats to zero counts', () => {
       const { jobId } = service.createJob('user-1');
       const job = service.getJob(jobId);
-      expect(job.stats).toEqual({ profileCount: 0, memoryCount: 0, errorCount: 0 });
+      expect(job.stats).toEqual({
+        profileCount: 0,
+        memoryCount: 0,
+        errorCount: 0,
+      });
     });
 
     it('should initialize errors as empty array', () => {
@@ -78,7 +82,9 @@ describe('ImportJobService', () => {
     });
 
     it('should throw NotFoundException with descriptive message', () => {
-      expect(() => service.getJob('bad-id')).toThrow('Import job not found: bad-id');
+      expect(() => service.getJob('bad-id')).toThrow(
+        'Import job not found: bad-id',
+      );
     });
 
     it('should return a shallow copy (mutations do not affect stored state)', () => {
@@ -124,7 +130,9 @@ describe('ImportJobService', () => {
     });
 
     it('should throw NotFoundException for unknown jobId', () => {
-      expect(() => service.updateProgress('bad', 0.5, {})).toThrow(NotFoundException);
+      expect(() => service.updateProgress('bad', 0.5, {})).toThrow(
+        NotFoundException,
+      );
     });
 
     it('should update updatedAt timestamp', () => {
@@ -170,7 +178,9 @@ describe('ImportJobService', () => {
     });
 
     it('should throw NotFoundException for unknown jobId', () => {
-      expect(() => service.addError('bad', { rowNumber: 1, message: 'x' })).toThrow(NotFoundException);
+      expect(() =>
+        service.addError('bad', { rowNumber: 1, message: 'x' }),
+      ).toThrow(NotFoundException);
     });
   });
 
@@ -179,7 +189,11 @@ describe('ImportJobService', () => {
   describe('completeJob', () => {
     it('should mark job as COMPLETED', () => {
       const { jobId } = service.createJob('user-1');
-      const stats: ImportStats = { profileCount: 10, memoryCount: 50, errorCount: 0 };
+      const stats: ImportStats = {
+        profileCount: 10,
+        memoryCount: 50,
+        errorCount: 0,
+      };
       service.completeJob(jobId, stats);
       const job = service.getJob(jobId);
       expect(job.status).toBe('COMPLETED');
@@ -187,22 +201,36 @@ describe('ImportJobService', () => {
 
     it('should set progress to 1 on completion', () => {
       const { jobId } = service.createJob('user-1');
-      service.completeJob(jobId, { profileCount: 1, memoryCount: 1, errorCount: 0 });
+      service.completeJob(jobId, {
+        profileCount: 1,
+        memoryCount: 1,
+        errorCount: 0,
+      });
       const job = service.getJob(jobId);
       expect(job.progress).toBe(1);
     });
 
     it('should store the final stats', () => {
       const { jobId } = service.createJob('user-1');
-      const stats: ImportStats = { profileCount: 5, memoryCount: 25, errorCount: 2 };
+      const stats: ImportStats = {
+        profileCount: 5,
+        memoryCount: 25,
+        errorCount: 2,
+      };
       service.completeJob(jobId, stats);
       const job = service.getJob(jobId);
       expect(job.stats).toEqual(stats);
     });
 
     it('should throw NotFoundException for unknown jobId', () => {
-      const stats: ImportStats = { profileCount: 0, memoryCount: 0, errorCount: 0 };
-      expect(() => service.completeJob('bad', stats)).toThrow(NotFoundException);
+      const stats: ImportStats = {
+        profileCount: 0,
+        memoryCount: 0,
+        errorCount: 0,
+      };
+      expect(() => service.completeJob('bad', stats)).toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -291,7 +319,11 @@ describe('ImportJobService', () => {
     it('should allow completeJob after partial progress updates', () => {
       const { jobId } = service.createJob('user-1');
       service.updateProgress(jobId, 0.5, { profileCount: 3 });
-      service.completeJob(jobId, { profileCount: 10, memoryCount: 40, errorCount: 1 });
+      service.completeJob(jobId, {
+        profileCount: 10,
+        memoryCount: 40,
+        errorCount: 1,
+      });
       const job = service.getJob(jobId);
       expect(job.status).toBe('COMPLETED');
       expect(job.stats.profileCount).toBe(10); // overwritten by final stats

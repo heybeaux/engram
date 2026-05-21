@@ -40,9 +40,7 @@ describe('LMStudioProvider', () => {
   // ─── chat ───────────────────────────────────────────────────────────────────
 
   describe('chat', () => {
-    const messages: LLMMessage[] = [
-      { role: 'user', content: 'Hello, world!' },
-    ];
+    const messages: LLMMessage[] = [{ role: 'user', content: 'Hello, world!' }];
 
     it('should return LLMResponse on success', async () => {
       mockFetch.mockResolvedValue({
@@ -100,7 +98,10 @@ describe('LMStudioProvider', () => {
         }),
       });
 
-      await provider.chat(messages, { model: 'override-model', provider: 'lmstudio' });
+      await provider.chat(messages, {
+        model: 'override-model',
+        provider: 'lmstudio',
+      });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.model).toBe('override-model');
@@ -109,10 +110,18 @@ describe('LMStudioProvider', () => {
     it('should use options.temperature when provided', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: 'ok' } }], model: 'x', usage: {} }),
+        json: async () => ({
+          choices: [{ message: { content: 'ok' } }],
+          model: 'x',
+          usage: {},
+        }),
       });
 
-      await provider.chat(messages, { temperature: 0.1, provider: 'lmstudio', model: 'x' });
+      await provider.chat(messages, {
+        temperature: 0.1,
+        provider: 'lmstudio',
+        model: 'x',
+      });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.temperature).toBe(0.1);
@@ -125,7 +134,9 @@ describe('LMStudioProvider', () => {
         text: async () => 'Internal Server Error',
       });
 
-      await expect(provider.chat(messages)).rejects.toThrow('LM Studio API error: 500');
+      await expect(provider.chat(messages)).rejects.toThrow(
+        'LM Studio API error: 500',
+      );
     });
 
     it('should return empty content when choices is empty', async () => {
@@ -189,7 +200,9 @@ describe('LMStudioProvider', () => {
         }),
       });
 
-      const result = await provider.json<{ name: string; value: number }>(messages);
+      const result = await provider.json<{ name: string; value: number }>(
+        messages,
+      );
       expect(result.name).toBe('test');
       expect(result.value).toBe(42);
     });
@@ -232,7 +245,9 @@ describe('LMStudioProvider', () => {
         }),
       });
 
-      await expect(provider.json(messages)).rejects.toThrow('Failed to parse JSON response');
+      await expect(provider.json(messages)).rejects.toThrow(
+        'Failed to parse JSON response',
+      );
     });
 
     it('should use lower temperature (0.3) by default for json()', async () => {
@@ -315,8 +330,12 @@ describe('LMStudioProvider', () => {
         text: async () => 'No embedding model loaded',
       });
 
-      await expect(provider.embed('test')).rejects.toThrow('LM Studio Embedding API error: 503');
-      await expect(provider.embed('test')).rejects.toThrow('Make sure an embedding model is loaded');
+      await expect(provider.embed('test')).rejects.toThrow(
+        'LM Studio Embedding API error: 503',
+      );
+      await expect(provider.embed('test')).rejects.toThrow(
+        'Make sure an embedding model is loaded',
+      );
     });
 
     it('should throw when no embedding in response', async () => {
@@ -325,7 +344,9 @@ describe('LMStudioProvider', () => {
         json: async () => ({ data: [] }), // empty data array
       });
 
-      await expect(provider.embed('test')).rejects.toThrow('No embedding returned');
+      await expect(provider.embed('test')).rejects.toThrow(
+        'No embedding returned',
+      );
     });
 
     it('should fall back model name to defaultModel', async () => {

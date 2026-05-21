@@ -265,5 +265,4 @@ export const PERSONAL_TOPIC_DEFINITIONS: TopicDefinition[] = [
     decayRate: 0.4,
     relatedTopics: ['events', 'projects', 'schedule'],
   },
-
 ];

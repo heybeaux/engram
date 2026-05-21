@@ -30,15 +30,15 @@ describe('AwarenessSourceController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AwarenessSourceController],
-      providers: [
-        { provide: AwarenessSourceService, useValue: service },
-      ],
+      providers: [{ provide: AwarenessSourceService, useValue: service }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })
       .compile();
 
-    controller = module.get<AwarenessSourceController>(AwarenessSourceController);
+    controller = module.get<AwarenessSourceController>(
+      AwarenessSourceController,
+    );
   });
 
   afterEach(() => {
@@ -63,7 +63,12 @@ describe('AwarenessSourceController', () => {
     it('should create source with optional fields', async () => {
       service.create!.mockResolvedValue({ ...mockSource, enabled: false });
 
-      const dto = { name: 'Custom', type: 'custom' as const, enabled: false, config: { url: 'http://test' } };
+      const dto = {
+        name: 'Custom',
+        type: 'custom' as const,
+        enabled: false,
+        config: { url: 'http://test' },
+      };
       await controller.create(dto as any);
 
       expect(service.create).toHaveBeenCalledWith(dto);
@@ -104,7 +109,9 @@ describe('AwarenessSourceController', () => {
         throw new NotFoundException('Signal source unknown not found');
       });
 
-      await expect(controller.getById('unknown')).rejects.toThrow(NotFoundException);
+      await expect(controller.getById('unknown')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -132,7 +139,9 @@ describe('AwarenessSourceController', () => {
         throw new NotFoundException('Signal source unknown not found');
       });
 
-      await expect(controller.getStatus('unknown')).rejects.toThrow(NotFoundException);
+      await expect(controller.getStatus('unknown')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -152,7 +161,9 @@ describe('AwarenessSourceController', () => {
       const updated = { ...mockSource, enabled: false };
       service.update!.mockResolvedValue(updated);
 
-      const result = await controller.update('src-1', { enabled: false } as any);
+      const result = await controller.update('src-1', {
+        enabled: false,
+      } as any);
 
       expect(result.enabled).toBe(false);
     });
@@ -162,7 +173,9 @@ describe('AwarenessSourceController', () => {
         throw new NotFoundException('Signal source unknown not found');
       });
 
-      await expect(controller.update('unknown', {} as any)).rejects.toThrow(NotFoundException);
+      await expect(controller.update('unknown', {} as any)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -181,7 +194,9 @@ describe('AwarenessSourceController', () => {
         throw new NotFoundException('Signal source unknown not found');
       });
 
-      await expect(controller.delete('unknown')).rejects.toThrow(NotFoundException);
+      await expect(controller.delete('unknown')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

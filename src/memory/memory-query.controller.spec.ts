@@ -238,9 +238,7 @@ describe('MemoryQueryController', () => {
         range: { start: '2026-03-01', end: '2026-03-03' },
         totalMemories: 5,
         averagePerDay: 1.67,
-        gaps: [
-          { date: '2026-03-02', memoryCount: 0, isAbsoluteGap: true },
-        ],
+        gaps: [{ date: '2026-03-02', memoryCount: 0, isAbsoluteGap: true }],
         coverage: 66.67,
       };
       temporalGapService.detectGaps.mockResolvedValue(gapResponse);
@@ -266,7 +264,13 @@ describe('MemoryQueryController', () => {
         lastActivity: null,
         totalMemories: 0,
         confidence: 0,
-        summary: { goals: [], decisions: [], issues: [], outcomes: [], insights: [] },
+        summary: {
+          goals: [],
+          decisions: [],
+          issues: [],
+          outcomes: [],
+          insights: [],
+        },
         recentActivity: [],
       };
       projectStateService.synthesize.mockResolvedValue(expected);
@@ -285,7 +289,13 @@ describe('MemoryQueryController', () => {
         lastActivity: null,
         totalMemories: 0,
         confidence: 0,
-        summary: { goals: [], decisions: [], issues: [], outcomes: [], insights: [] },
+        summary: {
+          goals: [],
+          decisions: [],
+          issues: [],
+          outcomes: [],
+          insights: [],
+        },
         recentActivity: [],
       };
       projectStateService.synthesize.mockResolvedValue(expected);

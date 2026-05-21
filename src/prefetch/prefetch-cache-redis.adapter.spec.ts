@@ -99,8 +99,14 @@ describe('PrefetchCacheRedisAdapter', () => {
       adapter.persist(memory, 30000);
       await Promise.resolve();
 
-      expect(mockRedis.sadd).toHaveBeenCalledWith('prefetch:topic:health', 'mem-topics');
-      expect(mockRedis.sadd).toHaveBeenCalledWith('prefetch:topic:family', 'mem-topics');
+      expect(mockRedis.sadd).toHaveBeenCalledWith(
+        'prefetch:topic:health',
+        'mem-topics',
+      );
+      expect(mockRedis.sadd).toHaveBeenCalledWith(
+        'prefetch:topic:family',
+        'mem-topics',
+      );
     });
 
     it('should set topic index TTL to 2x memory TTL', async () => {
@@ -162,8 +168,14 @@ describe('PrefetchCacheRedisAdapter', () => {
       adapter.delete('mem-del', ['work', 'technical'] as TopicId[]);
       await Promise.resolve();
 
-      expect(mockRedis.srem).toHaveBeenCalledWith('prefetch:topic:work', 'mem-del');
-      expect(mockRedis.srem).toHaveBeenCalledWith('prefetch:topic:technical', 'mem-del');
+      expect(mockRedis.srem).toHaveBeenCalledWith(
+        'prefetch:topic:work',
+        'mem-del',
+      );
+      expect(mockRedis.srem).toHaveBeenCalledWith(
+        'prefetch:topic:technical',
+        'mem-del',
+      );
     });
 
     it('should handle redis del failure silently', async () => {
@@ -174,7 +186,9 @@ describe('PrefetchCacheRedisAdapter', () => {
 
     it('should handle srem failure silently', async () => {
       mockRedis.srem.mockRejectedValueOnce(new Error('srem failed'));
-      expect(() => adapter.delete('mem-x', ['family'] as TopicId[])).not.toThrow();
+      expect(() =>
+        adapter.delete('mem-x', ['family'] as TopicId[]),
+      ).not.toThrow();
       await new Promise((r) => setTimeout(r, 10));
     });
 
@@ -226,7 +240,10 @@ describe('PrefetchCacheRedisAdapter', () => {
         match: 'prefetch:*',
         count: 100,
       });
-      expect(mockRedis.del).toHaveBeenCalledWith('prefetch:cache:1', 'prefetch:cache:2');
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        'prefetch:cache:1',
+        'prefetch:cache:2',
+      );
     });
 
     it('should not call del when scan returns empty batch', () => {
@@ -304,7 +321,9 @@ describe('PrefetchCacheRedisAdapter', () => {
       });
 
       setupScanStream(['prefetch:cache:expired']);
-      mockPipeline.exec.mockResolvedValue([[null, JSON.stringify(expiredMemory)]]);
+      mockPipeline.exec.mockResolvedValue([
+        [null, JSON.stringify(expiredMemory)],
+      ]);
 
       const result = await adapter.hydrate(60000); // 60s TTL
 

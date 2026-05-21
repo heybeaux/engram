@@ -15,9 +15,7 @@ describe('SummarizationController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SummarizationController],
-      providers: [
-        { provide: SummarizationService, useValue: service },
-      ],
+      providers: [{ provide: SummarizationService, useValue: service }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })
@@ -42,16 +40,25 @@ describe('SummarizationController', () => {
         projectId: 'proj-1',
         minImportance: 0.5,
       };
-      const expected = { facts: [], created: 0, totalTurns: 1, processingMs: 10 };
+      const expected = {
+        facts: [],
+        created: 0,
+        totalTurns: 1,
+        processingMs: 10,
+      };
       service.summarizeAndStore!.mockResolvedValue(expected as any);
 
       const result = await controller.summarize('user-1', dto as any);
 
-      expect(service.summarizeAndStore).toHaveBeenCalledWith('user-1', dto.turns, {
-        sessionId: 'sess-1',
-        projectId: 'proj-1',
-        minImportance: 0.5,
-      });
+      expect(service.summarizeAndStore).toHaveBeenCalledWith(
+        'user-1',
+        dto.turns,
+        {
+          sessionId: 'sess-1',
+          projectId: 'proj-1',
+          minImportance: 0.5,
+        },
+      );
       expect(result).toEqual(expected);
     });
 
@@ -59,29 +66,45 @@ describe('SummarizationController', () => {
       const dto = {
         turns: [{ role: 'assistant' as const, content: 'hi' }],
       };
-      const expected = { facts: [], created: 0, totalTurns: 1, processingMs: 5 };
+      const expected = {
+        facts: [],
+        created: 0,
+        totalTurns: 1,
+        processingMs: 5,
+      };
       service.summarizeAndStore!.mockResolvedValue(expected as any);
 
       await controller.summarize('user-2', dto as any);
 
-      expect(service.summarizeAndStore).toHaveBeenCalledWith('user-2', dto.turns, {
-        sessionId: undefined,
-        projectId: undefined,
-        minImportance: undefined,
-      });
+      expect(service.summarizeAndStore).toHaveBeenCalledWith(
+        'user-2',
+        dto.turns,
+        {
+          sessionId: undefined,
+          projectId: undefined,
+          minImportance: undefined,
+        },
+      );
     });
 
     it('should propagate service errors', async () => {
       service.summarizeAndStore!.mockRejectedValue(new Error('LLM timeout'));
       const dto = { turns: [{ role: 'user' as const, content: 'test' }] };
 
-      await expect(controller.summarize('user-1', dto as any)).rejects.toThrow('LLM timeout');
+      await expect(controller.summarize('user-1', dto as any)).rejects.toThrow(
+        'LLM timeout',
+      );
     });
   });
 
   describe('POST /v1/summarize/session/:sessionId', () => {
     it('should return flush result when buffer has data', async () => {
-      const expected = { facts: [{ content: 'fact1' }], created: 1, totalTurns: 3, processingMs: 50 };
+      const expected = {
+        facts: [{ content: 'fact1' }],
+        created: 1,
+        totalTurns: 3,
+        processingMs: 50,
+      };
       service.flushBuffer!.mockResolvedValue(expected as any);
 
       const result = await controller.summarizeSession('user-1', 'sess-1');
@@ -119,7 +142,9 @@ describe('SummarizationController', () => {
     it('should propagate service errors', async () => {
       service.flushBuffer!.mockRejectedValue(new Error('Redis down'));
 
-      await expect(controller.summarizeSession('user-1', 'sess-1')).rejects.toThrow('Redis down');
+      await expect(
+        controller.summarizeSession('user-1', 'sess-1'),
+      ).rejects.toThrow('Redis down');
     });
   });
 });

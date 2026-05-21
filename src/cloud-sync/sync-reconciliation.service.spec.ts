@@ -355,7 +355,9 @@ describe('CloudLinkService - identity mapping', () => {
         plan: 'pro',
       }),
       createSyncKey: jest.fn().mockResolvedValue('esync_test'),
-      getCloudStatus: jest.fn().mockResolvedValue({ linked: true, plan: 'pro' }),
+      getCloudStatus: jest
+        .fn()
+        .mockResolvedValue({ linked: true, plan: 'pro' }),
     };
 
     mockMappingService = {

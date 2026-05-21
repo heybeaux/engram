@@ -85,7 +85,9 @@ export class MemoryPoolService {
       throw new BadRequestException('Provide either agentSessionId or agentId');
     }
     if (dto.agentSessionId && dto.agentId) {
-      throw new BadRequestException('Provide only one of agentSessionId or agentId');
+      throw new BadRequestException(
+        'Provide only one of agentSessionId or agentId',
+      );
     }
 
     if (dto.agentSessionId) {

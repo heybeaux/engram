@@ -238,7 +238,9 @@ export class MemoryQueryRankingService {
           .map((r) => {
             const mem = candidates[r.index];
             const importanceScore =
-              (mem as any).effectiveScore ?? (mem as any).importanceScore ?? 0.5;
+              (mem as any).effectiveScore ??
+              (mem as any).importanceScore ??
+              0.5;
             const sp = SentimentService.scorePenalty(
               query,
               (mem as any).raw ?? '',

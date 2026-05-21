@@ -138,9 +138,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
     it('should create timelines for days with memories', async () => {
       const date = new Date('2026-03-22');
       // Setup: one day bucket with an agent
-      prisma.$queryRaw.mockResolvedValue([
-        { agent_id: 'agent-1', day: date },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ agent_id: 'agent-1', day: date }]);
 
       const memories = [
         makeMemory('m1', 'Fixed the bug', new Date('2026-03-22T10:00:00Z')),
@@ -173,9 +171,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
 
     it('should pass memory data to TimelineLodService', async () => {
       const date = new Date('2026-03-22');
-      prisma.$queryRaw.mockResolvedValue([
-        { agent_id: 'agent-1', day: date },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ agent_id: 'agent-1', day: date }]);
 
       const memories = [
         makeMemory('m1', 'Did something', new Date('2026-03-22T10:00:00Z')),
@@ -202,9 +198,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
   describe('run — empty days skipped', () => {
     it('should skip days with zero memories', async () => {
       const date = new Date('2026-03-22');
-      prisma.$queryRaw.mockResolvedValue([
-        { agent_id: 'agent-1', day: date },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ agent_id: 'agent-1', day: date }]);
 
       // Return empty memories for the day
       prisma.memory.findMany.mockResolvedValue([]);
@@ -241,9 +235,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
   describe('run — TIMELINE_DRAFT incorporated', () => {
     it('should include timeline drafts as additional context', async () => {
       const date = new Date('2026-03-22');
-      prisma.$queryRaw.mockResolvedValue([
-        { agent_id: 'agent-1', day: date },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ agent_id: 'agent-1', day: date }]);
 
       const memories = [
         makeMemory('m1', 'Regular memory', new Date('2026-03-22T10:00:00Z')),
@@ -314,9 +306,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
   describe('run — upsert on re-run', () => {
     it('should update existing timeline on re-run', async () => {
       const date = new Date('2026-03-22');
-      prisma.$queryRaw.mockResolvedValue([
-        { agent_id: 'agent-1', day: date },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ agent_id: 'agent-1', day: date }]);
 
       const memories = [
         makeMemory('m1', 'Memory', new Date('2026-03-22T10:00:00Z')),
@@ -348,9 +338,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
   describe('run — dry run', () => {
     it('should not write to database in dry run mode', async () => {
       const date = new Date('2026-03-22');
-      prisma.$queryRaw.mockResolvedValue([
-        { agent_id: 'agent-1', day: date },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ agent_id: 'agent-1', day: date }]);
 
       const memories = [
         makeMemory('m1', 'Memory', new Date('2026-03-22T10:00:00Z')),
@@ -404,9 +392,7 @@ describe('DreamCycleTimelineSynthesisStage', () => {
   describe('run — null agentId handling', () => {
     it('should use default agentId for memories with null agent_id', async () => {
       const date = new Date('2026-03-22');
-      prisma.$queryRaw.mockResolvedValue([
-        { agent_id: null, day: date },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ agent_id: null, day: date }]);
 
       const memories = [
         makeMemory(
@@ -470,15 +456,12 @@ describe('DreamCycleTimelineSynthesisStage', () => {
   describe('run — embedding failure does not abort', () => {
     it('should still count timeline as created even if embedding fails', async () => {
       const date = new Date('2026-03-22');
-      prisma.$queryRaw.mockResolvedValue([
-        { agent_id: 'agent-1', day: date },
-      ]);
+      prisma.$queryRaw.mockResolvedValue([{ agent_id: 'agent-1', day: date }]);
 
       const memories = [
         makeMemory('m1', 'Memory', new Date('2026-03-22T10:00:00Z')),
       ];
-      prisma.memory.findMany
-        .mockResolvedValueOnce(memories);
+      prisma.memory.findMany.mockResolvedValueOnce(memories);
 
       prisma.dreamCycleReport.findFirst.mockResolvedValue({
         startedAt: new Date('2026-03-21T03:00:00Z'),
@@ -495,6 +478,5 @@ describe('DreamCycleTimelineSynthesisStage', () => {
       expect(result.errors).toBe(1);
     });
   });
-
 });
 // Note: fetchTimelineDrafts was removed in the ENG-44 schema alignment refactor.

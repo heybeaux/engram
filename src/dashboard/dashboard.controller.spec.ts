@@ -85,7 +85,9 @@ describe('DashboardController', () => {
     it('should throw NotFoundException when user not found', async () => {
       service.getUserDetail.mockResolvedValue(null);
 
-      await expect(controller.getUserDetail('bad-id')).rejects.toThrow(NotFoundException);
+      await expect(controller.getUserDetail('bad-id')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -111,7 +113,9 @@ describe('DashboardController', () => {
     it('should throw NotFoundException when user not found', async () => {
       service.deleteUser.mockResolvedValue(null);
 
-      await expect(controller.deleteUser('bad-id')).rejects.toThrow(NotFoundException);
+      await expect(controller.deleteUser('bad-id')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should treat non-true string as false for deleteMemories', async () => {

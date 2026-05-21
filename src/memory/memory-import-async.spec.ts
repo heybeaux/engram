@@ -31,14 +31,17 @@ describe('MemoryBulkController — Async Import (HEY-353)', () => {
       expect(result.status).toBe('processing');
       expect(result.jobId).toBe('batch-abc');
       expect(result.count).toBe(2);
-      expect(mockJobQueue.createBatch).toHaveBeenCalledWith(
-        'user-1',
-        [
-          { memoryId: 'existing-id', raw: 'Memory one', extractionContext: undefined },
-          expect.objectContaining({ raw: 'Memory two', extractionContext: undefined }),
-        ],
-      );
+      expect(mockJobQueue.createBatch).toHaveBeenCalledWith('user-1', [
+        {
+          memoryId: 'existing-id',
+          raw: 'Memory one',
+          extractionContext: undefined,
+        },
+        expect.objectContaining({
+          raw: 'Memory two',
+          extractionContext: undefined,
+        }),
+      ]);
     });
-
   });
 });

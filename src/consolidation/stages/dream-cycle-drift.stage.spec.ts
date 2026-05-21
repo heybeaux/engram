@@ -88,7 +88,11 @@ describe('DreamCycleDriftStage', () => {
 
       const result = await stage.run('user-123', false);
 
-      expect(result).toEqual({ modelsAnalyzed: 0, snapshotsPersisted: 0, alerts: [] });
+      expect(result).toEqual({
+        modelsAnalyzed: 0,
+        snapshotsPersisted: 0,
+        alerts: [],
+      });
       expect(mockEnsemble.getConfig).not.toHaveBeenCalled();
     });
 
@@ -107,7 +111,11 @@ describe('DreamCycleDriftStage', () => {
 
       const result = await stage.run('user-123', false);
 
-      expect(result).toEqual({ modelsAnalyzed: 0, snapshotsPersisted: 0, alerts: [] });
+      expect(result).toEqual({
+        modelsAnalyzed: 0,
+        snapshotsPersisted: 0,
+        alerts: [],
+      });
     });
 
     it('should return zero results when ensembleService is not injected', async () => {
@@ -125,7 +133,11 @@ describe('DreamCycleDriftStage', () => {
 
       const result = await stage.run('user-123', false);
 
-      expect(result).toEqual({ modelsAnalyzed: 0, snapshotsPersisted: 0, alerts: [] });
+      expect(result).toEqual({
+        modelsAnalyzed: 0,
+        snapshotsPersisted: 0,
+        alerts: [],
+      });
     });
   });
 
@@ -170,7 +182,10 @@ describe('DreamCycleDriftStage', () => {
       const models = ['openai', 'cohere'];
       mockEnsemble.getConfig.mockReturnValue({ models });
       mockEnsemble.embedAll.mockResolvedValue({
-        embeddings: models.map((m) => ({ model: m, embedding: sampleEmbedding })),
+        embeddings: models.map((m) => ({
+          model: m,
+          embedding: sampleEmbedding,
+        })),
       });
       mockDriftDetection.measureBatchDrift.mockResolvedValue(
         sampleMemories.map((m) => ({ memoryId: m.id, cosineDrift: 0.01 })),
@@ -179,7 +194,10 @@ describe('DreamCycleDriftStage', () => {
         avgCosineDrift: 0.01,
         maxCosineDrift: 0.02,
       });
-      mockDriftDetection.getThresholds.mockReturnValue({ drift: 0.05, alert: 0.1 });
+      mockDriftDetection.getThresholds.mockReturnValue({
+        drift: 0.05,
+        alert: 0.1,
+      });
       mockPrisma.driftSnapshot.create.mockResolvedValue({ id: 'snap-x' });
 
       const result = await stage.run('user-123', false);
@@ -208,7 +226,9 @@ describe('DreamCycleDriftStage', () => {
 
       await stage.run('user-123', false);
 
-      expect(mockEnsemble.embedAll).toHaveBeenCalledTimes(sampleMemories.length);
+      expect(mockEnsemble.embedAll).toHaveBeenCalledTimes(
+        sampleMemories.length,
+      );
       expect(mockEnsemble.embedAll).toHaveBeenCalledWith(sampleMemories[0].raw);
     });
   });
@@ -232,7 +252,7 @@ describe('DreamCycleDriftStage', () => {
 
     it('should generate a critical alert when drift exceeds alert threshold', async () => {
       mockPrisma.memory.findMany.mockResolvedValueOnce(sampleMemories);
-      setupHappyPath('openai', 0.15, 0.20); // above alert(0.1)
+      setupHappyPath('openai', 0.15, 0.2); // above alert(0.1)
 
       const result = await stage.run('user-123', false);
 
@@ -316,7 +336,10 @@ describe('DreamCycleDriftStage', () => {
         avgCosineDrift: 0.01,
         maxCosineDrift: 0.02,
       });
-      mockDriftDetection.getThresholds.mockReturnValue({ drift: 0.05, alert: 0.1 });
+      mockDriftDetection.getThresholds.mockReturnValue({
+        drift: 0.05,
+        alert: 0.1,
+      });
       mockPrisma.driftSnapshot.create.mockResolvedValue({});
 
       // Should not throw, handles error gracefully with empty embedding
@@ -344,7 +367,10 @@ describe('DreamCycleDriftStage', () => {
         avgCosineDrift: 0.01,
         maxCosineDrift: 0.01,
       });
-      mockDriftDetection.getThresholds.mockReturnValue({ drift: 0.05, alert: 0.1 });
+      mockDriftDetection.getThresholds.mockReturnValue({
+        drift: 0.05,
+        alert: 0.1,
+      });
       mockPrisma.driftSnapshot.create.mockResolvedValue({});
 
       const result = await stage.run('user-123', false);
@@ -361,7 +387,10 @@ describe('DreamCycleDriftStage', () => {
       const models = ['openai', 'cohere'];
       mockEnsemble.getConfig.mockReturnValue({ models });
       mockEnsemble.embedAll.mockResolvedValue({
-        embeddings: models.map((m) => ({ model: m, embedding: sampleEmbedding })),
+        embeddings: models.map((m) => ({
+          model: m,
+          embedding: sampleEmbedding,
+        })),
       });
       mockDriftDetection.measureBatchDrift.mockResolvedValue(
         sampleMemories.map((m) => ({ memoryId: m.id, cosineDrift: 0.15 })),
@@ -370,7 +399,10 @@ describe('DreamCycleDriftStage', () => {
         avgCosineDrift: 0.15,
         maxCosineDrift: 0.2,
       });
-      mockDriftDetection.getThresholds.mockReturnValue({ drift: 0.05, alert: 0.1 });
+      mockDriftDetection.getThresholds.mockReturnValue({
+        drift: 0.05,
+        alert: 0.1,
+      });
       mockPrisma.driftSnapshot.create.mockResolvedValue({});
 
       const result = await stage.run('user-123', false);

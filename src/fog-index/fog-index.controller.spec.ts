@@ -35,7 +35,10 @@ describe('FogIndexController', () => {
       const expected = { score: 42, tier: 'CLEAR' };
       service.compute.mockResolvedValue(expected as any);
 
-      const req = { agent: { id: 'agent-1', accountId: 'acc-1' }, accountId: 'acc-1' };
+      const req = {
+        agent: { id: 'agent-1', accountId: 'acc-1' },
+        accountId: 'acc-1',
+      };
       const result = await controller.getCurrent('user-1', req);
       expect(result).toEqual(expected);
       expect(service.compute).toHaveBeenCalledWith({
@@ -93,7 +96,10 @@ describe('FogIndexController', () => {
       const expected = { score: 55, tier: 'FOGGY' };
       service.snapshot.mockResolvedValue(expected as any);
 
-      const req = { agent: { id: 'a1', accountId: 'acc-1' }, accountId: 'acc-1' };
+      const req = {
+        agent: { id: 'a1', accountId: 'acc-1' },
+        accountId: 'acc-1',
+      };
       const result = await controller.takeSnapshot('user-1', req);
       expect(result).toEqual(expected);
       expect(service.snapshot).toHaveBeenCalledWith({

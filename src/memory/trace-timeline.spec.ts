@@ -41,9 +41,27 @@ describe('traceTimeline', () => {
 
   it('should return memories in chronological order', async () => {
     mockPrisma.$queryRawUnsafe.mockResolvedValue([
-      { id: 'm1', raw: 'deployment started', memory_type: 'OBSERVATION', importance_score: 5, created_at: new Date('2026-03-01T10:00:00Z') },
-      { id: 'm2', raw: 'deployment finished', memory_type: 'OBSERVATION', importance_score: 7, created_at: new Date('2026-03-03T14:00:00Z') },
-      { id: 'm3', raw: 'deployment rollback', memory_type: 'OBSERVATION', importance_score: 9, created_at: new Date('2026-03-05T08:00:00Z') },
+      {
+        id: 'm1',
+        raw: 'deployment started',
+        memory_type: 'OBSERVATION',
+        importance_score: 5,
+        created_at: new Date('2026-03-01T10:00:00Z'),
+      },
+      {
+        id: 'm2',
+        raw: 'deployment finished',
+        memory_type: 'OBSERVATION',
+        importance_score: 7,
+        created_at: new Date('2026-03-03T14:00:00Z'),
+      },
+      {
+        id: 'm3',
+        raw: 'deployment rollback',
+        memory_type: 'OBSERVATION',
+        importance_score: 9,
+        created_at: new Date('2026-03-05T08:00:00Z'),
+      },
     ]);
 
     const result = await service.traceTimeline('agent-1', baseDto);
@@ -57,8 +75,20 @@ describe('traceTimeline', () => {
 
   it('should detect gaps (days with no memories)', async () => {
     mockPrisma.$queryRawUnsafe.mockResolvedValue([
-      { id: 'm1', raw: 'deployment started', memory_type: 'OBSERVATION', importance_score: 5, created_at: new Date('2026-03-01T10:00:00Z') },
-      { id: 'm2', raw: 'deployment finished', memory_type: 'OBSERVATION', importance_score: 7, created_at: new Date('2026-03-05T14:00:00Z') },
+      {
+        id: 'm1',
+        raw: 'deployment started',
+        memory_type: 'OBSERVATION',
+        importance_score: 5,
+        created_at: new Date('2026-03-01T10:00:00Z'),
+      },
+      {
+        id: 'm2',
+        raw: 'deployment finished',
+        memory_type: 'OBSERVATION',
+        importance_score: 7,
+        created_at: new Date('2026-03-05T14:00:00Z'),
+      },
     ]);
 
     const result = await service.traceTimeline('agent-1', baseDto);
@@ -69,8 +99,20 @@ describe('traceTimeline', () => {
   it('should calculate coverage percentage', async () => {
     // 5 days total, memories on 2 days → 40% coverage
     mockPrisma.$queryRawUnsafe.mockResolvedValue([
-      { id: 'm1', raw: 'deployment v1', memory_type: 'OBSERVATION', importance_score: 5, created_at: new Date('2026-03-01T10:00:00Z') },
-      { id: 'm2', raw: 'deployment v2', memory_type: 'OBSERVATION', importance_score: 7, created_at: new Date('2026-03-03T14:00:00Z') },
+      {
+        id: 'm1',
+        raw: 'deployment v1',
+        memory_type: 'OBSERVATION',
+        importance_score: 5,
+        created_at: new Date('2026-03-01T10:00:00Z'),
+      },
+      {
+        id: 'm2',
+        raw: 'deployment v2',
+        memory_type: 'OBSERVATION',
+        importance_score: 7,
+        created_at: new Date('2026-03-03T14:00:00Z'),
+      },
     ]);
 
     const result = await service.traceTimeline('agent-1', baseDto);

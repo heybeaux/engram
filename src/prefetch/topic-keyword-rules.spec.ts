@@ -75,7 +75,9 @@ describe('KEYWORD_RULES', () => {
 
     it('should match family/immediate for "daughter"', () => {
       const rules = getRulesForTopic('family/immediate');
-      expect(matchesAnyPattern('my daughter loves dinosaurs', rules)).toBe(true);
+      expect(matchesAnyPattern('my daughter loves dinosaurs', rules)).toBe(
+        true,
+      );
     });
 
     it('should match family/extended for "grandmother"', () => {
@@ -120,12 +122,16 @@ describe('KEYWORD_RULES', () => {
 
     it('should match projects/active for "working on"', () => {
       const rules = getRulesForTopic('projects/active');
-      expect(matchesAnyPattern('I am working on a new feature', rules)).toBe(true);
+      expect(matchesAnyPattern('I am working on a new feature', rules)).toBe(
+        true,
+      );
     });
 
     it('should match work/role for "my job"', () => {
       const rules = getRulesForTopic('work/role');
-      expect(matchesAnyPattern('my job involves a lot of coding', rules)).toBe(true);
+      expect(matchesAnyPattern('my job involves a lot of coding', rules)).toBe(
+        true,
+      );
     });
   });
 
@@ -205,7 +211,9 @@ describe('KEYWORD_RULES', () => {
 
     it('should match technical for "docker"', () => {
       const rules = getRulesForTopic('technical');
-      expect(matchesAnyPattern('running in docker container', rules)).toBe(true);
+      expect(matchesAnyPattern('running in docker container', rules)).toBe(
+        true,
+      );
     });
 
     it('should match technical/tools for "github"', () => {
@@ -220,7 +228,9 @@ describe('KEYWORD_RULES', () => {
 
     it('should match technical for "bug"', () => {
       const rules = getRulesForTopic('technical');
-      expect(matchesAnyPattern('there is a bug in production', rules)).toBe(true);
+      expect(matchesAnyPattern('there is a bug in production', rules)).toBe(
+        true,
+      );
     });
   });
 
@@ -260,7 +270,9 @@ describe('KEYWORD_RULES', () => {
 
     it('should match preferences/dislikes for "can\'t stand"', () => {
       const rules = getRulesForTopic('preferences/dislikes');
-      expect(matchesAnyPattern("I can't stand dark chocolate", rules)).toBe(true);
+      expect(matchesAnyPattern("I can't stand dark chocolate", rules)).toBe(
+        true,
+      );
     });
   });
 
@@ -280,7 +292,9 @@ describe('KEYWORD_RULES', () => {
 
     it('should match conversation rule for "we talked"', () => {
       const rules = getRulesForTopic('conversation');
-      expect(matchesAnyPattern('we talked about this before', rules)).toBe(true);
+      expect(matchesAnyPattern('we talked about this before', rules)).toBe(
+        true,
+      );
     });
   });
 

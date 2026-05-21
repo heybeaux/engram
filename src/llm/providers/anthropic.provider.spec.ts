@@ -29,19 +29,32 @@ describe('AnthropicProvider', () => {
 
   describe('constructor', () => {
     it('should create a provider with a valid api key', () => {
-      const provider = new AnthropicProvider({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', apiKey: 'sk-test' });
+      const provider = new AnthropicProvider({
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'sk-test',
+      });
       expect(provider).toBeDefined();
       expect(provider.name).toBe('anthropic');
     });
 
     it('should throw if no api key provided', () => {
-      expect(() => new AnthropicProvider({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', apiKey: '' })).toThrow(
-        'Anthropic provider requires an API key',
-      );
+      expect(
+        () =>
+          new AnthropicProvider({
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet-20241022',
+            apiKey: '',
+          }),
+      ).toThrow('Anthropic provider requires an API key');
     });
 
     it('should use default model if not specified', () => {
-      const provider = new AnthropicProvider({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', apiKey: 'sk-test' });
+      const provider = new AnthropicProvider({
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'sk-test',
+      });
       // Internal default — confirmed via chat call headers/body
       expect(provider).toBeDefined();
     });
@@ -72,7 +85,11 @@ describe('AnthropicProvider', () => {
     let provider: AnthropicProvider;
 
     beforeEach(() => {
-      provider = new AnthropicProvider({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', apiKey: 'sk-test' });
+      provider = new AnthropicProvider({
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'sk-test',
+      });
     });
 
     it('should make a POST to /v1/messages', async () => {
@@ -258,7 +275,11 @@ describe('AnthropicProvider', () => {
     let provider: AnthropicProvider;
 
     beforeEach(() => {
-      provider = new AnthropicProvider({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', apiKey: 'sk-test' });
+      provider = new AnthropicProvider({
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'sk-test',
+      });
     });
 
     it('should parse valid JSON response', async () => {
@@ -335,7 +356,11 @@ describe('AnthropicProvider', () => {
 
   describe('embed', () => {
     it('should throw because Anthropic does not support embeddings', async () => {
-      const provider = new AnthropicProvider({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', apiKey: 'sk-test' });
+      const provider = new AnthropicProvider({
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'sk-test',
+      });
 
       await expect(provider.embed('some text')).rejects.toThrow(
         'Anthropic does not provide embeddings',
@@ -347,7 +372,11 @@ describe('AnthropicProvider', () => {
 
   describe('supportsEmbeddings', () => {
     it('should return false', () => {
-      const provider = new AnthropicProvider({ provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', apiKey: 'sk-test' });
+      const provider = new AnthropicProvider({
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: 'sk-test',
+      });
       expect(provider.supportsEmbeddings()).toBe(false);
     });
   });

@@ -105,7 +105,10 @@ export class EntitySemanticService {
     const response = await fetch(`${this.embedUrl}/v1/embeddings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: text, ...(this.embedModel ? { model: this.embedModel } : {}) }),
+      body: JSON.stringify({
+        input: text,
+        ...(this.embedModel ? { model: this.embedModel } : {}),
+      }),
     });
 
     if (!response.ok) {

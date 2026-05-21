@@ -258,7 +258,10 @@ export class CloudSyncService {
           : this.decryptApiKey(link.cloudApiKey);
         const memory = await this.prisma.memory.findUnique({
           where: { id: event.memoryId },
-          include: { extraction: true, entities: { include: { entity: true } } },
+          include: {
+            extraction: true,
+            entities: { include: { entity: true } },
+          },
         });
         if (!memory || memory.deletedAt) return;
 

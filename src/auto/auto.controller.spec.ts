@@ -77,9 +77,7 @@ describe('AutoController', () => {
   describe('analyze', () => {
     it('should call observer.analyzeSignals and return signals', async () => {
       const dto = {
-        turns: [
-          { role: 'user', content: 'I always use dark mode' },
-        ],
+        turns: [{ role: 'user', content: 'I always use dark mode' }],
       };
       const expected = {
         signals: [

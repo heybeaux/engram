@@ -29,7 +29,8 @@ const FEEDBACK_WEIGHT_MAP: Record<FeedbackSignalType, number> = {
 const FEEDBACK_SIGNAL_MAP: Record<FeedbackSignalType, RetrievalSignalType> = {
   [FeedbackSignalType.EXPLICIT_HIT]: RetrievalSignalType.EXPLICIT_HIT,
   [FeedbackSignalType.EXPLICIT_MISS]: RetrievalSignalType.EXPLICIT_MISS,
-  [FeedbackSignalType.EXPLICIT_IRRELEVANT]: RetrievalSignalType.EXPLICIT_IRRELEVANT,
+  [FeedbackSignalType.EXPLICIT_IRRELEVANT]:
+    RetrievalSignalType.EXPLICIT_IRRELEVANT,
   [FeedbackSignalType.EXPLICIT_PARTIAL]: RetrievalSignalType.EXPLICIT_PARTIAL,
 };
 
@@ -52,7 +53,8 @@ export class RetrievalSignalsController {
     @Body() dto: FeedbackDto,
     @Req() req: any,
   ): Promise<{ signalId: string }> {
-    const accountId = req.accountId ?? req.agent?.accountId ?? req.user?.accountId ?? 'unknown';
+    const accountId =
+      req.accountId ?? req.agent?.accountId ?? req.user?.accountId ?? 'unknown';
     const weight = dto.weight ?? FEEDBACK_WEIGHT_MAP[dto.signal];
 
     const signalId = await this.retrievalSignalsService.logSignal({
@@ -85,10 +87,13 @@ export class RetrievalSignalsController {
       return { logs: [] };
     }
 
-    const logs = await this.retrievalSignalsService.getRecentQueries(accountId, {
-      limit: query.limit,
-      since: query.since ? new Date(query.since) : undefined,
-    });
+    const logs = await this.retrievalSignalsService.getRecentQueries(
+      accountId,
+      {
+        limit: query.limit,
+        since: query.since ? new Date(query.since) : undefined,
+      },
+    );
 
     return { logs };
   }

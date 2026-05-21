@@ -32,7 +32,8 @@ export class TraceTimelineDto {
   endDate: string;
 
   @ApiPropertyOptional({
-    description: 'Search method: "keyword" for ILIKE, "semantic" for embedding similarity',
+    description:
+      'Search method: "keyword" for ILIKE, "semantic" for embedding similarity',
     default: 'keyword',
   })
   @IsOptional()

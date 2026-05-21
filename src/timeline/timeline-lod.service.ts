@@ -89,7 +89,10 @@ export class TimelineLodService {
       this.logger.error(
         `Failed to generate timeline LOD for ${date}: ${message}`,
       );
-      throw new Error(`Timeline LOD generation failed for ${date}: ${message}`, { cause: error });
+      throw new Error(
+        `Timeline LOD generation failed for ${date}: ${message}`,
+        { cause: error },
+      );
     }
   }
 
@@ -111,7 +114,9 @@ export class TimelineLodService {
     date: string,
   ): TimelineLodResult {
     return {
-      indexText: response.indexText || `${date}: "Quiet day" — no notable events. [misc]`,
+      indexText:
+        response.indexText ||
+        `${date}: "Quiet day" — no notable events. [misc]`,
       summaryText: response.summaryText || 'No significant activity recorded.',
       standardText: response.standardText || 'No detailed record available.',
       events: Array.isArray(response.events) ? response.events : [],
@@ -130,7 +135,8 @@ export class TimelineLodService {
     return {
       indexText: `${date}: "Quiet day" — no memories recorded. [idle]`,
       summaryText: 'No memories were recorded for this day.',
-      standardText: 'No memories were recorded for this day. No events, decisions, or interactions to report.',
+      standardText:
+        'No memories were recorded for this day. No events, decisions, or interactions to report.',
       events: [],
       decisions: [],
       chapter: 'Quiet day',

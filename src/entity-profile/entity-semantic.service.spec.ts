@@ -39,7 +39,9 @@ describe('EntitySemanticService', () => {
     });
 
     it('should return empty array when no profiles exist', async () => {
-      mockPrisma.memory.findFirst.mockResolvedValue({ raw: 'some memory text' });
+      mockPrisma.memory.findFirst.mockResolvedValue({
+        raw: 'some memory text',
+      });
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }] }),
@@ -51,8 +53,14 @@ describe('EntitySemanticService', () => {
     });
 
     it('should return empty array when embed fails', async () => {
-      mockPrisma.memory.findFirst.mockResolvedValue({ raw: 'some memory text' });
-      mockFetch.mockResolvedValue({ ok: false, status: 500, text: async () => 'Server Error' });
+      mockPrisma.memory.findFirst.mockResolvedValue({
+        raw: 'some memory text',
+      });
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Server Error',
+      });
 
       const result = await service.findSemanticMatches('mem-1', 'user-1');
       expect(result).toEqual([]);
@@ -131,7 +139,9 @@ describe('EntitySemanticService', () => {
 
       // Mismatched profile should be skipped (caught internally), valid one returned
       expect(result.some((r) => r.profileId === 'profile-ok')).toBe(true);
-      expect(result.some((r) => r.profileId === 'profile-mismatched')).toBe(false);
+      expect(result.some((r) => r.profileId === 'profile-mismatched')).toBe(
+        false,
+      );
     });
 
     it('should use custom threshold when provided', async () => {
@@ -145,7 +155,11 @@ describe('EntitySemanticService', () => {
         { id: 'profile-mid', embedding: '[0.707,0.707,0]' },
       ]);
 
-      const resultAbove = await service.findSemanticMatches('mem-1', 'user-1', 0.5);
+      const resultAbove = await service.findSemanticMatches(
+        'mem-1',
+        'user-1',
+        0.5,
+      );
       expect(resultAbove).toHaveLength(1);
 
       jest.clearAllMocks();
@@ -157,7 +171,11 @@ describe('EntitySemanticService', () => {
       mockPrisma.$queryRaw.mockResolvedValue([
         { id: 'profile-mid', embedding: '[0.707,0.707,0]' },
       ]);
-      const resultBelow = await service.findSemanticMatches('mem-1', 'user-1', 0.99);
+      const resultBelow = await service.findSemanticMatches(
+        'mem-1',
+        'user-1',
+        0.99,
+      );
       expect(resultBelow).toHaveLength(0);
     });
 
@@ -202,7 +220,9 @@ describe('EntitySemanticService', () => {
         text: async () => 'Service Unavailable',
       });
 
-      await expect(service.embed('test')).rejects.toThrow('Embed server error 503');
+      await expect(service.embed('test')).rejects.toThrow(
+        'Embed server error 503',
+      );
     });
 
     it('should throw when response has no data array', async () => {
@@ -211,7 +231,9 @@ describe('EntitySemanticService', () => {
         json: async () => ({ result: 'unexpected' }),
       });
 
-      await expect(service.embed('test')).rejects.toThrow('Invalid response from embed server');
+      await expect(service.embed('test')).rejects.toThrow(
+        'Invalid response from embed server',
+      );
     });
 
     it('should throw when first data item has no embedding', async () => {
@@ -220,7 +242,9 @@ describe('EntitySemanticService', () => {
         json: async () => ({ data: [{ object: 'embedding' }] }),
       });
 
-      await expect(service.embed('test')).rejects.toThrow('Invalid response from embed server');
+      await expect(service.embed('test')).rejects.toThrow(
+        'Invalid response from embed server',
+      );
     });
 
     it('should use LOCAL_EMBED_URL from config', async () => {
@@ -230,7 +254,10 @@ describe('EntitySemanticService', () => {
           return def;
         }),
       };
-      const customService = new EntitySemanticService(mockPrisma as any, customConfig as any);
+      const customService = new EntitySemanticService(
+        mockPrisma as any,
+        customConfig as any,
+      );
 
       mockFetch.mockResolvedValue({
         ok: true,

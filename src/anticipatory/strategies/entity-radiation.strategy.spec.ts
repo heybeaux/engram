@@ -40,7 +40,10 @@ function makeEntity(id: string, name: string) {
   return { id, name };
 }
 
-function makeTraversal(nodes: { id: string; name: string }[], edges: { sourceId: string; targetId: string; weight: number }[] = []) {
+function makeTraversal(
+  nodes: { id: string; name: string }[],
+  edges: { sourceId: string; targetId: string; weight: number }[] = [],
+) {
   return { nodes, edges };
 }
 
@@ -91,7 +94,10 @@ describe('EntityRadiationStrategy', () => {
   describe('execute — happy paths', () => {
     it('should return empty array when no entities in signals', async () => {
       const signals = makeSignals({ entities: [] });
-      const result = await strategy.execute(signals, { maxResults: 5, timeoutMs: 5000 });
+      const result = await strategy.execute(signals, {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(result).toEqual([]);
       expect(mockEntityService.findByNameOrAlias).not.toHaveBeenCalled();
     });
@@ -99,16 +105,24 @@ describe('EntityRadiationStrategy', () => {
     it('should return empty array when entity is not found in graph', async () => {
       mockEntityService.findByNameOrAlias.mockResolvedValue(null);
       const signals = makeSignals({ entities: ['UnknownThing'] });
-      const result = await strategy.execute(signals, { maxResults: 5, timeoutMs: 5000 });
+      const result = await strategy.execute(signals, {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(result).toEqual([]);
     });
 
     it('should return empty when traversal has no adjacent nodes', async () => {
       const entity = makeEntity('e-1', 'Engram');
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
-      mockRelationshipService.traverse.mockResolvedValue(makeTraversal([entity]));
+      mockRelationshipService.traverse.mockResolvedValue(
+        makeTraversal([entity]),
+      );
 
-      const result = await strategy.execute(makeSignals(), { maxResults: 5, timeoutMs: 5000 });
+      const result = await strategy.execute(makeSignals(), {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(result).toEqual([]);
     });
 
@@ -117,11 +131,17 @@ describe('EntityRadiationStrategy', () => {
       const adjacent = makeEntity('e-2', 'Railway');
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
       mockRelationshipService.traverse.mockResolvedValue(
-        makeTraversal([entity, adjacent], [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.9 }]),
+        makeTraversal(
+          [entity, adjacent],
+          [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.9 }],
+        ),
       );
       mockPrisma.memory.findMany.mockResolvedValue([]);
 
-      const result = await strategy.execute(makeSignals(), { maxResults: 5, timeoutMs: 5000 });
+      const result = await strategy.execute(makeSignals(), {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(result).toEqual([]);
     });
 
@@ -132,11 +152,17 @@ describe('EntityRadiationStrategy', () => {
 
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
       mockRelationshipService.traverse.mockResolvedValue(
-        makeTraversal([entity, adjacent], [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.8 }]),
+        makeTraversal(
+          [entity, adjacent],
+          [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.8 }],
+        ),
       );
       mockPrisma.memory.findMany.mockResolvedValue([memory]);
 
-      const results = await strategy.execute(makeSignals(), { maxResults: 5, timeoutMs: 5000 });
+      const results = await strategy.execute(makeSignals(), {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(results).toHaveLength(1);
       expect(results[0].meta.strategy).toBe('entity_radiation');
       expect(results[0].meta.entityPath).toEqual(['Engram', 'Railway']);
@@ -151,11 +177,17 @@ describe('EntityRadiationStrategy', () => {
 
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
       mockRelationshipService.traverse.mockResolvedValue(
-        makeTraversal([entity, adjacent], [{ sourceId: 'e-1', targetId: 'e-2', weight: 1.0 }]),
+        makeTraversal(
+          [entity, adjacent],
+          [{ sourceId: 'e-1', targetId: 'e-2', weight: 1.0 }],
+        ),
       );
       mockPrisma.memory.findMany.mockResolvedValue([memory]);
 
-      const results = await strategy.execute(makeSignals(), { maxResults: 5, timeoutMs: 5000 });
+      const results = await strategy.execute(makeSignals(), {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(results[0].meta.salience).toBeGreaterThan(0);
       expect(results[0].meta.salience).toBeLessThanOrEqual(1.0); // weight × score × decay ≤ 1
     });
@@ -172,18 +204,30 @@ describe('EntityRadiationStrategy', () => {
 
       // Test with two separate strategy calls to compare salience
       const edge = [{ sourceId: 'e-1', targetId: 'e-2', weight: 1.0 }];
-      mockRelationshipService.traverse.mockResolvedValue(makeTraversal([entity, adjacent], edge));
+      mockRelationshipService.traverse.mockResolvedValue(
+        makeTraversal([entity, adjacent], edge),
+      );
 
       mockPrisma.memory.findMany.mockResolvedValueOnce([freshMemory]);
-      const freshResult = await strategy.execute(makeSignals({ entities: ['Engram'] }), { maxResults: 5, timeoutMs: 5000 });
+      const freshResult = await strategy.execute(
+        makeSignals({ entities: ['Engram'] }),
+        { maxResults: 5, timeoutMs: 5000 },
+      );
 
       jest.clearAllMocks();
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
-      mockRelationshipService.traverse.mockResolvedValue(makeTraversal([entity, adjacent], edge));
+      mockRelationshipService.traverse.mockResolvedValue(
+        makeTraversal([entity, adjacent], edge),
+      );
       mockPrisma.memory.findMany.mockResolvedValue([oldMemory]);
-      const oldResult = await strategy.execute(makeSignals({ entities: ['Engram'] }), { maxResults: 5, timeoutMs: 5000 });
+      const oldResult = await strategy.execute(
+        makeSignals({ entities: ['Engram'] }),
+        { maxResults: 5, timeoutMs: 5000 },
+      );
 
-      expect(freshResult[0].meta.salience).toBeGreaterThan(oldResult[0].meta.salience);
+      expect(freshResult[0].meta.salience).toBeGreaterThan(
+        oldResult[0].meta.salience,
+      );
     });
 
     it('should sort results by salience descending', async () => {
@@ -208,9 +252,14 @@ describe('EntityRadiationStrategy', () => {
         .mockResolvedValueOnce([memHigh])
         .mockResolvedValueOnce([memLow]);
 
-      const results = await strategy.execute(makeSignals(), { maxResults: 10, timeoutMs: 5000 });
+      const results = await strategy.execute(makeSignals(), {
+        maxResults: 10,
+        timeoutMs: 5000,
+      });
       expect(results).toHaveLength(2);
-      expect(results[0].meta.salience).toBeGreaterThanOrEqual(results[1].meta.salience);
+      expect(results[0].meta.salience).toBeGreaterThanOrEqual(
+        results[1].meta.salience,
+      );
     });
 
     it('should respect maxResults limit', async () => {
@@ -220,13 +269,22 @@ describe('EntityRadiationStrategy', () => {
         makeEntity('e-3', 'Prisma'),
         makeEntity('e-4', 'pgvector'),
       ];
-      const edges = adjacent.map((a, i) => ({ sourceId: 'e-1', targetId: a.id, weight: 0.8 - i * 0.1 }));
+      const edges = adjacent.map((a, i) => ({
+        sourceId: 'e-1',
+        targetId: a.id,
+        weight: 0.8 - i * 0.1,
+      }));
 
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
-      mockRelationshipService.traverse.mockResolvedValue(makeTraversal([entity, ...adjacent], edges));
+      mockRelationshipService.traverse.mockResolvedValue(
+        makeTraversal([entity, ...adjacent], edges),
+      );
       mockPrisma.memory.findMany.mockResolvedValue([makeMemory('mem-x')]);
 
-      const results = await strategy.execute(makeSignals(), { maxResults: 2, timeoutMs: 5000 });
+      const results = await strategy.execute(makeSignals(), {
+        maxResults: 2,
+        timeoutMs: 5000,
+      });
       expect(results.length).toBeLessThanOrEqual(2);
     });
 
@@ -237,7 +295,10 @@ describe('EntityRadiationStrategy', () => {
 
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
       mockRelationshipService.traverse.mockResolvedValue(
-        makeTraversal([entity, adjacent], [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.8 }]),
+        makeTraversal(
+          [entity, adjacent],
+          [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.8 }],
+        ),
       );
       mockPrisma.memory.findMany.mockResolvedValue([]);
 
@@ -264,8 +325,18 @@ describe('EntityRadiationStrategy', () => {
         .mockResolvedValueOnce(prisma);
 
       mockRelationshipService.traverse
-        .mockResolvedValueOnce(makeTraversal([engram, shared], [{ sourceId: 'e-1', targetId: 'e-3', weight: 0.8 }]))
-        .mockResolvedValueOnce(makeTraversal([prisma, shared], [{ sourceId: 'e-2', targetId: 'e-3', weight: 0.7 }]));
+        .mockResolvedValueOnce(
+          makeTraversal(
+            [engram, shared],
+            [{ sourceId: 'e-1', targetId: 'e-3', weight: 0.8 }],
+          ),
+        )
+        .mockResolvedValueOnce(
+          makeTraversal(
+            [prisma, shared],
+            [{ sourceId: 'e-2', targetId: 'e-3', weight: 0.7 }],
+          ),
+        );
 
       mockPrisma.memory.findMany.mockResolvedValue([makeMemory('mem-shared')]);
 
@@ -283,10 +354,15 @@ describe('EntityRadiationStrategy', () => {
 
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
       // Traversal with no edges
-      mockRelationshipService.traverse.mockResolvedValue(makeTraversal([entity, adjacent], []));
+      mockRelationshipService.traverse.mockResolvedValue(
+        makeTraversal([entity, adjacent], []),
+      );
       mockPrisma.memory.findMany.mockResolvedValue([memory]);
 
-      const results = await strategy.execute(makeSignals(), { maxResults: 5, timeoutMs: 5000 });
+      const results = await strategy.execute(makeSignals(), {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       // Salience uses default weight 0.5 — should still produce a valid result
       expect(results).toHaveLength(1);
       expect(results[0].meta.salience).toBeGreaterThan(0);
@@ -307,31 +383,47 @@ describe('EntityRadiationStrategy', () => {
         .mockResolvedValueOnce(entity2);
 
       mockRelationshipService.traverse.mockResolvedValue(
-        makeTraversal([entity2, adjacent], [{ sourceId: 'e-2', targetId: 'e-3', weight: 0.7 }]),
+        makeTraversal(
+          [entity2, adjacent],
+          [{ sourceId: 'e-2', targetId: 'e-3', weight: 0.7 }],
+        ),
       );
       mockPrisma.memory.findMany.mockResolvedValue([memory]);
 
       const signals = makeSignals({ entities: ['Engram', 'Railway'] });
-      const results = await strategy.execute(signals, { maxResults: 5, timeoutMs: 5000 });
+      const results = await strategy.execute(signals, {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
 
       // Should not throw; should return results from entity2
       expect(results).toHaveLength(1);
     });
 
     it('should return empty array when all entities throw', async () => {
-      mockEntityService.findByNameOrAlias.mockRejectedValue(new Error('timeout'));
+      mockEntityService.findByNameOrAlias.mockRejectedValue(
+        new Error('timeout'),
+      );
 
       const signals = makeSignals({ entities: ['Engram', 'Prisma'] });
-      const results = await strategy.execute(signals, { maxResults: 5, timeoutMs: 5000 });
+      const results = await strategy.execute(signals, {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(results).toEqual([]);
     });
 
     it('should handle traversal service throwing gracefully', async () => {
       const entity = makeEntity('e-1', 'Engram');
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
-      mockRelationshipService.traverse.mockRejectedValue(new Error('graph unavailable'));
+      mockRelationshipService.traverse.mockRejectedValue(
+        new Error('graph unavailable'),
+      );
 
-      const results = await strategy.execute(makeSignals(), { maxResults: 5, timeoutMs: 5000 });
+      const results = await strategy.execute(makeSignals(), {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(results).toEqual([]);
     });
 
@@ -341,11 +433,17 @@ describe('EntityRadiationStrategy', () => {
 
       mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
       mockRelationshipService.traverse.mockResolvedValue(
-        makeTraversal([entity, adjacent], [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.8 }]),
+        makeTraversal(
+          [entity, adjacent],
+          [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.8 }],
+        ),
       );
       mockPrisma.memory.findMany.mockRejectedValue(new Error('query timeout'));
 
-      const results = await strategy.execute(makeSignals(), { maxResults: 5, timeoutMs: 5000 });
+      const results = await strategy.execute(makeSignals(), {
+        maxResults: 5,
+        timeoutMs: 5000,
+      });
       expect(results).toEqual([]);
     });
   });
@@ -355,10 +453,13 @@ describe('EntityRadiationStrategy', () => {
   describe('execute — deadline handling', () => {
     it('should return partial results when already past deadline before starting entity loop', async () => {
       // timeout 0ms — deadline will be in the past immediately for any real work
-      const result = await strategy.execute(makeSignals({ entities: ['Engram', 'Prisma'] }), {
-        maxResults: 5,
-        timeoutMs: 0,
-      });
+      const result = await strategy.execute(
+        makeSignals({ entities: ['Engram', 'Prisma'] }),
+        {
+          maxResults: 5,
+          timeoutMs: 0,
+        },
+      );
       // With 0ms timeout, deadline is effectively already expired — we expect empty or minimal results
       // depending on JS event loop timing; the important thing is it doesn't hang
       expect(Array.isArray(result)).toBe(true);

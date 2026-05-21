@@ -106,9 +106,15 @@ describe('DreamCycleQueueProducer', () => {
         (c: any) => c.name === DREAM_CYCLE_JOBS.IDENTITY,
       );
       // IDENTITY → DRIFT → CLUSTERING → PATTERNS
-      const driftJob = identityJob?.children?.find((c: any) => c.name === DREAM_CYCLE_JOBS.DRIFT);
-      const clusteringJob = driftJob?.children?.find((c: any) => c.name === DREAM_CYCLE_JOBS.CLUSTERING);
-      const patternsJob = clusteringJob?.children?.find((c: any) => c.name === DREAM_CYCLE_JOBS.PATTERNS);
+      const driftJob = identityJob?.children?.find(
+        (c: any) => c.name === DREAM_CYCLE_JOBS.DRIFT,
+      );
+      const clusteringJob = driftJob?.children?.find(
+        (c: any) => c.name === DREAM_CYCLE_JOBS.CLUSTERING,
+      );
+      const patternsJob = clusteringJob?.children?.find(
+        (c: any) => c.name === DREAM_CYCLE_JOBS.PATTERNS,
+      );
       expect(patternsJob).toBeDefined();
     });
 
@@ -141,7 +147,9 @@ describe('DreamCycleQueueProducer', () => {
     });
 
     it('should propagate flowProducer.add errors', async () => {
-      mockFlowProducer.add.mockRejectedValueOnce(new Error('Queue unavailable'));
+      mockFlowProducer.add.mockRejectedValueOnce(
+        new Error('Queue unavailable'),
+      );
       await expect(producer.enqueue('user-1')).rejects.toThrow(
         'Queue unavailable',
       );

@@ -45,7 +45,9 @@ describe('MonitoringController', () => {
 
     it('should propagate service errors', async () => {
       service.getMetrics.mockRejectedValue(new Error('Metrics unavailable'));
-      await expect(controller.getStatus()).rejects.toThrow('Metrics unavailable');
+      await expect(controller.getStatus()).rejects.toThrow(
+        'Metrics unavailable',
+      );
     });
   });
 

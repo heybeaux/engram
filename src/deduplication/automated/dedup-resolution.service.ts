@@ -176,11 +176,7 @@ export class DedupResolutionService {
             break;
 
           case 'CONFLICTING':
-            await this.resolveContradiction(
-              candidate.id,
-              memory1,
-              memory2,
-            );
+            await this.resolveContradiction(candidate.id, memory1, memory2);
             stats.contradictionsResolved++;
             break;
 

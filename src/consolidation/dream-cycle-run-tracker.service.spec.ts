@@ -50,14 +50,24 @@ describe('DreamCycleRunTrackerService', () => {
     it('should call prisma.dreamCycleStageRun.create with STARTED status', async () => {
       await service.startStage('run-1', 'TIERING');
       expect(mockPrisma.dreamCycleStageRun.create).toHaveBeenCalledWith({
-        data: { runId: 'run-1', stage: 'TIERING', status: 'STARTED', totalRows: undefined },
+        data: {
+          runId: 'run-1',
+          stage: 'TIERING',
+          status: 'STARTED',
+          totalRows: undefined,
+        },
       });
     });
 
     it('should pass totalRows when provided', async () => {
       await service.startStage('run-1', 'PATTERNS', 100);
       expect(mockPrisma.dreamCycleStageRun.create).toHaveBeenCalledWith({
-        data: { runId: 'run-1', stage: 'PATTERNS', status: 'STARTED', totalRows: 100 },
+        data: {
+          runId: 'run-1',
+          stage: 'PATTERNS',
+          status: 'STARTED',
+          totalRows: 100,
+        },
       });
     });
 
@@ -65,7 +75,9 @@ describe('DreamCycleRunTrackerService', () => {
       mockPrisma.dreamCycleStageRun.create.mockRejectedValueOnce(
         new Error('DB error'),
       );
-      await expect(service.startStage('run-1', 'PENDING')).rejects.toThrow('DB error');
+      await expect(service.startStage('run-1', 'PENDING')).rejects.toThrow(
+        'DB error',
+      );
     });
   });
 

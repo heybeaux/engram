@@ -96,9 +96,7 @@ export class ElasticsearchService implements OnModuleInit {
 
     try {
       const health = await this.client.cluster.health();
-      this.logger.log(
-        `[ES] Connected — cluster status: ${health.status}`,
-      );
+      this.logger.log(`[ES] Connected — cluster status: ${health.status}`);
     } catch (err) {
       this.logger.warn(
         `[ES] Cluster unreachable at ${url}: ${(err as Error).message} — keyword search disabled`,

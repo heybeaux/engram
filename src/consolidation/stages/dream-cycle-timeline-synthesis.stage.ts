@@ -74,11 +74,7 @@ export class DreamCycleTimelineSynthesisStage {
 
       try {
         // 3. Fetch memories for this agent+date
-        const memories = await this.fetchDayMemories(
-          userId,
-          agentId,
-          date,
-        );
+        const memories = await this.fetchDayMemories(userId, agentId, date);
 
         if (memories.length === 0) {
           result.daysSkipped++;
@@ -86,12 +82,17 @@ export class DreamCycleTimelineSynthesisStage {
         }
 
         // 5. Call TimelineLodService for LOD generation
-        const lod = await this.timelineLodService.generateLod(memories, dateStr);
+        const lod = await this.timelineLodService.generateLod(
+          memories,
+          dateStr,
+        );
         result.llmCalls += 1;
 
         if (dryRun) {
           result.daysProcessed++;
-          this.logger.debug(`[dry-run] Would upsert timeline for ${agentId} on ${dateStr}`);
+          this.logger.debug(
+            `[dry-run] Would upsert timeline for ${agentId} on ${dateStr}`,
+          );
           continue;
         }
 
@@ -131,9 +132,7 @@ export class DreamCycleTimelineSynthesisStage {
     return result;
   }
 
-  async getDateRange(
-    userId: string,
-  ): Promise<{ from: Date; to: Date } | null> {
+  async getDateRange(userId: string): Promise<{ from: Date; to: Date } | null> {
     // Find the last completed dream cycle report for this user
     const lastReport = await this.prisma.dreamCycleReport.findFirst({
       where: {
@@ -195,9 +194,7 @@ export class DreamCycleTimelineSynthesisStage {
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
 
     const agentFilter =
-      agentId === this.defaultAgentId
-        ? { agentId: null }
-        : { agentId };
+      agentId === this.defaultAgentId ? { agentId: null } : { agentId };
 
     return this.prisma.memory.findMany({
       where: {

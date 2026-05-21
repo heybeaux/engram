@@ -160,7 +160,9 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
     rlsContext.run(undefined as any, () => {
       this.runJob(jobId).catch((error) => {
         const errMsg = error instanceof Error ? error.message : String(error);
-        this.logger.error(`[ReembeddingService] Job ${jobId} failed: ${errMsg}`);
+        this.logger.error(
+          `[ReembeddingService] Job ${jobId} failed: ${errMsg}`,
+        );
         const failedJob = this.jobs.get(jobId);
         if (failedJob) {
           failedJob.status = ReembeddingJobStatus.FAILED;

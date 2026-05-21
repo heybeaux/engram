@@ -21,7 +21,12 @@ describe('TimelineService', () => {
     standardText:
       'Full detailed entry about the productive day with all events and decisions.',
     events: [
-      { time: '09:00', description: 'Standup', significance: 3, tags: ['standup'] },
+      {
+        time: '09:00',
+        description: 'Standup',
+        significance: 3,
+        tags: ['standup'],
+      },
     ],
     decisions: [],
     openThreadIds: [],
@@ -291,9 +296,9 @@ describe('TimelineService', () => {
     });
 
     it('should throw BadRequestException on invalid date', async () => {
-      await expect(
-        service.findByDate(agentId, 'garbage'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.findByDate(agentId, 'garbage')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -343,9 +348,9 @@ describe('TimelineService', () => {
     });
 
     it('should throw BadRequestException on invalid date', async () => {
-      await expect(
-        service.findByDateDeep(agentId, 'bad-date'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.findByDateDeep(agentId, 'bad-date')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

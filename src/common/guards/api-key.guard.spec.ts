@@ -325,10 +325,20 @@ describe('ApiKeyGuard', () => {
   describe('ENG-109: case-insensitive externalId', () => {
     const apiKey = 'engram_case';
     const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
-    const agent = { id: 'agent-1', accountId: 'acc-1', apiKeyHash, deletedAt: null };
+    const agent = {
+      id: 'agent-1',
+      accountId: 'acc-1',
+      apiKeyHash,
+      deletedAt: null,
+    };
 
     it('should normalize externalId to lowercase on lookup', async () => {
-      const user = { id: 'user-1', accountId: 'acc-1', externalId: 'beaux', deletedAt: null };
+      const user = {
+        id: 'user-1',
+        accountId: 'acc-1',
+        externalId: 'beaux',
+        deletedAt: null,
+      };
       mockPrisma.agent.findUnique.mockResolvedValue(agent);
       mockPrisma.user.findUnique.mockResolvedValue(user);
 
@@ -338,12 +348,19 @@ describe('ApiKeyGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+        where: {
+          accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' },
+        },
       });
     });
 
     it('should normalize BEAUX to beaux on lookup', async () => {
-      const user = { id: 'user-1', accountId: 'acc-1', externalId: 'beaux', deletedAt: null };
+      const user = {
+        id: 'user-1',
+        accountId: 'acc-1',
+        externalId: 'beaux',
+        deletedAt: null,
+      };
       mockPrisma.agent.findUnique.mockResolvedValue(agent);
       mockPrisma.user.findUnique.mockResolvedValue(user);
 
@@ -353,12 +370,19 @@ describe('ApiKeyGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+        where: {
+          accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' },
+        },
       });
     });
 
     it('should create user with lowercase externalId when not found', async () => {
-      const newUser = { id: 'user-new', accountId: 'acc-1', externalId: 'beaux', deletedAt: null };
+      const newUser = {
+        id: 'user-new',
+        accountId: 'acc-1',
+        externalId: 'beaux',
+        deletedAt: null,
+      };
       mockPrisma.agent.findUnique.mockResolvedValue(agent);
       mockPrisma.user.findUnique.mockResolvedValue(null);
       mockPrisma.user.create.mockResolvedValue(newUser);
@@ -379,10 +403,21 @@ describe('ApiKeyGuard', () => {
   describe('ENG-109: optional X-AM-User-ID', () => {
     const apiKey = 'engram_noid';
     const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
-    const agent = { id: 'agent-1', accountId: 'acc-1', apiKeyHash, deletedAt: null };
+    const agent = {
+      id: 'agent-1',
+      accountId: 'acc-1',
+      apiKeyHash,
+      deletedAt: null,
+    };
 
     it('should resolve default user when X-AM-User-ID is omitted', async () => {
-      const defaultUser = { id: 'user-default', accountId: 'acc-1', externalId: 'default', isDefault: true, deletedAt: null };
+      const defaultUser = {
+        id: 'user-default',
+        accountId: 'acc-1',
+        externalId: 'default',
+        isDefault: true,
+        deletedAt: null,
+      };
       mockPrisma.agent.findUnique.mockResolvedValue(agent);
       mockPrisma.user.findFirst.mockResolvedValue(defaultUser);
 
@@ -404,7 +439,13 @@ describe('ApiKeyGuard', () => {
     });
 
     it('should create default user when none exists and X-AM-User-ID is omitted', async () => {
-      const createdDefault = { id: 'user-new-default', accountId: 'acc-1', externalId: 'default', isDefault: true, deletedAt: null };
+      const createdDefault = {
+        id: 'user-new-default',
+        accountId: 'acc-1',
+        externalId: 'default',
+        isDefault: true,
+        deletedAt: null,
+      };
       mockPrisma.agent.findUnique.mockResolvedValue(agent);
       mockPrisma.user.findFirst.mockResolvedValue(null);
       mockPrisma.user.create.mockResolvedValue(createdDefault);
@@ -426,7 +467,12 @@ describe('ApiKeyGuard', () => {
     });
 
     it('should still scope to specific user when X-AM-User-ID is provided', async () => {
-      const user = { id: 'user-1', accountId: 'acc-1', externalId: 'beaux', deletedAt: null };
+      const user = {
+        id: 'user-1',
+        accountId: 'acc-1',
+        externalId: 'beaux',
+        deletedAt: null,
+      };
       mockPrisma.agent.findUnique.mockResolvedValue(agent);
       mockPrisma.user.findUnique.mockResolvedValue(user);
 
@@ -436,7 +482,9 @@ describe('ApiKeyGuard', () => {
 
       expect(await guard.canActivate(ctx)).toBe(true);
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
-        where: { accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' } },
+        where: {
+          accountId_externalId: { accountId: 'acc-1', externalId: 'beaux' },
+        },
       });
     });
   });

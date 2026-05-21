@@ -19,9 +19,7 @@ describe('CloudLinkController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CloudLinkController],
-      providers: [
-        { provide: CloudLinkService, useValue: mockService },
-      ],
+      providers: [{ provide: CloudLinkService, useValue: mockService }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })
@@ -145,9 +143,7 @@ describe('CloudLinkController', () => {
 
     it('should propagate health check failures', async () => {
       const req = { accountId: 'acct-1' };
-      mockService.healthCheck.mockRejectedValue(
-        new Error('Cloud unreachable'),
-      );
+      mockService.healthCheck.mockRejectedValue(new Error('Cloud unreachable'));
 
       await expect(controller.healthCheck(req)).rejects.toThrow(
         'Cloud unreachable',

@@ -74,13 +74,18 @@ export class MemoryQueryService {
 
     // ENG-109: Normalize userId for Prisma where clauses.
     // If null (no X-AM-User-ID header), omit filter to query all account users.
-    const userIdFilter = userId === null
-      ? undefined
-      : Array.isArray(userId) ? { in: userId } : userId;
+    const userIdFilter =
+      userId === null
+        ? undefined
+        : Array.isArray(userId)
+          ? { in: userId }
+          : userId;
 
     // v0.9: Use explicit poolIds if provided, otherwise resolve from agentSessionKey
     let poolIds: string[] | undefined = dto.poolIds;
-    const singleUserId = Array.isArray(userId) ? userId[0] : (userId ?? undefined);
+    const singleUserId = Array.isArray(userId)
+      ? userId[0]
+      : (userId ?? undefined);
     if (!poolIds && dto.agentSessionKey && this.memoryPoolService) {
       try {
         poolIds = await this.memoryPoolService.getAccessiblePoolIds(
@@ -147,11 +152,13 @@ export class MemoryQueryService {
       };
       if (dto.after) {
         const afterDate = new Date(dto.after);
-        if (afterDate > temporalCreatedAt.gte) temporalCreatedAt.gte = afterDate;
+        if (afterDate > temporalCreatedAt.gte)
+          temporalCreatedAt.gte = afterDate;
       }
       if (dto.before) {
         const beforeDate = new Date(dto.before);
-        if (beforeDate < temporalCreatedAt.lte) temporalCreatedAt.lte = beforeDate;
+        if (beforeDate < temporalCreatedAt.lte)
+          temporalCreatedAt.lte = beforeDate;
       }
 
       const temporalMemories = await this.prisma.memory.findMany({
@@ -241,9 +248,11 @@ export class MemoryQueryService {
       const skipFts = poolIds && poolIds.length > 0 && !singleUserId;
       try {
         // ENG-109: When no userId, omit user_id filter to search all account memories
-        const ftsResults = skipFts ? [] : singleUserId
-          ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-              `SELECT id FROM memories
+        const ftsResults = skipFts
+          ? []
+          : singleUserId
+            ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM memories
                WHERE user_id = $1
                  AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
                  AND deleted_at IS NULL
@@ -251,19 +260,19 @@ export class MemoryQueryService {
                  AND searchable IS NOT FALSE
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
                LIMIT 100`,
-              singleUserId ?? 'default',
-              searchQuery,
-            )
-          : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-              `SELECT id FROM memories
+                singleUserId ?? 'default',
+                searchQuery,
+              )
+            : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM memories
                WHERE to_tsvector('english', raw) @@ websearch_to_tsquery('english', $1)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
                LIMIT 100`,
-              searchQuery,
-            );
+                searchQuery,
+              );
         let ftsAdded = 0;
         for (const row of ftsResults) {
           ftsResultIds.add(row.id);
@@ -446,7 +455,9 @@ export class MemoryQueryService {
 
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
-      result = (await this.memoryFailureService?.attachChains(scoredMemories) ?? scoredMemories) as MemoryWithScore[];
+      result = ((await this.memoryFailureService?.attachChains(
+        scoredMemories,
+      )) ?? scoredMemories) as MemoryWithScore[];
     }
 
     const resultIds = result.map((m) => m.id);
@@ -603,7 +614,9 @@ export class MemoryQueryService {
 
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
-      result = (await this.memoryFailureService?.attachChains(scoredMemories) ?? scoredMemories) as MemoryWithScore[];
+      result = ((await this.memoryFailureService?.attachChains(
+        scoredMemories,
+      )) ?? scoredMemories) as MemoryWithScore[];
     }
 
     const resultIds = result.map((m) => m.id);
@@ -652,7 +665,7 @@ export class MemoryQueryService {
         const excludeIds = new Set(result.map((m) => m.id));
         const areResult = await this.anticipatoryService.run(
           dto.query,
-          Array.isArray(userId) ? userId[0] : userId ?? 'default',
+          Array.isArray(userId) ? userId[0] : (userId ?? 'default'),
           excludeIds,
           dto.anticipatory,
         );
@@ -879,8 +892,8 @@ export class MemoryQueryService {
         : 0;
 
     // Sort entries chronologically
-    const entries = Array.from(entriesByDate.values()).sort(
-      (a, b) => a.date.localeCompare(b.date),
+    const entries = Array.from(entriesByDate.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
     );
 
     return {

@@ -35,7 +35,8 @@ export class RetrievalSignalsService {
    * Returns the generated queryId (cuid).
    */
   async logQuery(input: LogQueryInput): Promise<string> {
-    const queryType = input.queryType ?? this.classifyQueryType(input.queryText);
+    const queryType =
+      input.queryType ?? this.classifyQueryType(input.queryText);
 
     const log = await this.prisma.retrievalLog.create({
       data: {
@@ -154,13 +155,19 @@ export class RetrievalSignalsService {
    * Under static RRF with fixed weights, propensity is approximated as
    * 1/(k + rank) normalized by the total number of results.
    */
-  computePropensity(rank: number, resultCount: number, rrfK: number = 60): number {
+  computePropensity(
+    rank: number,
+    resultCount: number,
+    rrfK: number = 60,
+  ): number {
     if (resultCount === 0) return 0;
     // Propensity = probability of item appearing at this rank
     // Under RRF: score(d) = 1/(k + rank). Normalize across result set.
     const rawScore = 1 / (rrfK + rank);
-    const totalMass = Array.from({ length: resultCount }, (_, i) => 1 / (rrfK + i))
-      .reduce((sum, s) => sum + s, 0);
+    const totalMass = Array.from(
+      { length: resultCount },
+      (_, i) => 1 / (rrfK + i),
+    ).reduce((sum, s) => sum + s, 0);
     return rawScore / totalMass;
   }
 

@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
@@ -66,7 +71,10 @@ export class AuditLogWatcherService implements OnModuleInit, OnModuleDestroy {
     );
     this.pollTimer = setInterval(() => {
       this.poll().catch((err) => {
-        this.logger.error(`Poll error: ${(err as Error).message}`, (err as Error).stack);
+        this.logger.error(
+          `Poll error: ${(err as Error).message}`,
+          (err as Error).stack,
+        );
       });
     }, this.pollIntervalMs);
   }

@@ -32,9 +32,7 @@ describe('AgentSessionController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AgentSessionController],
-      providers: [
-        { provide: AgentSessionService, useValue: service },
-      ],
+      providers: [{ provide: AgentSessionService, useValue: service }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })
@@ -94,7 +92,9 @@ describe('AgentSessionController', () => {
         new NotFoundException("Agent session 'unknown' not found"),
       );
 
-      await expect(controller.getByKey('unknown')).rejects.toThrow(NotFoundException);
+      await expect(controller.getByKey('unknown')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -125,7 +125,9 @@ describe('AgentSessionController', () => {
         new NotFoundException("Agent session 'unknown' not found"),
       );
 
-      await expect(controller.update('unknown', {} as any)).rejects.toThrow(NotFoundException);
+      await expect(controller.update('unknown', {} as any)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

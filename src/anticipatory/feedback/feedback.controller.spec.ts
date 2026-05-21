@@ -13,9 +13,7 @@ describe('FeedbackController (anticipatory)', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [FeedbackController],
-      providers: [
-        { provide: FeedbackService, useValue: mockFeedbackService },
-      ],
+      providers: [{ provide: FeedbackService, useValue: mockFeedbackService }],
     }).compile();
 
     controller = module.get<FeedbackController>(FeedbackController);
@@ -97,9 +95,9 @@ describe('FeedbackController (anticipatory)', () => {
         new Error('DB write failed'),
       );
 
-      await expect(
-        controller.submitFeedback(dto as any, req),
-      ).rejects.toThrow('DB write failed');
+      await expect(controller.submitFeedback(dto as any, req)).rejects.toThrow(
+        'DB write failed',
+      );
     });
   });
 });

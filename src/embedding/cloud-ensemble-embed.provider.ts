@@ -66,7 +66,9 @@ export class CloudEnsembleEmbedProvider implements EmbeddingProvider {
         'document',
       );
       if (response.embeddings.length === 0) {
-        const errs = response.errors?.map((e) => `${e.model}: ${e.error}`).join(', ');
+        const errs = response.errors
+          ?.map((e) => `${e.model}: ${e.error}`)
+          .join(', ');
         this.logger.error(
           `Health check: all models failed — ${errs ?? 'unknown error'}`,
         );
@@ -74,7 +76,9 @@ export class CloudEnsembleEmbedProvider implements EmbeddingProvider {
       }
       return true;
     } catch (err) {
-      this.logger.warn(`Health check failed: ${err instanceof Error ? err.message : err}`);
+      this.logger.warn(
+        `Health check failed: ${err instanceof Error ? err.message : err}`,
+      );
       return false;
     }
   }

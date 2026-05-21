@@ -152,8 +152,18 @@ describe('DedupResolutionService', () => {
         makeCandidate({
           classification: 'CONFLICTING',
           confidence: 0.9,
-          memory1: makeMemory({ id: 'old-mem', raw: 'User lives in NYC', createdAt: older, importanceScore: 0.6 }),
-          memory2: makeMemory({ id: 'new-mem', raw: 'User lives in LA', createdAt: newer, importanceScore: 0.5 }),
+          memory1: makeMemory({
+            id: 'old-mem',
+            raw: 'User lives in NYC',
+            createdAt: older,
+            importanceScore: 0.6,
+          }),
+          memory2: makeMemory({
+            id: 'new-mem',
+            raw: 'User lives in LA',
+            createdAt: newer,
+            importanceScore: 0.5,
+          }),
         }),
       ]);
 
@@ -180,8 +190,20 @@ describe('DedupResolutionService', () => {
         makeCandidate({
           classification: 'CONFLICTING',
           confidence: 0.85,
-          memory1: makeMemory({ id: 'low-conf', raw: 'User prefers tea', createdAt: sameTime, importanceScore: 0.3, typeConfidence: 0.4 }),
-          memory2: makeMemory({ id: 'high-conf', raw: 'User prefers coffee', createdAt: sameTime, importanceScore: 0.8, typeConfidence: 0.9 }),
+          memory1: makeMemory({
+            id: 'low-conf',
+            raw: 'User prefers tea',
+            createdAt: sameTime,
+            importanceScore: 0.3,
+            typeConfidence: 0.4,
+          }),
+          memory2: makeMemory({
+            id: 'high-conf',
+            raw: 'User prefers coffee',
+            createdAt: sameTime,
+            importanceScore: 0.8,
+            typeConfidence: 0.9,
+          }),
         }),
       ]);
 
@@ -209,8 +231,16 @@ describe('DedupResolutionService', () => {
         makeCandidate({
           classification: 'CONFLICTING',
           confidence: 0.9,
-          memory1: makeMemory({ id: 'old-mem', raw: 'Fact A', createdAt: older }),
-          memory2: makeMemory({ id: 'new-mem', raw: 'Fact B', createdAt: newer }),
+          memory1: makeMemory({
+            id: 'old-mem',
+            raw: 'Fact A',
+            createdAt: older,
+          }),
+          memory2: makeMemory({
+            id: 'new-mem',
+            raw: 'Fact B',
+            createdAt: newer,
+          }),
         }),
       ]);
 
@@ -218,7 +248,11 @@ describe('DedupResolutionService', () => {
 
       // The transaction should have 3 operations
       expect(mockPrisma.$transaction).toHaveBeenCalledWith(
-        expect.arrayContaining([expect.anything(), expect.anything(), expect.anything()]),
+        expect.arrayContaining([
+          expect.anything(),
+          expect.anything(),
+          expect.anything(),
+        ]),
       );
     });
 
@@ -226,7 +260,9 @@ describe('DedupResolutionService', () => {
       const older = new Date('2026-01-01');
       const newer = new Date('2026-03-01');
 
-      mockPrisma.$transaction.mockImplementation((ops: unknown[]) => Promise.resolve([]));
+      mockPrisma.$transaction.mockImplementation((ops: unknown[]) =>
+        Promise.resolve([]),
+      );
       mockPrisma.memory.update.mockReturnValue(Promise.resolve({}));
       mockPrisma.memory.create.mockReturnValue(Promise.resolve({}));
       mockPrisma.dedupCandidate.update.mockReturnValue(Promise.resolve({}));
@@ -235,8 +271,18 @@ describe('DedupResolutionService', () => {
         makeCandidate({
           classification: 'CONFLICTING',
           confidence: 0.9,
-          memory1: makeMemory({ id: 'old-mem', raw: 'User lives in NYC', createdAt: older, importanceScore: 0.7 }),
-          memory2: makeMemory({ id: 'new-mem', raw: 'User lives in LA', createdAt: newer, importanceScore: 0.5 }),
+          memory1: makeMemory({
+            id: 'old-mem',
+            raw: 'User lives in NYC',
+            createdAt: older,
+            importanceScore: 0.7,
+          }),
+          memory2: makeMemory({
+            id: 'new-mem',
+            raw: 'User lives in LA',
+            createdAt: newer,
+            importanceScore: 0.5,
+          }),
         }),
       ]);
 

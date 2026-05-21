@@ -21,9 +21,7 @@ describe('MemoryPoolController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MemoryPoolController],
-      providers: [
-        { provide: MemoryPoolService, useValue: mockService },
-      ],
+      providers: [{ provide: MemoryPoolService, useValue: mockService }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })

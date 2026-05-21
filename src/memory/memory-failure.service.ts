@@ -47,9 +47,8 @@ export class MemoryFailureService {
     const allPatterns = [...defaultKeywords, ...extraPatterns];
 
     // 3. Build user ID filter
-    const userIds = userId === null
-      ? null
-      : Array.isArray(userId) ? userId : [userId];
+    const userIds =
+      userId === null ? null : Array.isArray(userId) ? userId : [userId];
 
     // 4. Query: semantic similarity + failure keyword/metadata filter
     //    We use $queryRawUnsafe to combine pgvector cosine distance with ILIKE filtering.
@@ -60,7 +59,7 @@ export class MemoryFailureService {
 
     let query: string;
     const params: any[] = [];
-    let paramIdx = 1;
+    const paramIdx = 1;
 
     if (userIds && dto.agentId) {
       query = `
@@ -78,7 +77,14 @@ export class MemoryFailureService {
           AND 1 - (me.embedding <=> $${paramIdx}::vector) > $${paramIdx + 4}
         ORDER BY similarity DESC
         LIMIT $${paramIdx + 5}`;
-      params.push(embeddingLiteral, userIds, dto.agentId, patternsLiteral, minSimilarity, limit);
+      params.push(
+        embeddingLiteral,
+        userIds,
+        dto.agentId,
+        patternsLiteral,
+        minSimilarity,
+        limit,
+      );
     } else if (userIds) {
       query = `
         SELECT m.id, m.raw, m.layer, m.created_at, m.metadata, m.tags,
@@ -94,7 +100,13 @@ export class MemoryFailureService {
           AND 1 - (me.embedding <=> $${paramIdx}::vector) > $${paramIdx + 3}
         ORDER BY similarity DESC
         LIMIT $${paramIdx + 4}`;
-      params.push(embeddingLiteral, userIds, patternsLiteral, minSimilarity, limit);
+      params.push(
+        embeddingLiteral,
+        userIds,
+        patternsLiteral,
+        minSimilarity,
+        limit,
+      );
     } else {
       // No userId filter (account-wide)
       query = `

@@ -179,11 +179,17 @@ describe('DreamCycleService', () => {
         },
         {
           provide: DreamCycleTimelineSynthesisStage,
-          useValue: { run: jest.fn().mockResolvedValue({ synthesesCreated: 0 }) },
+          useValue: {
+            run: jest.fn().mockResolvedValue({ synthesesCreated: 0 }),
+          },
         },
         {
           provide: DreamCycleImportanceRescoreStage,
-          useValue: { run: jest.fn().mockResolvedValue({ rescored: 0, unchanged: 0, avgChange: 0 }) },
+          useValue: {
+            run: jest
+              .fn()
+              .mockResolvedValue({ rescored: 0, unchanged: 0, avgChange: 0 }),
+          },
         },
         {
           provide: DreamCycleArchivalStage,

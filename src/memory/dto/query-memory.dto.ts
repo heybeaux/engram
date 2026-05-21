@@ -22,7 +22,8 @@ import { AnticipatoryOptionsDto } from '../../anticipatory/dto/anticipatory.dto'
  */
 export class RecallFilterDto {
   @ApiPropertyOptional({
-    description: 'Must-match tags (AND logic — memory must have ALL listed tags)',
+    description:
+      'Must-match tags (AND logic — memory must have ALL listed tags)',
     example: ['google-ads', 'campaign'],
   })
   @IsOptional()
@@ -31,7 +32,8 @@ export class RecallFilterDto {
   tags?: string[];
 
   @ApiPropertyOptional({
-    description: 'Metadata key-value filters (memory.metadata must contain all entries)',
+    description:
+      'Metadata key-value filters (memory.metadata must contain all entries)',
     example: { client: 'acme', env: 'production' },
   })
   @IsOptional()

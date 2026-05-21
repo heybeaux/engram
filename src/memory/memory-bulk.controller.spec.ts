@@ -71,14 +71,20 @@ describe('MemoryBulkController', () => {
 
   describe('Guard enforcement', () => {
     it('should apply ApiKeyOrJwtGuard', () => {
-      const guards: any[] = Reflect.getMetadata('__guards__', MemoryBulkController) ?? [];
-      const names = guards.map((g) => (typeof g === 'function' ? g.name : g?.constructor?.name));
+      const guards: any[] =
+        Reflect.getMetadata('__guards__', MemoryBulkController) ?? [];
+      const names = guards.map((g) =>
+        typeof g === 'function' ? g.name : g?.constructor?.name,
+      );
       expect(names).toContain(ApiKeyOrJwtGuard.name);
     });
 
     it('should apply RateLimitGuard', () => {
-      const guards: any[] = Reflect.getMetadata('__guards__', MemoryBulkController) ?? [];
-      const names = guards.map((g) => (typeof g === 'function' ? g.name : g?.constructor?.name));
+      const guards: any[] =
+        Reflect.getMetadata('__guards__', MemoryBulkController) ?? [];
+      const names = guards.map((g) =>
+        typeof g === 'function' ? g.name : g?.constructor?.name,
+      );
       expect(names).toContain(RateLimitGuard.name);
     });
   });
@@ -98,7 +104,9 @@ describe('MemoryBulkController', () => {
 
     it('should propagate service errors', async () => {
       mockMemoryService.bulkCreate.mockRejectedValue(new Error('DB error'));
-      await expect(controller.bulkCreate(userId, dto)).rejects.toThrow('DB error');
+      await expect(controller.bulkCreate(userId, dto)).rejects.toThrow(
+        'DB error',
+      );
     });
   });
 
@@ -112,12 +120,19 @@ describe('MemoryBulkController', () => {
       mockMemoryService.bulkTextImport.mockResolvedValue(result);
       const out = await controller.bulkTextImport(userId, dto);
       expect(out).toEqual(result);
-      expect(mockMemoryService.bulkTextImport).toHaveBeenCalledWith(userId, dto);
+      expect(mockMemoryService.bulkTextImport).toHaveBeenCalledWith(
+        userId,
+        dto,
+      );
     });
 
     it('should propagate service errors', async () => {
-      mockMemoryService.bulkTextImport.mockRejectedValue(new Error('chunk error'));
-      await expect(controller.bulkTextImport(userId, dto)).rejects.toThrow('chunk error');
+      mockMemoryService.bulkTextImport.mockRejectedValue(
+        new Error('chunk error'),
+      );
+      await expect(controller.bulkTextImport(userId, dto)).rejects.toThrow(
+        'chunk error',
+      );
     });
   });
 
@@ -141,7 +156,10 @@ describe('MemoryBulkController', () => {
       const query = { format: 'json' } as any;
       await controller.exportMemoriesFiltered(userId, query, res as any);
 
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/json',
+      );
       expect(res.write).toHaveBeenCalledWith('[');
       expect(res.write).toHaveBeenCalledWith(JSON.stringify(memory));
       expect(res.write).toHaveBeenCalledWith(']');
@@ -156,7 +174,10 @@ describe('MemoryBulkController', () => {
       const query = { format: 'ndjson' } as any;
       await controller.exportMemoriesFiltered(userId, query, res as any);
 
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/x-ndjson');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/x-ndjson',
+      );
       expect(res.write).toHaveBeenCalledWith(JSON.stringify(memory) + '\n');
       expect(res.end).toHaveBeenCalled();
     });
@@ -170,7 +191,9 @@ describe('MemoryBulkController', () => {
       await controller.exportMemoriesFiltered(userId, query, res as any);
 
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-      expect(res.write).toHaveBeenCalledWith('id,raw,layer,importance,createdAt,updatedAt\n');
+      expect(res.write).toHaveBeenCalledWith(
+        'id,raw,layer,importance,createdAt,updatedAt\n',
+      );
       expect(res.end).toHaveBeenCalled();
     });
 
@@ -180,9 +203,13 @@ describe('MemoryBulkController', () => {
         .mockResolvedValueOnce([memWithQuotes])
         .mockResolvedValueOnce([]);
       const res = mockRes();
-      await controller.exportMemoriesFiltered(userId, { format: 'csv' } as any, res as any);
+      await controller.exportMemoriesFiltered(
+        userId,
+        { format: 'csv' } as any,
+        res as any,
+      );
 
-      const writeCalls = (res.write as jest.Mock).mock.calls.map((c) => c[0]);
+      const writeCalls = res.write.mock.calls.map((c) => c[0]);
       const dataRow = writeCalls.find((s: string) => s.includes('say'));
       expect(dataRow).toContain('say ""hello""');
     });
@@ -192,17 +219,25 @@ describe('MemoryBulkController', () => {
         .mockResolvedValueOnce([memory, { ...memory, id: 'm2' }])
         .mockResolvedValueOnce([]);
       const res = mockRes();
-      await controller.exportMemoriesFiltered(userId, { format: 'json' } as any, res as any);
+      await controller.exportMemoriesFiltered(
+        userId,
+        { format: 'json' } as any,
+        res as any,
+      );
 
-      const writeCalls = (res.write as jest.Mock).mock.calls.map((c) => c[0]);
+      const writeCalls = res.write.mock.calls.map((c) => c[0]);
       expect(writeCalls).toContain(',');
     });
 
     it('should set Content-Disposition header', async () => {
       mockMemoryService.exportMemoriesFiltered.mockResolvedValueOnce([]);
       const res = mockRes();
-      await controller.exportMemoriesFiltered(userId, { format: 'json' } as any, res as any);
-      const [name, value] = (res.setHeader as jest.Mock).mock.calls.find(
+      await controller.exportMemoriesFiltered(
+        userId,
+        { format: 'json' } as any,
+        res as any,
+      );
+      const [name, value] = res.setHeader.mock.calls.find(
         (c) => c[0] === 'Content-Disposition',
       );
       expect(name).toBe('Content-Disposition');
@@ -218,7 +253,11 @@ describe('MemoryBulkController', () => {
         .mockResolvedValueOnce(bigBatch)
         .mockResolvedValueOnce([]);
       const res = mockRes();
-      await controller.exportMemoriesFiltered(userId, { format: 'ndjson' } as any, res as any);
+      await controller.exportMemoriesFiltered(
+        userId,
+        { format: 'ndjson' } as any,
+        res as any,
+      );
 
       expect(mockMemoryService.exportMemoriesFiltered).toHaveBeenCalledTimes(2);
       const secondCall = mockMemoryService.exportMemoriesFiltered.mock.calls[1];
@@ -239,7 +278,12 @@ describe('MemoryBulkController', () => {
 
       expect(mockMemoryService.exportMemoriesFiltered).toHaveBeenCalledWith(
         userId,
-        { layer: 'SEMANTIC', projectId: 'proj-1', startDate: '2026-01-01', endDate: '2026-12-31' },
+        {
+          layer: 'SEMANTIC',
+          projectId: 'proj-1',
+          startDate: '2026-01-01',
+          endDate: '2026-12-31',
+        },
         500,
         undefined,
       );
@@ -256,9 +300,16 @@ describe('MemoryBulkController', () => {
         .mockResolvedValueOnce([memory])
         .mockResolvedValueOnce([]);
       const res = mockRes();
-      await controller.exportMemories(userId, { format: 'json' } as any, res as any);
+      await controller.exportMemories(
+        userId,
+        { format: 'json' } as any,
+        res as any,
+      );
 
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/json',
+      );
       expect(res.write).toHaveBeenCalledWith('[');
       expect(res.write).toHaveBeenCalledWith(']');
       expect(res.end).toHaveBeenCalled();
@@ -269,9 +320,16 @@ describe('MemoryBulkController', () => {
         .mockResolvedValueOnce([memory])
         .mockResolvedValueOnce([]);
       const res = mockRes();
-      await controller.exportMemories(userId, { format: 'ndjson' } as any, res as any);
+      await controller.exportMemories(
+        userId,
+        { format: 'ndjson' } as any,
+        res as any,
+      );
 
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/x-ndjson');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/x-ndjson',
+      );
       expect(res.write).toHaveBeenCalledWith(JSON.stringify(memory) + '\n');
       expect(res.end).toHaveBeenCalled();
     });
@@ -279,17 +337,27 @@ describe('MemoryBulkController', () => {
     it('should NOT write closing bracket for ndjson', async () => {
       mockMemoryService.exportMemoriesBatch.mockResolvedValueOnce([]);
       const res = mockRes();
-      await controller.exportMemories(userId, { format: 'ndjson' } as any, res as any);
+      await controller.exportMemories(
+        userId,
+        { format: 'ndjson' } as any,
+        res as any,
+      );
 
-      const writeCalls = (res.write as jest.Mock).mock.calls.map((c) => c[0]);
+      const writeCalls = res.write.mock.calls.map((c) => c[0]);
       expect(writeCalls).not.toContain(']');
     });
 
     it('should use .ndjson extension in Content-Disposition', async () => {
       mockMemoryService.exportMemoriesBatch.mockResolvedValueOnce([]);
       const res = mockRes();
-      await controller.exportMemories(userId, { format: 'ndjson' } as any, res as any);
-      const cdCall = (res.setHeader as jest.Mock).mock.calls.find((c) => c[0] === 'Content-Disposition');
+      await controller.exportMemories(
+        userId,
+        { format: 'ndjson' } as any,
+        res as any,
+      );
+      const cdCall = res.setHeader.mock.calls.find(
+        (c) => c[0] === 'Content-Disposition',
+      );
       expect(cdCall[1]).toMatch(/\.ndjson"/);
     });
   });
@@ -306,12 +374,19 @@ describe('MemoryBulkController', () => {
       mockMemoryService.importMemories.mockResolvedValue(result);
       const out = await controller.importMemories(userId, dto);
       expect(out).toEqual(result);
-      expect(mockMemoryService.importMemories).toHaveBeenCalledWith(userId, dto.memories);
+      expect(mockMemoryService.importMemories).toHaveBeenCalledWith(
+        userId,
+        dto.memories,
+      );
     });
 
     it('should propagate service errors', async () => {
-      mockMemoryService.importMemories.mockRejectedValue(new Error('plan limit'));
-      await expect(controller.importMemories(userId, dto)).rejects.toThrow('plan limit');
+      mockMemoryService.importMemories.mockRejectedValue(
+        new Error('plan limit'),
+      );
+      await expect(controller.importMemories(userId, dto)).rejects.toThrow(
+        'plan limit',
+      );
     });
   });
 
@@ -352,7 +427,7 @@ describe('MemoryBulkController', () => {
 
       await controller.importStream(userId, req as any, res as any);
 
-      const out = (res.json as jest.Mock).mock.calls[0][0];
+      const out = res.json.mock.calls[0][0];
       expect(out.errors).toBe(1);
       expect(out.errorDetails).toHaveLength(1);
     });
@@ -364,7 +439,7 @@ describe('MemoryBulkController', () => {
 
       await controller.importStream(userId, req as any, res as any);
 
-      const out = (res.json as jest.Mock).mock.calls[0][0];
+      const out = res.json.mock.calls[0][0];
       expect(out.errors).toBe(15);
       expect(out.errorDetails.length).toBeLessThanOrEqual(10);
     });
@@ -373,7 +448,11 @@ describe('MemoryBulkController', () => {
       const ndjson = '\n\n{"raw":"ok"}\n\n';
       const req = makeAsyncIterable([Buffer.from(ndjson)]);
       const res = mockRes();
-      mockMemoryService.importMemories.mockResolvedValue({ imported: 1, skipped: 0, errors: 0 });
+      mockMemoryService.importMemories.mockResolvedValue({
+        imported: 1,
+        skipped: 0,
+        errors: 0,
+      });
 
       await controller.importStream(userId, req as any, res as any);
 
@@ -384,11 +463,15 @@ describe('MemoryBulkController', () => {
       const mem = { raw: 'string chunk' };
       const req = makeAsyncIterable([JSON.stringify(mem)]);
       const res = mockRes();
-      mockMemoryService.importMemories.mockResolvedValue({ imported: 1, skipped: 0, errors: 0 });
+      mockMemoryService.importMemories.mockResolvedValue({
+        imported: 1,
+        skipped: 0,
+        errors: 0,
+      });
 
       await controller.importStream(userId, req as any, res as any);
 
-      const out = (res.json as jest.Mock).mock.calls[0][0];
+      const out = res.json.mock.calls[0][0];
       expect(out.imported).toBe(1);
     });
   });
@@ -413,7 +496,11 @@ describe('MemoryBulkController', () => {
       expect(mockMemoryJobQueue.createBatch).toHaveBeenCalledWith(
         userId,
         expect.arrayContaining([
-          expect.objectContaining({ memoryId: 'mem-1', raw: 'first', extractionContext: 'ctx' }),
+          expect.objectContaining({
+            memoryId: 'mem-1',
+            raw: 'first',
+            extractionContext: 'ctx',
+          }),
           expect.objectContaining({ raw: 'second' }),
         ]),
       );
@@ -458,12 +545,18 @@ describe('MemoryBulkController', () => {
 
       const out = await controller.getEmbeddingStatus(userId);
       expect(out).toEqual(status);
-      expect(mockMemoryPipeline.getEmbeddingStatus).toHaveBeenCalledWith(userId);
+      expect(mockMemoryPipeline.getEmbeddingStatus).toHaveBeenCalledWith(
+        userId,
+      );
     });
 
     it('should propagate service errors', async () => {
-      mockMemoryPipeline.getEmbeddingStatus.mockRejectedValue(new Error('pipeline down'));
-      await expect(controller.getEmbeddingStatus(userId)).rejects.toThrow('pipeline down');
+      mockMemoryPipeline.getEmbeddingStatus.mockRejectedValue(
+        new Error('pipeline down'),
+      );
+      await expect(controller.getEmbeddingStatus(userId)).rejects.toThrow(
+        'pipeline down',
+      );
     });
   });
 
@@ -480,8 +573,12 @@ describe('MemoryBulkController', () => {
     });
 
     it('should propagate errors', async () => {
-      mockMemoryPipeline.retryFailedEmbeddings.mockRejectedValue(new Error('embed fail'));
-      await expect(controller.retryFailedEmbeddings()).rejects.toThrow('embed fail');
+      mockMemoryPipeline.retryFailedEmbeddings.mockRejectedValue(
+        new Error('embed fail'),
+      );
+      await expect(controller.retryFailedEmbeddings()).rejects.toThrow(
+        'embed fail',
+      );
     });
   });
 });

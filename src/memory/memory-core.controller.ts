@@ -354,7 +354,11 @@ export class MemoryCoreController {
   async unarchiveMemory(
     @UserId() userId: string,
     @Param('id') id: string,
-  ): Promise<{ id: string; searchable: boolean; archivedReason: string | null }> {
+  ): Promise<{
+    id: string;
+    searchable: boolean;
+    archivedReason: string | null;
+  }> {
     const memory = await this.prisma.memory.findFirst({
       where: { id, userId, deletedAt: null },
     });

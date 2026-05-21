@@ -42,7 +42,11 @@ describe('EntityMemoryService', () => {
           raw: 'Steve Krueger is a person known to user-1.',
           layer: 'IDENTITY',
           source: 'AGENT_OBSERVATION',
-          tags: ['entity:steve-krueger', 'entity-type:person', 'auto:entity-extraction'],
+          tags: [
+            'entity:steve-krueger',
+            'entity-type:person',
+            'auto:entity-extraction',
+          ],
         }),
       }),
     );
@@ -62,7 +66,10 @@ describe('EntityMemoryService', () => {
         data: expect.objectContaining({
           raw: 'JIBE Commerce is an organization known to user-1.',
           layer: 'IDENTITY',
-          tags: expect.arrayContaining(['entity:jibe-commerce', 'entity-type:organization']),
+          tags: expect.arrayContaining([
+            'entity:jibe-commerce',
+            'entity-type:organization',
+          ]),
         }),
       }),
     );

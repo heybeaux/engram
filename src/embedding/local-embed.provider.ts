@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmbeddingProvider, EmbedOptions } from './embedding-provider.interface';
+import {
+  EmbeddingProvider,
+  EmbedOptions,
+} from './embedding-provider.interface';
 
 /**
  * Local Embedding Provider
@@ -63,10 +66,7 @@ export class LocalEmbedProvider implements EmbeddingProvider {
   }
 
   private async doFetch(fetchOptions: RequestInit): Promise<number[][]> {
-    const response = await fetch(
-      `${this.baseUrl}/v1/embeddings`,
-      fetchOptions,
-    );
+    const response = await fetch(`${this.baseUrl}/v1/embeddings`, fetchOptions);
 
     if (!response.ok) {
       const error = await response.text();

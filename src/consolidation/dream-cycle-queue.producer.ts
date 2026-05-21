@@ -69,17 +69,17 @@ export class DreamCycleQueueProducer {
     return this.job(DREAM_CYCLE_JOBS.REPORT, jobData, [
       this.job(DREAM_CYCLE_JOBS.ARCHIVAL, jobData, [
         this.job(DREAM_CYCLE_JOBS.IDENTITY, jobData, [
-        this.job(DREAM_CYCLE_JOBS.DRIFT, jobData, [
-          this.job(DREAM_CYCLE_JOBS.CLUSTERING, jobData, [
-            this.job(DREAM_CYCLE_JOBS.PATTERNS, jobData, [
-              this.job(DREAM_CYCLE_JOBS.CONSOLIDATION, jobData, [
-                this.job(DREAM_CYCLE_JOBS.TIERING, jobData, [
-                  this.job(DREAM_CYCLE_JOBS.PENDING, jobData),
+          this.job(DREAM_CYCLE_JOBS.DRIFT, jobData, [
+            this.job(DREAM_CYCLE_JOBS.CLUSTERING, jobData, [
+              this.job(DREAM_CYCLE_JOBS.PATTERNS, jobData, [
+                this.job(DREAM_CYCLE_JOBS.CONSOLIDATION, jobData, [
+                  this.job(DREAM_CYCLE_JOBS.TIERING, jobData, [
+                    this.job(DREAM_CYCLE_JOBS.PENDING, jobData),
+                  ]),
                 ]),
               ]),
             ]),
           ]),
-        ]),
         ]),
       ]),
     ]);

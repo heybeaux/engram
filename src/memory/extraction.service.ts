@@ -120,10 +120,20 @@ export class ExtractionService {
       const preferenceSignals = extractPreferenceSignals(raw, memoryType);
 
       const extractionResult: ExtractionResult = {
-        who: typeof result.who === 'string' ? result.who || null : Array.isArray(result.who as any) ? (result.who as any).join(', ') || null : null,
+        who:
+          typeof result.who === 'string'
+            ? result.who || null
+            : Array.isArray(result.who as any)
+              ? (result.who as any).join(', ') || null
+              : null,
         what: typeof result.what === 'string' ? result.what || null : null,
         when: typeof result.when === 'string' ? result.when || null : null,
-        where: typeof result.where === 'string' ? result.where || null : Array.isArray(result.where as any) ? (result.where as any).join(', ') || null : null,
+        where:
+          typeof result.where === 'string'
+            ? result.where || null
+            : Array.isArray(result.where as any)
+              ? (result.where as any).join(', ') || null
+              : null,
         why: typeof result.why === 'string' ? result.why || null : null,
         how: typeof result.how === 'string' ? result.how || null : null,
         topics: Array.isArray(result.topics) ? result.topics : [],

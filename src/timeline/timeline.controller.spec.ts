@@ -19,7 +19,14 @@ describe('TimelineController', () => {
     chapter: 'Productive day',
     arcId: null,
     text: 'A productive day of coding.',
-    events: [{ time: '09:00', description: 'Started coding', significance: 7, tags: ['dev'] }],
+    events: [
+      {
+        time: '09:00',
+        description: 'Started coding',
+        significance: 7,
+        tags: ['dev'],
+      },
+    ],
     decisions: [],
     openThreadIds: [],
     people: ['Alice'],
@@ -40,9 +47,7 @@ describe('TimelineController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TimelineController],
-      providers: [
-        { provide: TimelineService, useValue: mockService },
-      ],
+      providers: [{ provide: TimelineService, useValue: mockService }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })
@@ -191,7 +196,10 @@ describe('TimelineController', () => {
     });
 
     it('should pass agent.id and date to service', async () => {
-      mockService.findByDateDeep.mockResolvedValue({ ...mockTimeline, memories: [] });
+      mockService.findByDateDeep.mockResolvedValue({
+        ...mockTimeline,
+        memories: [],
+      });
       await controller.findDeep(mockAgent, '2026-03-24');
       expect(mockService.findByDateDeep).toHaveBeenCalledWith(
         'agent-1',

@@ -22,7 +22,10 @@ export class EntityMemoryService {
       return;
     }
 
-    const normalizedName = entity.name.toLowerCase().trim().replace(/\s+/g, '-');
+    const normalizedName = entity.name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-');
     const tag = `entity:${normalizedName}`;
 
     // Check for existing IDENTITY memory with this entity tag

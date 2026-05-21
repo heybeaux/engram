@@ -89,7 +89,10 @@ describe('DreamCycleSchedulerService', () => {
 
   describe('handleDreamCycleCron', () => {
     it('should call dreamCycle.run and log success', async () => {
-      dreamCycle.runAsync.mockResolvedValue({ runId: 'run-123', mode: 'queued' });
+      dreamCycle.runAsync.mockResolvedValue({
+        runId: 'run-123',
+        mode: 'queued',
+      });
 
       await service.handleDreamCycleCron();
 
@@ -97,7 +100,6 @@ describe('DreamCycleSchedulerService', () => {
       expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining('runId=run-123'),
       );
-      
     });
 
     it('should log error when dreamCycle.run throws', async () => {

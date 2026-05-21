@@ -139,9 +139,7 @@ describe('DreamCycleImportanceRescoreStage', () => {
         const recent = stage.recencyBoost(
           new Date(Date.now() - 7 * 86_400_000),
         );
-        const old = stage.recencyBoost(
-          new Date(Date.now() - 60 * 86_400_000),
-        );
+        const old = stage.recencyBoost(new Date(Date.now() - 60 * 86_400_000));
         expect(recent).toBeGreaterThan(old);
       });
 

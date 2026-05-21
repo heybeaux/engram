@@ -35,9 +35,7 @@ describe('TaskController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TaskController],
-      providers: [
-        { provide: TaskService, useValue: service },
-      ],
+      providers: [{ provide: TaskService, useValue: service }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })
@@ -110,7 +108,9 @@ describe('TaskController', () => {
     });
 
     it('should throw NotFoundException for unknown task', async () => {
-      service.update!.mockRejectedValue(new NotFoundException('Task not found'));
+      service.update!.mockRejectedValue(
+        new NotFoundException('Task not found'),
+      );
 
       await expect(
         controller.update('user-1', 'unknown', { status: 'COMPLETED' } as any),
@@ -132,7 +132,11 @@ describe('TaskController', () => {
     it('should pass query filters through', async () => {
       service.findAll!.mockResolvedValue([]);
 
-      const query = { status: 'COMPLETED', assignedTo: 'agent-a', contractId: 'c-1' };
+      const query = {
+        status: 'COMPLETED',
+        assignedTo: 'agent-a',
+        contractId: 'c-1',
+      };
       await controller.findAll('user-1', query as any);
 
       expect(service.findAll).toHaveBeenCalledWith('user-1', query);
@@ -150,9 +154,13 @@ describe('TaskController', () => {
     });
 
     it('should throw NotFoundException for unknown task', async () => {
-      service.findOne!.mockRejectedValue(new NotFoundException('Task not found'));
+      service.findOne!.mockRejectedValue(
+        new NotFoundException('Task not found'),
+      );
 
-      await expect(controller.findOne('user-1', 'unknown')).rejects.toThrow(NotFoundException);
+      await expect(controller.findOne('user-1', 'unknown')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

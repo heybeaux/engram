@@ -51,9 +51,7 @@ describe('MemoryService', () => {
     mockWriteService = {
       remember: jest.fn().mockResolvedValue(mockMemory),
       rememberAll: jest.fn().mockResolvedValue({ created: 0, failed: 0 }),
-      bulkCreate: jest
-        .fn()
-        .mockResolvedValue({ created: 0, memoryIds: [] }),
+      bulkCreate: jest.fn().mockResolvedValue({ created: 0, memoryIds: [] }),
       bulkTextImport: jest
         .fn()
         .mockResolvedValue({ created: 0, chunks: 0, memoryIds: [] }),
@@ -87,12 +85,22 @@ describe('MemoryService', () => {
     };
 
     mockFailureService = {
-      findFailures: jest.fn().mockResolvedValue({ failures: [], total: 0, goal: '', latencyMs: 0 }),
-      attachChains: jest.fn().mockImplementation((memories) => Promise.resolve(memories)),
+      findFailures: jest
+        .fn()
+        .mockResolvedValue({ failures: [], total: 0, goal: '', latencyMs: 0 }),
+      attachChains: jest
+        .fn()
+        .mockImplementation((memories) => Promise.resolve(memories)),
     };
 
     mockContradictionService = {
-      findContradictions: jest.fn().mockResolvedValue({ sourceId: null, sourceText: '', contradictions: [], total: 0, latencyMs: 0 }),
+      findContradictions: jest.fn().mockResolvedValue({
+        sourceId: null,
+        sourceText: '',
+        contradictions: [],
+        total: 0,
+        latencyMs: 0,
+      }),
     };
 
     mockGraphService = {
@@ -114,7 +122,10 @@ describe('MemoryService', () => {
         MemoryService,
         { provide: MemoryQueryService, useValue: mockQueryService },
         { provide: MemoryFailureService, useValue: mockFailureService },
-        { provide: MemoryContradictionService, useValue: mockContradictionService },
+        {
+          provide: MemoryContradictionService,
+          useValue: mockContradictionService,
+        },
         { provide: MemoryGraphService, useValue: mockGraphService },
         { provide: MemoryExportService, useValue: mockExportService },
         { provide: MemoryWriteService, useValue: mockWriteService },

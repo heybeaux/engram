@@ -23,17 +23,14 @@ describe('MemoryContradictionService.findContradictions', () => {
       generateForRecall: jest.fn().mockResolvedValue(fakeEmbedding),
     };
 
-    service = new MemoryContradictionService(
-      mockPrisma,
-      mockEmbedding,
-    );
+    service = new MemoryContradictionService(mockPrisma, mockEmbedding);
   });
 
   describe('input validation', () => {
     it('should throw BadRequestException when neither memoryId nor text provided', async () => {
-      await expect(
-        service.findContradictions(userId, {}),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.findContradictions(userId, {})).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

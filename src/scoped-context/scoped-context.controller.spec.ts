@@ -14,9 +14,7 @@ describe('ScopedContextController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ScopedContextController],
-      providers: [
-        { provide: ScopedContextService, useValue: mockService },
-      ],
+      providers: [{ provide: ScopedContextService, useValue: mockService }],
     })
       .overrideGuard(ApiKeyOrJwtGuard)
       .useValue({ canActivate: () => true })

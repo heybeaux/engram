@@ -47,7 +47,9 @@ describe('TemplateController', () => {
 
     it('should propagate service errors', async () => {
       service.create.mockRejectedValue(new Error('DB error'));
-      await expect(controller.create(userId, {} as any)).rejects.toThrow('DB error');
+      await expect(controller.create(userId, {} as any)).rejects.toThrow(
+        'DB error',
+      );
     });
   });
 
@@ -80,7 +82,9 @@ describe('TemplateController', () => {
 
     it('should propagate not-found from service', async () => {
       service.findOne.mockRejectedValue(new Error('Not found'));
-      await expect(controller.findOne(userId, 'bad-id')).rejects.toThrow('Not found');
+      await expect(controller.findOne(userId, 'bad-id')).rejects.toThrow(
+        'Not found',
+      );
     });
   });
 
@@ -97,7 +101,9 @@ describe('TemplateController', () => {
 
     it('should propagate service errors on update', async () => {
       service.update.mockRejectedValue(new Error('Forbidden'));
-      await expect(controller.update(userId, 't1', {} as any)).rejects.toThrow('Forbidden');
+      await expect(controller.update(userId, 't1', {} as any)).rejects.toThrow(
+        'Forbidden',
+      );
     });
   });
 
@@ -113,7 +119,9 @@ describe('TemplateController', () => {
 
     it('should propagate service errors on remove', async () => {
       service.remove.mockRejectedValue(new Error('Not found'));
-      await expect(controller.remove(userId, 'bad-id')).rejects.toThrow('Not found');
+      await expect(controller.remove(userId, 'bad-id')).rejects.toThrow(
+        'Not found',
+      );
     });
   });
 });

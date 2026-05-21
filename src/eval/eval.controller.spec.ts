@@ -90,7 +90,9 @@ describe('EvalController', () => {
 
     it('should propagate service errors', async () => {
       service.detectRegression.mockRejectedValue(new Error('No baseline'));
-      await expect(controller.detectRegression()).rejects.toThrow('No baseline');
+      await expect(controller.detectRegression()).rejects.toThrow(
+        'No baseline',
+      );
     });
   });
 });

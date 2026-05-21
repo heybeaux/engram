@@ -42,21 +42,29 @@ describe('TeamsController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    controller = new TeamsController(mockTeamsService as unknown as TeamsService);
+    controller = new TeamsController(
+      mockTeamsService as unknown as TeamsService,
+    );
   });
 
   // ── Guard enforcement ──────────────────────────────────────────────────────
 
   describe('Guard enforcement', () => {
     it('should apply ApiKeyOrJwtGuard at class level', () => {
-      const guards: any[] = Reflect.getMetadata('__guards__', TeamsController) ?? [];
-      const names = guards.map((g) => (typeof g === 'function' ? g.name : g?.constructor?.name));
+      const guards: any[] =
+        Reflect.getMetadata('__guards__', TeamsController) ?? [];
+      const names = guards.map((g) =>
+        typeof g === 'function' ? g.name : g?.constructor?.name,
+      );
       expect(names).toContain(ApiKeyOrJwtGuard.name);
     });
 
     it('should apply RateLimitGuard at class level', () => {
-      const guards: any[] = Reflect.getMetadata('__guards__', TeamsController) ?? [];
-      const names = guards.map((g) => (typeof g === 'function' ? g.name : g?.constructor?.name));
+      const guards: any[] =
+        Reflect.getMetadata('__guards__', TeamsController) ?? [];
+      const names = guards.map((g) =>
+        typeof g === 'function' ? g.name : g?.constructor?.name,
+      );
       expect(names).toContain(RateLimitGuard.name);
     });
   });
@@ -75,7 +83,9 @@ describe('TeamsController', () => {
 
     it('should propagate service errors', async () => {
       mockTeamsService.create.mockRejectedValue(new Error('create failed'));
-      await expect(controller.create(userId, dto)).rejects.toThrow('create failed');
+      await expect(controller.create(userId, dto)).rejects.toThrow(
+        'create failed',
+      );
     });
   });
 
@@ -113,8 +123,12 @@ describe('TeamsController', () => {
 
     it('should propagate NotFoundException from service', async () => {
       const { NotFoundException } = require('@nestjs/common');
-      mockTeamsService.findOne.mockRejectedValue(new NotFoundException('Team not found'));
-      await expect(controller.findOne(userId, 'nonexistent')).rejects.toThrow('Team not found');
+      mockTeamsService.findOne.mockRejectedValue(
+        new NotFoundException('Team not found'),
+      );
+      await expect(controller.findOne(userId, 'nonexistent')).rejects.toThrow(
+        'Team not found',
+      );
     });
   });
 
@@ -133,7 +147,9 @@ describe('TeamsController', () => {
 
     it('should propagate service errors', async () => {
       mockTeamsService.update.mockRejectedValue(new Error('update failed'));
-      await expect(controller.update(userId, teamId, dto)).rejects.toThrow('update failed');
+      await expect(controller.update(userId, teamId, dto)).rejects.toThrow(
+        'update failed',
+      );
     });
   });
 
@@ -150,7 +166,9 @@ describe('TeamsController', () => {
 
     it('should propagate errors', async () => {
       mockTeamsService.remove.mockRejectedValue(new Error('delete failed'));
-      await expect(controller.remove(userId, teamId)).rejects.toThrow('delete failed');
+      await expect(controller.remove(userId, teamId)).rejects.toThrow(
+        'delete failed',
+      );
     });
   });
 
@@ -158,18 +176,32 @@ describe('TeamsController', () => {
 
   describe('addMember', () => {
     const dto = { agentId: 'agent-x', role: 'contributor' } as any;
-    const member = { id: 'mem-1', teamId, agentId: 'agent-x', role: 'contributor', joinedAt: now };
+    const member = {
+      id: 'mem-1',
+      teamId,
+      agentId: 'agent-x',
+      role: 'contributor',
+      joinedAt: now,
+    };
 
     it('should add and return member', async () => {
       mockTeamsService.addMember.mockResolvedValue(member);
       const result = await controller.addMember(userId, teamId, dto);
       expect(result).toEqual(member);
-      expect(mockTeamsService.addMember).toHaveBeenCalledWith(userId, teamId, dto);
+      expect(mockTeamsService.addMember).toHaveBeenCalledWith(
+        userId,
+        teamId,
+        dto,
+      );
     });
 
     it('should propagate errors', async () => {
-      mockTeamsService.addMember.mockRejectedValue(new Error('member add failed'));
-      await expect(controller.addMember(userId, teamId, dto)).rejects.toThrow('member add failed');
+      mockTeamsService.addMember.mockRejectedValue(
+        new Error('member add failed'),
+      );
+      await expect(controller.addMember(userId, teamId, dto)).rejects.toThrow(
+        'member add failed',
+      );
     });
   });
 
@@ -183,12 +215,18 @@ describe('TeamsController', () => {
       mockTeamsService.removeMember.mockResolvedValue(removed);
       const result = await controller.removeMember(userId, teamId, memberId);
       expect(result).toEqual(removed);
-      expect(mockTeamsService.removeMember).toHaveBeenCalledWith(userId, teamId, memberId);
+      expect(mockTeamsService.removeMember).toHaveBeenCalledWith(
+        userId,
+        teamId,
+        memberId,
+      );
     });
 
     it('should propagate errors', async () => {
       mockTeamsService.removeMember.mockRejectedValue(new Error('not found'));
-      await expect(controller.removeMember(userId, teamId, memberId)).rejects.toThrow('not found');
+      await expect(
+        controller.removeMember(userId, teamId, memberId),
+      ).rejects.toThrow('not found');
     });
   });
 
@@ -208,12 +246,20 @@ describe('TeamsController', () => {
       mockTeamsService.recordCollaboration.mockResolvedValue(collab);
       const result = await controller.recordCollaboration(userId, teamId, dto);
       expect(result).toEqual(collab);
-      expect(mockTeamsService.recordCollaboration).toHaveBeenCalledWith(userId, teamId, dto);
+      expect(mockTeamsService.recordCollaboration).toHaveBeenCalledWith(
+        userId,
+        teamId,
+        dto,
+      );
     });
 
     it('should propagate errors', async () => {
-      mockTeamsService.recordCollaboration.mockRejectedValue(new Error('collab error'));
-      await expect(controller.recordCollaboration(userId, teamId, dto)).rejects.toThrow('collab error');
+      mockTeamsService.recordCollaboration.mockRejectedValue(
+        new Error('collab error'),
+      );
+      await expect(
+        controller.recordCollaboration(userId, teamId, dto),
+      ).rejects.toThrow('collab error');
     });
   });
 
@@ -229,13 +275,21 @@ describe('TeamsController', () => {
       mockTeamsService.getCollaborations.mockResolvedValue(collabs);
       const result = await controller.getCollaborations(userId, teamId);
       expect(result).toEqual(collabs);
-      expect(mockTeamsService.getCollaborations).toHaveBeenCalledWith(userId, teamId, 50);
+      expect(mockTeamsService.getCollaborations).toHaveBeenCalledWith(
+        userId,
+        teamId,
+        50,
+      );
     });
 
     it('should parse and pass custom limit', async () => {
       mockTeamsService.getCollaborations.mockResolvedValue(collabs);
       await controller.getCollaborations(userId, teamId, '20');
-      expect(mockTeamsService.getCollaborations).toHaveBeenCalledWith(userId, teamId, 20);
+      expect(mockTeamsService.getCollaborations).toHaveBeenCalledWith(
+        userId,
+        teamId,
+        20,
+      );
     });
 
     it('should return empty array when no collaborations', async () => {
@@ -245,8 +299,12 @@ describe('TeamsController', () => {
     });
 
     it('should propagate errors', async () => {
-      mockTeamsService.getCollaborations.mockRejectedValue(new Error('collab fetch error'));
-      await expect(controller.getCollaborations(userId, teamId)).rejects.toThrow('collab fetch error');
+      mockTeamsService.getCollaborations.mockRejectedValue(
+        new Error('collab fetch error'),
+      );
+      await expect(
+        controller.getCollaborations(userId, teamId),
+      ).rejects.toThrow('collab fetch error');
     });
   });
 });

@@ -1,7 +1,4 @@
-import {
-  createParamDecorator,
-  ExecutionContext,
-} from '@nestjs/common';
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**
  * Extracts the internal user ID from the request

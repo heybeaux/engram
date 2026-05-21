@@ -31,10 +31,7 @@ export class DreamCycleImportanceRescoreStage {
     );
   }
 
-  async run(
-    userId: string,
-    dryRun: boolean,
-  ): Promise<ImportanceRescoreResult> {
+  async run(userId: string, dryRun: boolean): Promise<ImportanceRescoreResult> {
     this.logger.log(
       `Starting importance re-scoring for user ${userId} (dryRun: ${dryRun})`,
     );
@@ -106,7 +103,9 @@ export class DreamCycleImportanceRescoreStage {
       avgChange: Math.round(avgChange * 1000) / 1000,
     };
 
-    this.logger.log(`Importance re-scoring complete: ${JSON.stringify(result)}`);
+    this.logger.log(
+      `Importance re-scoring complete: ${JSON.stringify(result)}`,
+    );
     return result;
   }
 

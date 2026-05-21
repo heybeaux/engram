@@ -151,7 +151,11 @@ export class ApiKeyGuard implements CanActivate {
       request.agent = defaultAgent;
       // Resolve default user for controllers that need @UserId()
       const defaultUser = await this.prisma.user.findFirst({
-        where: { accountId: instanceKey.accountId, isDefault: true, deletedAt: null },
+        where: {
+          accountId: instanceKey.accountId,
+          isDefault: true,
+          deletedAt: null,
+        },
         orderBy: { createdAt: 'asc' },
       });
       if (defaultUser) {
@@ -159,7 +163,11 @@ export class ApiKeyGuard implements CanActivate {
         request.userId = defaultUser.id;
       } else {
         const createdUser = await this.prisma.user.create({
-          data: { accountId: instanceKey.accountId, externalId: 'default', isDefault: true },
+          data: {
+            accountId: instanceKey.accountId,
+            externalId: 'default',
+            isDefault: true,
+          },
         });
         request.user = createdUser;
         request.userId = createdUser.id;
@@ -220,7 +228,9 @@ export class ApiKeyGuard implements CanActivate {
       const normalizedId = externalId.toLowerCase();
       // Attempt findUnique first (happy path)
       let user = await this.prisma.user.findUnique({
-        where: { accountId_externalId: { accountId, externalId: normalizedId } },
+        where: {
+          accountId_externalId: { accountId, externalId: normalizedId },
+        },
       });
       if (!user) {
         user = await this.prisma.user.create({

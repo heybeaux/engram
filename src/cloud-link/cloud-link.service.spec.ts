@@ -37,7 +37,11 @@ describe('CloudLinkService', () => {
     jest.clearAllMocks();
     authService = new CloudLinkAuthService(mockPrisma as any);
     mappingService = new CloudLinkMappingService(mockPrisma as any);
-    service = new CloudLinkService(mockPrisma as any, authService, mappingService);
+    service = new CloudLinkService(
+      mockPrisma as any,
+      authService,
+      mappingService,
+    );
   });
 
   describe('linkCloud', () => {

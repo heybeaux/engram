@@ -203,7 +203,9 @@ export class ApiKeyOrJwtGuard implements CanActivate {
       // ENG-109: Normalize to lowercase for case-insensitive matching
       const normalizedId = externalId.toLowerCase();
       let user = await this.prisma.user.findUnique({
-        where: { accountId_externalId: { accountId, externalId: normalizedId } },
+        where: {
+          accountId_externalId: { accountId, externalId: normalizedId },
+        },
       });
       if (!user) {
         user = await this.prisma.user.create({

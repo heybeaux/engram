@@ -8,7 +8,9 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTimelineDto {
-  @ApiProperty({ description: 'Local date for the timeline entry (YYYY-MM-DD)' })
+  @ApiProperty({
+    description: 'Local date for the timeline entry (YYYY-MM-DD)',
+  })
   @IsDateString()
   agentLocalDate: string;
 
@@ -38,12 +40,18 @@ export class CreateTimelineDto {
   @IsString()
   standardText: string;
 
-  @ApiPropertyOptional({ description: 'Structured timeline events', type: 'array' })
+  @ApiPropertyOptional({
+    description: 'Structured timeline events',
+    type: 'array',
+  })
   @IsOptional()
   @IsArray()
   events?: any[];
 
-  @ApiPropertyOptional({ description: 'Decisions made during this day', type: 'array' })
+  @ApiPropertyOptional({
+    description: 'Decisions made during this day',
+    type: 'array',
+  })
   @IsOptional()
   @IsArray()
   decisions?: any[];

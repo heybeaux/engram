@@ -133,10 +133,10 @@ describe('TemporalGapService', () => {
       // Let's use bigger numbers: avg = 50/5 = 10, threshold = 5
       mockPrisma.$queryRawUnsafe.mockResolvedValue([
         { day: new Date('2026-03-01'), count: BigInt(20) },
-        { day: new Date('2026-03-02'), count: BigInt(2) },  // sparse (2 < 5)
+        { day: new Date('2026-03-02'), count: BigInt(2) }, // sparse (2 < 5)
         { day: new Date('2026-03-03'), count: BigInt(15) },
         { day: new Date('2026-03-04'), count: BigInt(10) },
-        { day: new Date('2026-03-05'), count: BigInt(3) },  // sparse (3 < 5)
+        { day: new Date('2026-03-05'), count: BigInt(3) }, // sparse (3 < 5)
       ]);
 
       const result = await service.detectGaps(

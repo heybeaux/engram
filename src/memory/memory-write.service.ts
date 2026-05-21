@@ -13,11 +13,7 @@ import {
   BulkTextImportDto,
   BulkTextResult,
 } from './dto/bulk.dto';
-import {
-  MemoryLayer,
-  MemorySource,
-  SubjectType,
-} from '@prisma/client';
+import { MemoryLayer, MemorySource, SubjectType } from '@prisma/client';
 import { CorrectionService } from '../correction/correction.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { generateContentHash } from '../common/content-hash.util';

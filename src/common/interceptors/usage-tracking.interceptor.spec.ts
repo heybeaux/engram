@@ -18,7 +18,10 @@ function makeContext(overrides: {
   const request = {
     method: overrides.method ?? 'GET',
     path: overrides.path ?? '/api/memories',
-    agent: overrides.agent !== undefined ? overrides.agent : { accountId: 'acc-001' },
+    agent:
+      overrides.agent !== undefined
+        ? overrides.agent
+        : { accountId: 'acc-001' },
   } as any;
 
   return {
@@ -58,7 +61,9 @@ describe('UsageTrackingInterceptor', () => {
       ],
     }).compile();
 
-    interceptor = module.get<UsageTrackingInterceptor>(UsageTrackingInterceptor);
+    interceptor = module.get<UsageTrackingInterceptor>(
+      UsageTrackingInterceptor,
+    );
   });
 
   // ─── Happy paths ────────────────────────────────────────────────────────────
@@ -191,7 +196,9 @@ describe('UsageTrackingInterceptor', () => {
       ]);
       const ctx = makeContext({});
 
-      await expect(interceptor.intercept(ctx, makeHandler())).resolves.toBeDefined();
+      await expect(
+        interceptor.intercept(ctx, makeHandler()),
+      ).resolves.toBeDefined();
     });
 
     it('should enforce SCALE plan API limit (100000/day)', async () => {
@@ -205,7 +212,9 @@ describe('UsageTrackingInterceptor', () => {
       const ctx = makeContext({});
 
       // Within SCALE limit — should pass
-      await expect(interceptor.intercept(ctx, makeHandler())).resolves.toBeDefined();
+      await expect(
+        interceptor.intercept(ctx, makeHandler()),
+      ).resolves.toBeDefined();
     });
   });
 
@@ -258,7 +267,9 @@ describe('UsageTrackingInterceptor', () => {
       ]);
       const ctx = makeContext({ method: 'GET', path: '/v1/memories' });
 
-      await expect(interceptor.intercept(ctx, makeHandler())).resolves.toBeDefined();
+      await expect(
+        interceptor.intercept(ctx, makeHandler()),
+      ).resolves.toBeDefined();
     });
 
     it('should NOT check memory limit on POST to non-memory endpoints', async () => {
@@ -271,7 +282,9 @@ describe('UsageTrackingInterceptor', () => {
       ]);
       const ctx = makeContext({ method: 'POST', path: '/v1/agents' });
 
-      await expect(interceptor.intercept(ctx, makeHandler())).resolves.toBeDefined();
+      await expect(
+        interceptor.intercept(ctx, makeHandler()),
+      ).resolves.toBeDefined();
     });
 
     it('should use memories_used from query result if available', async () => {
@@ -315,7 +328,9 @@ describe('UsageTrackingInterceptor', () => {
       const ctx = makeContext({});
 
       // Should not throw — uses defaults (0 api calls)
-      await expect(interceptor.intercept(ctx, makeHandler())).resolves.toBeDefined();
+      await expect(
+        interceptor.intercept(ctx, makeHandler()),
+      ).resolves.toBeDefined();
     });
 
     it('should throw when $queryRaw returns null (DB error)', async () => {
@@ -324,7 +339,9 @@ describe('UsageTrackingInterceptor', () => {
       const ctx = makeContext({});
 
       // Current implementation does result[0]?.api_calls_today which throws on null
-      await expect(interceptor.intercept(ctx, makeHandler())).rejects.toThrow(TypeError);
+      await expect(interceptor.intercept(ctx, makeHandler())).rejects.toThrow(
+        TypeError,
+      );
     });
 
     it('should handle agent object missing entirely (no request.agent)', async () => {

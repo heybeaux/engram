@@ -33,9 +33,7 @@ export class MemoryContradictionService {
     const startTime = Date.now();
 
     if (!dto.memoryId && !dto.text) {
-      throw new BadRequestException(
-        'Either memoryId or text must be provided',
-      );
+      throw new BadRequestException('Either memoryId or text must be provided');
     }
 
     const threshold = dto.threshold ?? 0.8;
@@ -53,9 +51,7 @@ export class MemoryContradictionService {
       });
 
       if (!source) {
-        throw new NotFoundException(
-          `Memory ${dto.memoryId} not found`,
-        );
+        throw new NotFoundException(`Memory ${dto.memoryId} not found`);
       }
 
       sourceId = source.id;

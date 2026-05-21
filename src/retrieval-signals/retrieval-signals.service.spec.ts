@@ -30,31 +30,63 @@ describe('RetrievalSignalsService', () => {
 
   describe('classifyQueryType', () => {
     it('should classify temporal queries', () => {
-      expect(service.classifyQueryType('what happened yesterday')).toBe(QueryType.TEMPORAL);
-      expect(service.classifyQueryType('meetings last week')).toBe(QueryType.TEMPORAL);
-      expect(service.classifyQueryType('notes from March')).toBe(QueryType.TEMPORAL);
-      expect(service.classifyQueryType('when did we discuss the project')).toBe(QueryType.TEMPORAL);
-      expect(service.classifyQueryType('recent conversations')).toBe(QueryType.TEMPORAL);
-      expect(service.classifyQueryType('what happened on 2026-03-15')).toBe(QueryType.TEMPORAL);
+      expect(service.classifyQueryType('what happened yesterday')).toBe(
+        QueryType.TEMPORAL,
+      );
+      expect(service.classifyQueryType('meetings last week')).toBe(
+        QueryType.TEMPORAL,
+      );
+      expect(service.classifyQueryType('notes from March')).toBe(
+        QueryType.TEMPORAL,
+      );
+      expect(service.classifyQueryType('when did we discuss the project')).toBe(
+        QueryType.TEMPORAL,
+      );
+      expect(service.classifyQueryType('recent conversations')).toBe(
+        QueryType.TEMPORAL,
+      );
+      expect(service.classifyQueryType('what happened on 2026-03-15')).toBe(
+        QueryType.TEMPORAL,
+      );
     });
 
     it('should classify factual queries', () => {
-      expect(service.classifyQueryType('what is the API key')).toBe(QueryType.FACTUAL);
-      expect(service.classifyQueryType('who is the CEO')).toBe(QueryType.FACTUAL);
-      expect(service.classifyQueryType('email address')).toBe(QueryType.FACTUAL);
+      expect(service.classifyQueryType('what is the API key')).toBe(
+        QueryType.FACTUAL,
+      );
+      expect(service.classifyQueryType('who is the CEO')).toBe(
+        QueryType.FACTUAL,
+      );
+      expect(service.classifyQueryType('email address')).toBe(
+        QueryType.FACTUAL,
+      );
       expect(service.classifyQueryType('phone number')).toBe(QueryType.FACTUAL);
-      expect(service.classifyQueryType('where is the office')).toBe(QueryType.FACTUAL);
+      expect(service.classifyQueryType('where is the office')).toBe(
+        QueryType.FACTUAL,
+      );
     });
 
     it('should classify semantic queries', () => {
-      expect(service.classifyQueryType('how do I feel about the project direction and team dynamics')).toBe(QueryType.SEMANTIC);
-      expect(service.classifyQueryType('thoughts on improving the architecture')).toBe(QueryType.SEMANTIC);
-      expect(service.classifyQueryType('my preferences for code review style')).toBe(QueryType.SEMANTIC);
+      expect(
+        service.classifyQueryType(
+          'how do I feel about the project direction and team dynamics',
+        ),
+      ).toBe(QueryType.SEMANTIC);
+      expect(
+        service.classifyQueryType('thoughts on improving the architecture'),
+      ).toBe(QueryType.SEMANTIC);
+      expect(
+        service.classifyQueryType('my preferences for code review style'),
+      ).toBe(QueryType.SEMANTIC);
     });
 
     it('should default to SEMANTIC for ambiguous queries', () => {
-      expect(service.classifyQueryType('tell me more about this')).toBe(QueryType.SEMANTIC);
-      expect(service.classifyQueryType('interesting patterns in the data')).toBe(QueryType.SEMANTIC);
+      expect(service.classifyQueryType('tell me more about this')).toBe(
+        QueryType.SEMANTIC,
+      );
+      expect(
+        service.classifyQueryType('interesting patterns in the data'),
+      ).toBe(QueryType.SEMANTIC);
     });
   });
 

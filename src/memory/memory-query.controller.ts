@@ -9,11 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  MemoryService,
-  QueryResult,
-  ContextResult,
-} from './memory.service';
+import { MemoryService, QueryResult, ContextResult } from './memory.service';
 import { MemoryQueryService } from './memory-query.service';
 import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import {

@@ -16,6 +16,11 @@ import { AuditLogWatcherService } from './audit-log-watcher.service';
     AuditLogWatcherService,
     { provide: 'MONITORING_SERVICE', useExisting: MonitoringService },
   ],
-  exports: [MonitoringService, MonitoringInterceptor, AuditLogWatcherService, 'MONITORING_SERVICE'],
+  exports: [
+    MonitoringService,
+    MonitoringInterceptor,
+    AuditLogWatcherService,
+    'MONITORING_SERVICE',
+  ],
 })
 export class MonitoringModule {}

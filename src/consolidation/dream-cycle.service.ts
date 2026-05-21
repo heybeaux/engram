@@ -219,9 +219,7 @@ export class DreamCycleService {
           select: { id: true },
         });
 
-        this.log(
-          `Account ${account.id}: found ${users.length} users`,
-        );
+        this.log(`Account ${account.id}: found ${users.length} users`);
 
         // Phase 0 scalability: run users in parallel with concurrency limit
         // DREAM_CYCLE_CONCURRENCY env var controls batch size (default: 5)
@@ -232,8 +230,13 @@ export class DreamCycleService {
         );
         const userQueue = [...users];
         const runUser = async (user: { id: string }) => {
-          this.log(`Running Dream Cycle for user: ${user.id} (account: ${account.id})`);
-          const result = await this.runInternal({ ...options, userId: user.id });
+          this.log(
+            `Running Dream Cycle for user: ${user.id} (account: ${account.id})`,
+          );
+          const result = await this.runInternal({
+            ...options,
+            userId: user.id,
+          });
           allResults.push(result);
         };
         while (userQueue.length > 0) {
@@ -284,7 +287,7 @@ export class DreamCycleService {
     const startTime = Date.now();
     const stageDetails: Record<string, any> = {};
     const errors: string[] = [];
-    let scoresRefreshed = 0;
+    const scoresRefreshed = 0;
     let duplicatesMerged = 0;
     let patternsCreated = 0;
     let memoriesArchived = 0;

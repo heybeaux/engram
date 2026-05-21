@@ -1,6 +1,9 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmbeddingProvider, EmbedOptions } from './embedding-provider.interface';
+import {
+  EmbeddingProvider,
+  EmbedOptions,
+} from './embedding-provider.interface';
 import { LocalEmbedProvider } from './local-embed.provider';
 import { OpenAIEmbedProvider } from './openai-embed.provider';
 import { CloudEnsembleEmbedProvider } from './cloud-ensemble-embed.provider';

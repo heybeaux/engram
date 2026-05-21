@@ -36,7 +36,12 @@ describe('CloudLinkAuthService', () => {
     it('should return cloud auth response on valid key', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ id: 'cloud-123', email: 'user@test.com', plan: 'PRO', name: 'Test User' }),
+        json: async () => ({
+          id: 'cloud-123',
+          email: 'user@test.com',
+          plan: 'PRO',
+          name: 'Test User',
+        }),
       });
 
       const result = await service.validateCloudApiKey('valid-api-key');
@@ -46,7 +51,9 @@ describe('CloudLinkAuthService', () => {
       expect(result.plan).toBe('PRO');
       expect(mockFetch).toHaveBeenCalledWith(
         `${service.CLOUD_API_BASE}/v1/auth/me`,
-        expect.objectContaining({ headers: { 'X-AM-API-Key': 'valid-api-key' } }),
+        expect.objectContaining({
+          headers: { 'X-AM-API-Key': 'valid-api-key' },
+        }),
       );
     });
 
@@ -110,7 +117,11 @@ describe('CloudLinkAuthService', () => {
     });
 
     it('should return null when response is not ok', async () => {
-      mockFetch.mockResolvedValue({ ok: false, status: 500, text: async () => 'Server Error' });
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Server Error',
+      });
 
       const result = await service.createSyncKey('my-api-key');
       expect(result).toBeNull();
@@ -156,7 +167,11 @@ describe('CloudLinkAuthService', () => {
       });
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ id: 'cloud-1', email: 'new@test.com', plan: 'PRO' }),
+        json: async () => ({
+          id: 'cloud-1',
+          email: 'new@test.com',
+          plan: 'PRO',
+        }),
       });
       mockPrisma.cloudLink.update.mockResolvedValue({});
 
@@ -168,7 +183,10 @@ describe('CloudLinkAuthService', () => {
       expect(mockPrisma.cloudLink.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { accountId: 'acc-1' },
-          data: expect.objectContaining({ cloudPlan: 'PRO', cloudEmail: 'new@test.com' }),
+          data: expect.objectContaining({
+            cloudPlan: 'PRO',
+            cloudEmail: 'new@test.com',
+          }),
         }),
       );
     });
@@ -230,7 +248,9 @@ describe('CloudLinkAuthService', () => {
       const result = await service.refreshSubscription('acc-1'); // failure 3 → unlink
 
       expect(result.linked).toBe(false);
-      expect(mockPrisma.cloudLink.delete).toHaveBeenCalledWith({ where: { accountId: 'acc-1' } });
+      expect(mockPrisma.cloudLink.delete).toHaveBeenCalledWith({
+        where: { accountId: 'acc-1' },
+      });
     });
 
     it('should reset failure counter after successful auth', async () => {

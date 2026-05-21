@@ -27,7 +27,8 @@ export class EmbeddingProxyController {
   async embeddings(@Body() dto: EmbeddingRequestDto) {
     const texts = Array.isArray(dto.input) ? dto.input : [dto.input];
 
-    const embeddings: { object: string; embedding: number[]; index: number }[] = [];
+    const embeddings: { object: string; embedding: number[]; index: number }[] =
+      [];
     let totalTokens = 0;
 
     for (let i = 0; i < texts.length; i++) {
@@ -44,7 +45,8 @@ export class EmbeddingProxyController {
     return {
       object: 'list',
       data: embeddings,
-      model: this.embeddingService.getModelName() || dto.model || 'bge-base-en-v1.5',
+      model:
+        this.embeddingService.getModelName() || dto.model || 'bge-base-en-v1.5',
       usage: {
         prompt_tokens: totalTokens,
         total_tokens: totalTokens,

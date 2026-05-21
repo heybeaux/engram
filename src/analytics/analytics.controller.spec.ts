@@ -46,7 +46,9 @@ describe('AnalyticsController', () => {
 
     it('should propagate service errors', async () => {
       service.getTimeline.mockRejectedValue(new Error('Query failed'));
-      await expect(controller.getTimeline(agent, {} as any)).rejects.toThrow('Query failed');
+      await expect(controller.getTimeline(agent, {} as any)).rejects.toThrow(
+        'Query failed',
+      );
     });
   });
 
@@ -75,7 +77,9 @@ describe('AnalyticsController', () => {
 
     it('should propagate service errors', async () => {
       service.getLayerDistribution.mockRejectedValue(new Error('DB error'));
-      await expect(controller.getLayerBreakdown(agent, {} as any)).rejects.toThrow('DB error');
+      await expect(
+        controller.getLayerBreakdown(agent, {} as any),
+      ).rejects.toThrow('DB error');
     });
   });
 

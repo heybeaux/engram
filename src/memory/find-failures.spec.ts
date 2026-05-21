@@ -32,10 +32,7 @@ describe('findFailures (ENG-116)', () => {
         search: jest.fn().mockResolvedValue([]),
       } as any;
 
-      service = new MemoryFailureService(
-        prisma,
-        embedding,
-      );
+      service = new MemoryFailureService(prisma, embedding);
     });
 
     it('should return matching failure memories with similarity scores', async () => {
@@ -98,7 +95,7 @@ describe('findFailures (ENG-116)', () => {
       };
       await service.findFailures(userId, dto);
 
-      const queryArg = prisma.$queryRawUnsafe.mock.calls[0][0] as string;
+      const queryArg = prisma.$queryRawUnsafe.mock.calls[0][0];
       expect(queryArg).toContain('m.agent_id =');
 
       // agentId should be in the params
@@ -112,7 +109,7 @@ describe('findFailures (ENG-116)', () => {
       const dto: FindFailuresDto = { goal: 'Deploy service' };
       await service.findFailures(userId, dto);
 
-      const queryArg = prisma.$queryRawUnsafe.mock.calls[0][0] as string;
+      const queryArg = prisma.$queryRawUnsafe.mock.calls[0][0];
       expect(queryArg).not.toContain('m.agent_id');
     });
 
@@ -132,7 +129,7 @@ describe('findFailures (ENG-116)', () => {
       const dto: FindFailuresDto = { goal: 'Deploy service' };
       await service.findFailures(null, dto);
 
-      const queryArg = prisma.$queryRawUnsafe.mock.calls[0][0] as string;
+      const queryArg = prisma.$queryRawUnsafe.mock.calls[0][0];
       expect(queryArg).not.toContain('m.user_id');
     });
 

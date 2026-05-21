@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { ElasticsearchService, EsMemoryDocument } from './elasticsearch.service';
+import {
+  ElasticsearchService,
+  EsMemoryDocument,
+} from './elasticsearch.service';
 
 const mockIndices = {
   existsIndexTemplate: jest.fn(),
@@ -53,25 +56,23 @@ describe('ElasticsearchService', () => {
 
     service = module.get<ElasticsearchService>(ElasticsearchService);
     configService = module.get<ConfigService>(ConfigService);
+
+    // Initialize the service so it is enabled for tests that exercise the
+    // indexing / search paths. Individual onModuleInit tests override as needed.
+    await service.onModuleInit();
   });
 
   describe('onModuleInit', () => {
-    it('throws when ELASTICSEARCH_URL is not set', async () => {
-      jest
-        .spyOn(configService, 'get')
-        .mockImplementation((key: string) =>
-          key === 'ELASTICSEARCH_URL' ? undefined : undefined,
-        );
-      await expect(service.onModuleInit()).rejects.toThrow(
-        'ELASTICSEARCH_URL is required',
-      );
+    it('resolves without throwing when ELASTICSEARCH_URL is not set', async () => {
+      jest.spyOn(configService, 'get').mockImplementation(() => undefined);
+      // ES is optional — missing URL should warn and degrade, not throw
+      await expect(service.onModuleInit()).resolves.toBeUndefined();
     });
 
-    it('throws when cluster is unreachable', async () => {
+    it('resolves without throwing when cluster is unreachable', async () => {
       mockClient.cluster.health.mockRejectedValue(new Error('ECONNREFUSED'));
-      await expect(service.onModuleInit()).rejects.toThrow(
-        'Cluster unreachable',
-      );
+      // ES is optional — unreachable cluster should warn and degrade, not throw
+      await expect(service.onModuleInit()).resolves.toBeUndefined();
     });
 
     it('creates index template when it does not exist', async () => {
@@ -84,6 +85,7 @@ describe('ElasticsearchService', () => {
 
     it('skips index template creation when it already exists', async () => {
       mockIndices.existsIndexTemplate.mockResolvedValue(true);
+      mockIndices.putIndexTemplate.mockClear();
       await service.onModuleInit();
       expect(mockIndices.putIndexTemplate).not.toHaveBeenCalled();
     });
@@ -189,7 +191,11 @@ describe('ElasticsearchService', () => {
     it('returns empty array when no hits', async () => {
       mockClient.search.mockResolvedValue({ hits: { hits: [] } });
 
-      const results = await service.keywordSearch('query', { userId: 'u1' }, 10);
+      const results = await service.keywordSearch(
+        'query',
+        { userId: 'u1' },
+        10,
+      );
 
       expect(results).toEqual([]);
     });

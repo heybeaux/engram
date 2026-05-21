@@ -27,7 +27,9 @@ describe('SessionIndexingController', () => {
       .useValue({ canActivate: () => true })
       .compile();
 
-    controller = module.get<SessionIndexingController>(SessionIndexingController);
+    controller = module.get<SessionIndexingController>(
+      SessionIndexingController,
+    );
     service = module.get(SessionIndexingService);
   });
 
@@ -48,7 +50,9 @@ describe('SessionIndexingController', () => {
 
     it('should propagate service errors', async () => {
       service.indexSession.mockRejectedValue(new Error('Invalid transcript'));
-      await expect(controller.indexSession(userId, {} as any)).rejects.toThrow('Invalid transcript');
+      await expect(controller.indexSession(userId, {} as any)).rejects.toThrow(
+        'Invalid transcript',
+      );
     });
   });
 
@@ -59,21 +63,44 @@ describe('SessionIndexingController', () => {
 
       const result = await controller.getSessionMemories(userId, 's1');
       expect(result).toEqual(memories);
-      expect(service.getSessionMemories).toHaveBeenCalledWith(userId, 's1', undefined, undefined);
+      expect(service.getSessionMemories).toHaveBeenCalledWith(
+        userId,
+        's1',
+        undefined,
+        undefined,
+      );
     });
 
     it('should parse limit and offset query params', async () => {
-      service.getSessionMemories.mockResolvedValue({ sessionId: 's1', memories: [], total: 0 } as any);
+      service.getSessionMemories.mockResolvedValue({
+        sessionId: 's1',
+        memories: [],
+        total: 0,
+      } as any);
 
       await controller.getSessionMemories(userId, 's1', '10', '5');
-      expect(service.getSessionMemories).toHaveBeenCalledWith(userId, 's1', 10, 5);
+      expect(service.getSessionMemories).toHaveBeenCalledWith(
+        userId,
+        's1',
+        10,
+        5,
+      );
     });
 
     it('should handle only limit provided', async () => {
-      service.getSessionMemories.mockResolvedValue({ sessionId: 's1', memories: [], total: 0 } as any);
+      service.getSessionMemories.mockResolvedValue({
+        sessionId: 's1',
+        memories: [],
+        total: 0,
+      } as any);
 
       await controller.getSessionMemories(userId, 's1', '20');
-      expect(service.getSessionMemories).toHaveBeenCalledWith(userId, 's1', 20, undefined);
+      expect(service.getSessionMemories).toHaveBeenCalledWith(
+        userId,
+        's1',
+        20,
+        undefined,
+      );
     });
   });
 
@@ -90,7 +117,9 @@ describe('SessionIndexingController', () => {
 
     it('should propagate service errors', async () => {
       service.flushMemories.mockRejectedValue(new Error('Flush failed'));
-      await expect(controller.flushMemories(userId, {} as any)).rejects.toThrow('Flush failed');
+      await expect(controller.flushMemories(userId, {} as any)).rejects.toThrow(
+        'Flush failed',
+      );
     });
   });
 });

@@ -1,14 +1,26 @@
-import { IsString, IsOptional, IsNumber, Min, Max, ValidateIf } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  ValidateIf,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class FindContradictionsDto {
-  @ApiPropertyOptional({ description: 'ID of the memory to find contradictions for' })
+  @ApiPropertyOptional({
+    description: 'ID of the memory to find contradictions for',
+  })
   @IsString()
   @IsOptional()
   @ValidateIf((o) => !o.text)
   memoryId?: string;
 
-  @ApiPropertyOptional({ description: 'Text to find contradictions for (used if memoryId not provided)' })
+  @ApiPropertyOptional({
+    description:
+      'Text to find contradictions for (used if memoryId not provided)',
+  })
   @IsString()
   @IsOptional()
   @ValidateIf((o) => !o.memoryId)
@@ -19,14 +31,20 @@ export class FindContradictionsDto {
   @IsOptional()
   agentId?: string;
 
-  @ApiPropertyOptional({ description: 'Minimum similarity threshold (0-1)', default: 0.8 })
+  @ApiPropertyOptional({
+    description: 'Minimum similarity threshold (0-1)',
+    default: 0.8,
+  })
   @IsNumber()
   @Min(0)
   @Max(1)
   @IsOptional()
   threshold?: number;
 
-  @ApiPropertyOptional({ description: 'Maximum number of results', default: 10 })
+  @ApiPropertyOptional({
+    description: 'Maximum number of results',
+    default: 10,
+  })
   @IsNumber()
   @Min(1)
   @Max(100)

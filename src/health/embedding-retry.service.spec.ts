@@ -103,22 +103,40 @@ describe('EmbeddingRetryService', () => {
     it('should generate and store embeddings for pending memories', async () => {
       mockEmbedHealth.isAvailable.mockResolvedValue(true);
       const pendingMemories = [
-        { id: 'mem-1', raw: 'text 1', userId: 'u1', layer: 'EPISODIC', importanceScore: 0.8 },
-        { id: 'mem-2', raw: 'text 2', userId: 'u1', layer: 'SEMANTIC', importanceScore: 0.6 },
+        {
+          id: 'mem-1',
+          raw: 'text 1',
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importanceScore: 0.8,
+        },
+        {
+          id: 'mem-2',
+          raw: 'text 2',
+          userId: 'u1',
+          layer: 'SEMANTIC',
+          importanceScore: 0.6,
+        },
       ];
       mockPrisma.memory.findMany.mockResolvedValue(pendingMemories);
       mockEmbeddingService.generate.mockResolvedValue([0.1, 0.2, 0.3]);
-      mockEmbeddingService.store.mockResolvedValueOnce('emb-1').mockResolvedValueOnce('emb-2');
+      mockEmbeddingService.store
+        .mockResolvedValueOnce('emb-1')
+        .mockResolvedValueOnce('emb-2');
       mockPrisma.memory.update.mockResolvedValue({});
 
       await service.retryPendingEmbeddings();
 
       expect(mockEmbeddingService.generate).toHaveBeenCalledTimes(2);
-      expect(mockEmbeddingService.store).toHaveBeenCalledWith('mem-1', [0.1, 0.2, 0.3], {
-        userId: 'u1',
-        layer: 'EPISODIC',
-        importance: 0.8,
-      });
+      expect(mockEmbeddingService.store).toHaveBeenCalledWith(
+        'mem-1',
+        [0.1, 0.2, 0.3],
+        {
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importance: 0.8,
+        },
+      );
       expect(mockPrisma.memory.update).toHaveBeenCalledTimes(2);
       expect(mockPrisma.memory.update).toHaveBeenCalledWith({
         where: { id: 'mem-1' },
@@ -129,10 +147,34 @@ describe('EmbeddingRetryService', () => {
     it('should stop batch after 3 consecutive failures', async () => {
       mockEmbedHealth.isAvailable.mockResolvedValue(true);
       const pendingMemories = [
-        { id: 'mem-1', raw: 'text 1', userId: 'u1', layer: 'EPISODIC', importanceScore: 0.5 },
-        { id: 'mem-2', raw: 'text 2', userId: 'u1', layer: 'EPISODIC', importanceScore: 0.5 },
-        { id: 'mem-3', raw: 'text 3', userId: 'u1', layer: 'EPISODIC', importanceScore: 0.5 },
-        { id: 'mem-4', raw: 'text 4', userId: 'u1', layer: 'EPISODIC', importanceScore: 0.5 },
+        {
+          id: 'mem-1',
+          raw: 'text 1',
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importanceScore: 0.5,
+        },
+        {
+          id: 'mem-2',
+          raw: 'text 2',
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importanceScore: 0.5,
+        },
+        {
+          id: 'mem-3',
+          raw: 'text 3',
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importanceScore: 0.5,
+        },
+        {
+          id: 'mem-4',
+          raw: 'text 4',
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importanceScore: 0.5,
+        },
       ];
       mockPrisma.memory.findMany.mockResolvedValue(pendingMemories);
       mockEmbeddingService.generate.mockRejectedValue(new Error('embed down'));
@@ -146,9 +188,27 @@ describe('EmbeddingRetryService', () => {
     it('should continue after individual failures until threshold', async () => {
       mockEmbedHealth.isAvailable.mockResolvedValue(true);
       const pendingMemories = [
-        { id: 'mem-1', raw: 'text 1', userId: 'u1', layer: 'EPISODIC', importanceScore: 0.5 },
-        { id: 'mem-2', raw: 'text 2', userId: 'u1', layer: 'EPISODIC', importanceScore: 0.5 },
-        { id: 'mem-3', raw: 'text 3', userId: 'u1', layer: 'EPISODIC', importanceScore: 0.5 },
+        {
+          id: 'mem-1',
+          raw: 'text 1',
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importanceScore: 0.5,
+        },
+        {
+          id: 'mem-2',
+          raw: 'text 2',
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importanceScore: 0.5,
+        },
+        {
+          id: 'mem-3',
+          raw: 'text 3',
+          userId: 'u1',
+          layer: 'EPISODIC',
+          importanceScore: 0.5,
+        },
       ];
       mockPrisma.memory.findMany.mockResolvedValue(pendingMemories);
       mockEmbeddingService.generate

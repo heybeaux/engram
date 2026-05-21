@@ -243,9 +243,7 @@ describe('TimelineLodService', () => {
     });
 
     it('should omit tags section when memory has no tags', async () => {
-      const memories = [
-        createMockMemory({ raw: 'Quick note', tags: [] }),
-      ];
+      const memories = [createMockMemory({ raw: 'Quick note', tags: [] })];
 
       mockLlm.json.mockResolvedValue(FULL_LLM_RESPONSE);
       await service.generateLod(memories, '2026-03-22');
@@ -314,9 +312,7 @@ describe('TimelineLodService', () => {
 
       const memories = [createMockMemory()];
 
-      await expect(
-        service.generateLod(memories, '2026-03-22'),
-      ).rejects.toThrow(
+      await expect(service.generateLod(memories, '2026-03-22')).rejects.toThrow(
         'Timeline LOD generation failed for 2026-03-22: Rate limit exceeded',
       );
     });
@@ -326,9 +322,7 @@ describe('TimelineLodService', () => {
 
       const memories = [createMockMemory()];
 
-      await expect(
-        service.generateLod(memories, '2026-03-22'),
-      ).rejects.toThrow(
+      await expect(service.generateLod(memories, '2026-03-22')).rejects.toThrow(
         'Timeline LOD generation failed for 2026-03-22: Unknown LLM error',
       );
     });

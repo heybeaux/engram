@@ -36,8 +36,6 @@ async function bootstrap() {
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', true);
 
-
-
   // Use Pino logger
   app.useLogger(app.get(Logger));
 

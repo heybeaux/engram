@@ -156,7 +156,10 @@ export class PgVectorProvider implements VectorProvider {
     }
 
     // ENG-42: Metadata JSONB containment filter
-    if (options.filter?.metadata && Object.keys(options.filter.metadata).length > 0) {
+    if (
+      options.filter?.metadata &&
+      Object.keys(options.filter.metadata).length > 0
+    ) {
       memoryWhereClause += ` AND m.metadata @> $${paramIndex}::jsonb`;
       params.push(JSON.stringify(options.filter.metadata));
       paramIndex++;
