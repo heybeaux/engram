@@ -675,6 +675,7 @@ enum MemoryType {
   DECISION // Priority 2: Choices that were made (retained longer — decisions have consequences)
   OUTCOME // Priority 3: Results of actions (linked to decisions)
   GOAL // Priority 2: Intended objectives (active until resolved or abandoned)
+  TEMPORAL_GAP // ENG-131: Session-resume gap markers anchoring observations temporally
 }
 
 /// Subject type - who/what is this memory about?

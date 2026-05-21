@@ -26,6 +26,7 @@ import { HypeService } from './hype.service';
 import { DurabilityClassifierService } from './durability-classifier.service';
 import { MemoryWithExtraction } from './memory.types';
 import { ElasticsearchService } from '../search/elasticsearch.service';
+import { TemporalGapMarkerService } from './temporal-gap-marker.service';
 
 @Injectable()
 export class MemoryWriteService {
@@ -45,6 +46,8 @@ export class MemoryWriteService {
     @Optional() private readonly embeddingQueue?: EmbeddingQueueProducer,
     @Optional() private readonly hypeService?: HypeService,
     @Optional() private durabilityClassifier?: DurabilityClassifierService,
+    @Optional()
+    private readonly temporalGapMarker?: TemporalGapMarkerService,
   ) {}
 
   /**
@@ -108,6 +111,33 @@ export class MemoryWriteService {
     const subjectId =
       dto.subjectId ??
       (subjectType === SubjectType.USER ? userId : dto.agentId);
+
+    // 6b. ENG-131: Insert a temporal-gap marker before this memory if the
+    // gap since the last memory for this agent/session exceeds the threshold.
+    // Best-effort: failures here must not block the actual write.
+    if (this.temporalGapMarker && dto.agentId) {
+      try {
+        await this.temporalGapMarker.maybeInsertMarker({
+          userId,
+          agentId: dto.agentId,
+          sessionId,
+          enqueueEmbedding: this.embeddingQueue
+            ? (memoryId, raw) =>
+                this.embeddingQueue!.enqueueEmbedding({
+                  memoryId,
+                  userId,
+                  raw,
+                  // Markers are deterministic anchors - no dedup needed.
+                  runDedup: false,
+                })
+            : undefined,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `[Memory] Temporal gap marker step failed (continuing): ${(err as Error).message}`,
+        );
+      }
+    }
 
     // 7. Create memory record
     const contentHash = generateContentHash(rawContent);

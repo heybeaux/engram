@@ -23,6 +23,7 @@ import { BackfillService } from './backfill.service';
 import { ConsolidationService } from './consolidation.service';
 import { TemporalParserService } from './temporal/temporal-parser.service';
 import { TemporalGapService } from './temporal-gap.service';
+import { TemporalGapMarkerService } from './temporal-gap-marker.service';
 import { LLMModule } from '../llm/llm.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { MultiQueryService } from '../multi-query/multi-query.service';
@@ -109,6 +110,7 @@ const bullExports = hasRedis ? [EmbeddingQueueProducer] : [];
     ConsolidationService,
     TemporalParserService,
     TemporalGapService,
+    TemporalGapMarkerService,
     MultiQueryService,
     QueryExpansionService,
     ResultFusionService,
