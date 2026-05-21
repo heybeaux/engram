@@ -283,6 +283,7 @@ describe('TemporalGapMarkerService', () => {
         agentId: 'a1',
         sessionId: 'sess-1',
         memoryType: 'TEMPORAL_GAP',
+        searchable: false,
         priority: 4,
         tags: ['temporal_gap'],
       });
@@ -299,11 +300,8 @@ describe('TemporalGapMarkerService', () => {
       expect(call.data.raw).toContain(prev.toISOString());
       expect(call.data.raw).toContain(now.toISOString());
 
-      // Embedding queue gets the marker
-      expect(enqueueEmbedding).toHaveBeenCalledWith(
-        'mem-gap-1',
-        call.data.raw,
-      );
+      // Markers are searchable=false — embedding queue must NOT be called
+      expect(enqueueEmbedding).not.toHaveBeenCalled();
     });
 
     it('respects a custom threshold from env', async () => {

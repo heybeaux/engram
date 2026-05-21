@@ -183,6 +183,9 @@ export class TemporalGapMarkerService {
           layer: MemoryLayer.SESSION,
           source: MemorySource.SYSTEM,
           memoryType: TEMPORAL_GAP_TYPE,
+          // ENG-131: Excluded from recall like dream-cycle derivatives (ENG-94).
+          // Markers are temporal anchors for context, not semantic recall targets.
+          searchable: false,
           // priority 4 matches EVENT - low-priority anchor, not safety-critical
           priority: 4,
           importanceScore: 0.2,
@@ -200,17 +203,9 @@ export class TemporalGapMarkerService {
         },
       });
 
-      // Queue embedding so the marker is retrievable like any normal memory.
-      // (We intentionally do not modify the embedding pipeline itself.)
-      if (opts.enqueueEmbedding) {
-        try {
-          await opts.enqueueEmbedding(marker.id, raw);
-        } catch (err) {
-          this.logger.warn(
-            `[TemporalGapMarker] embedding enqueue failed for ${marker.id}: ${(err as Error).message}`,
-          );
-        }
-      }
+      // Markers are searchable=false — do not embed them.
+      // The enqueueEmbedding callback is kept in the API for future use but
+      // intentionally not called here so markers never surface in vector recall.
 
       this.logger.log(
         `[TemporalGapMarker] inserted marker ${marker.id} (gap=${humanGap}, agent=${opts.agentId ?? 'n/a'}, session=${opts.sessionId ?? 'n/a'})`,
