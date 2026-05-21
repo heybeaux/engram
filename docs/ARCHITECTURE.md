@@ -9,17 +9,17 @@
 
 ## Module Map
 
-> 52 modules total. Sizes from architecture watchdog (2026-03-09).
+> 56 modules total. Sizes from architecture watchdog (2026-03-19).
 
 ### Core
 | Module | Purpose | Files | Lines |
 |---|---|---|---|
-| `memory` | CRUD, embedding generation, recall, temporal parsing, search | 63 | 16,636 |
+| `memory` | CRUD, embedding generation, recall, temporal parsing, search | 72 | 19,696 |
 | `prisma` | PrismaService singleton (wraps @prisma/client) | 9 | 630 |
 | `storage` | Unified storage interface (Prisma-Postgres, SQLite providers) | 7 | 1,759 |
-| `vector` | pgvector provider for similarity search | 8 | 1,149 |
-| `embedding` | Unified embedding interface (local/cloud/ensemble providers) | 15 | 1,530 |
-| `llm` | LLM abstraction layer (OpenAI, structured output) | 11 | 1,551 |
+| `vector` | pgvector provider for similarity search | 10 | 1,614 |
+| `embedding` | Unified embedding interface (local/cloud/ensemble providers) | 17 | 2,021 |
+| `llm` | LLM abstraction layer (OpenAI, structured output) | 12 | 1,900 |
 | `events` | Global event emitter module (NestJS EventEmitter) | 4 | 285 |
 | `common` | Shared decorators, pipes, guards, utilities | 27 | 3,418 |
 | `utils` | Utility functions (date parser, etc.) | 3 | 589 |
@@ -27,15 +27,15 @@
 ### Intelligence
 | Module | Purpose | Files | Lines |
 |---|---|---|---|
-| `ensemble` | Multi-model RRF fusion, drift detection, nightly re-embed, model registry | 17 | 7,598 |
+| `ensemble` | Multi-model RRF fusion, drift detection, nightly re-embed, model registry | 17 | 7,696 |
 | `correction` | Contradiction detection, memory superseding chains | 5 | 866 |
-| `consolidation` | Merge duplicate/related memories, dream cycle | 33 | 7,478 |
-| `deduplication` | Exact/near-duplicate detection, merge, lineage | 17 | 7,103 |
+| `consolidation` | Merge duplicate/related memories, dream cycle | 34 | 7,837 |
+| `deduplication` | Exact/near-duplicate detection, merge, lineage | 38 | 11,368 |
 | `clustering` | Memory clustering | 5 | 833 |
-| `hierarchy` | Hierarchical memory organization | 10 | 2,269 |
+| `hierarchy` | Hierarchical memory organization | 11 | 2,518 |
 | `summarization` | Memory summarization | 6 | 731 |
 | `fog-index` | Memory fog/decay scoring | 5 | 697 |
-| `reembedding` | Re-embed memories with updated models | 9 | 2,002 |
+| `reembedding` | Re-embed memories with updated models | 9 | 2,004 |
 
 ### Awareness & Anticipation
 | Module | Purpose | Files | Lines |
@@ -54,27 +54,35 @@
 | `memory-pool` | Memory pooling for agents and sessions | 5 | 588 |
 | `graph` | Relationship graph between memories (entities, extraction) | 17 | 4,624 |
 | `session-indexing` | Session-level memory indexing | 5 | 603 |
+| `retrieval-signals` | Signal scoring for search ranking | 6 | 582 |
 
 ### Identity & Delegation
 | Module | Purpose | Files | Lines |
 |---|---|---|---|
-| `identity` | User identity profiles, portable identity, team profiles, delegation contracts, capability deltas | 65 | 11,117 |
-| `entity-profile` | Entity profile management | 9 | 742 |
+| `identity` | User identity profiles, portable identity, team profiles, delegation contracts, capability deltas | 66 | 11,480 |
+| `entity-profile` | Entity profile management (attachments, semantic enrichment) | 15 | 2,455 |
 | `delegation` | Agent delegation tasks, templates, recall | 17 | 838 |
-| `challenge` | Challenge-response for identity verification | 6 | 705 |
+| `challenge` | Challenge-response for identity verification | 7 | 1,005 |
 
 ### Platform
 | Module | Purpose | Files | Lines |
 |---|---|---|---|
 | `account` | Account management, JWT auth, admin endpoints, plan limits | 12 | 1,749 |
 | `agent` | Agent profiles and config | 10 | 1,319 |
-| `agent-recall` | Agent recall service | 5 | 746 |
+| `agent-recall` | Agent-scoped recall service | 6 | 1,162 |
 | `agent-session` | Session management | 5 | 675 |
+| `billing` | Billing plans and entitlement management | 9 | 1,051 |
 | `teams` | Team management | 5 | 601 |
 | `instance` | Instance/node management | 5 | 313 |
 | `queue` | Background job queue | 3 | 283 |
 | `stripe` | Stripe billing, subscriptions, webhook handling | 7 | 745 |
-| `scripts` | CLI/maintenance scripts | 2 | 337 |
+| `scripts` | CLI/maintenance scripts | 5 | 1,108 |
+
+### Import
+| Module | Purpose | Files | Lines |
+|---|---|---|---|
+| `import` | Legacy data import pipeline | 12 | 1,914 |
+| `import-v2` | Revised import pipeline (v2) | 9 | 1,161 |
 
 ### Cloud & Sync
 | Module | Purpose | Files | Lines |
@@ -89,7 +97,7 @@
 |---|---|---|---|
 | `analytics` | Usage analytics | 9 | 967 |
 | `monitoring` | Health/perf monitoring snapshots | 5 | 485 |
-| `health` | Health check endpoints | 9 | 1,015 |
+| `health` | Health check endpoints | 11 | 1,752 |
 | `dashboard` | Admin dashboard UI and API | 6 | 916 |
 | `rate-limit` | Rate limiting | 7 | 682 |
 | `eval` | Evaluation framework | 5 | 658 |
@@ -103,8 +111,9 @@
 5. Services don't import from other module's internals — use NestJS DI
 
 ## Known Architecture Notes
-- `memory.service.ts` (1,071 lines), `memory.controller.ts` (1,062), `memory-query.service.ts` (916), `deduplication.service.ts` (910) — candidates for future file splitting
-- `identity` module (65 files, 11.1k lines) is the largest module; consider sub-module breakdown
+- `memory-query.service.ts` (1,214 lines), `memory.service.ts` (1,105), `memory.controller.ts` (1,088), `deduplication.service.ts` (910) — top candidates for future file splitting
+- `identity` module (67 files, 11.7k lines) is the largest module; consider sub-module breakdown
+- `deduplication` module grew significantly (7.1k→11.4k lines) — review for splitting opportunity
 - `topic-taxonomy.ts` (802 lines) — static data file, large but acceptable
 - `scripts` module has no `.spec.ts` files (shell scripts, no TS tests needed)
 - Cross-module direct imports are used for `PrismaService` and shared guards — acceptable NestJS pattern for infrastructure concerns

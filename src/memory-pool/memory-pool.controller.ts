@@ -14,6 +14,7 @@ import {
   CreateMemoryPoolDto,
   GrantPoolAccessDto,
   AddMemoryToPoolDto,
+  BulkAddMemoriesToPoolDto,
 } from './dto/memory-pool.dto';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 
@@ -74,6 +75,24 @@ export class MemoryPoolController {
   @ApiOperation({ summary: 'Revoke session access to pool' })
   async revoke(@Param('id') id: string, @Param('sessionId') sessionId: string) {
     return this.service.revokeAccess(id, sessionId);
+  }
+
+  @Delete(':id/grant/agent/:agentId')
+  @ApiOperation({ summary: 'Revoke agent-level access to pool' })
+  async revokeAgent(
+    @Param('id') id: string,
+    @Param('agentId') agentId: string,
+  ) {
+    return this.service.revokeAgentAccess(id, agentId);
+  }
+
+  @Post(':id/memories/bulk')
+  @ApiOperation({ summary: 'Bulk add memories to pool' })
+  async addMemoriesBulk(
+    @Param('id') id: string,
+    @Body() dto: BulkAddMemoriesToPoolDto,
+  ) {
+    return this.service.addMemoriesBulk(id, dto);
   }
 
   @Post(':id/memories')

@@ -111,6 +111,12 @@ describe('ExtractionClassifiers', () => {
       ['LESSON', 'LESSON'],
       ['TASK_OUTCOME', 'TASK_OUTCOME'],
       ['SELF_ASSESSMENT', 'SELF_ASSESSMENT'],
+      ['DECISION', 'DECISION'],
+      ['decision', 'DECISION'],
+      ['OUTCOME', 'OUTCOME'],
+      ['outcome', 'OUTCOME'],
+      ['GOAL', 'GOAL'],
+      ['goal', 'GOAL'],
     ])('should normalize "%s" to "%s"', (input, expected) => {
       expect(normalizeMemoryType(input)).toBe(expected);
     });
@@ -120,6 +126,9 @@ describe('ExtractionClassifiers', () => {
       ['PREFERENCES', 'PREFERENCE'],
       ['FACTS', 'FACT'],
       ['PREF', 'PREFERENCE'],
+      ['DECISIONS', 'DECISION'],
+      ['OUTCOMES', 'OUTCOME'],
+      ['GOALS', 'GOAL'],
     ])('should map plural/alias "%s" to "%s"', (input, expected) => {
       expect(normalizeMemoryType(input)).toBe(expected);
     });
@@ -300,6 +309,55 @@ describe('ExtractionClassifiers', () => {
       expect(
         basicMemoryTypeClassification('yesterday I went to the store'),
       ).toBe('EVENT');
+    });
+
+    it('should classify decisions as DECISION', () => {
+      expect(
+        basicMemoryTypeClassification('we decided to use PostgreSQL'),
+      ).toBe('DECISION');
+      expect(basicMemoryTypeClassification('I chose React over Vue')).toBe(
+        'DECISION',
+      );
+      expect(
+        basicMemoryTypeClassification(
+          'we went with the microservices approach',
+        ),
+      ).toBe('DECISION');
+      expect(basicMemoryTypeClassification('opted for the cheaper plan')).toBe(
+        'DECISION',
+      );
+    });
+
+    it('should classify outcomes as OUTCOME', () => {
+      expect(
+        basicMemoryTypeClassification('the migration resulted in data loss'),
+      ).toBe('OUTCOME');
+      expect(
+        basicMemoryTypeClassification(
+          'the deployment succeeded without issues',
+        ),
+      ).toBe('OUTCOME');
+      expect(basicMemoryTypeClassification('the experiment failed')).toBe(
+        'OUTCOME',
+      );
+      expect(
+        basicMemoryTypeClassification('it turned out to be a caching issue'),
+      ).toBe('OUTCOME');
+    });
+
+    it('should classify goals as GOAL', () => {
+      expect(basicMemoryTypeClassification('my goal is to learn Rust')).toBe(
+        'GOAL',
+      );
+      expect(
+        basicMemoryTypeClassification('I want to reduce latency by 50%'),
+      ).toBe('GOAL');
+      expect(
+        basicMemoryTypeClassification('we plan to migrate to Kubernetes'),
+      ).toBe('GOAL');
+      expect(
+        basicMemoryTypeClassification('I aim to ship this by Friday'),
+      ).toBe('GOAL');
     });
 
     it('should default to FACT', () => {

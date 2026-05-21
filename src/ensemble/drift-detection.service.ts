@@ -8,7 +8,7 @@
 
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { ModelId, DriftAnalysis, DriftSummary } from './ensemble.types';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class DriftDetectionService {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: ServicePrismaService,
   ) {
     this.DRIFT_THRESHOLD = this.config.get<number>(
       'ENSEMBLE_DRIFT_THRESHOLD',

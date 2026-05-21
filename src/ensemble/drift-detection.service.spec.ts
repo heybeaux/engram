@@ -5,7 +5,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { DriftDetectionService } from './drift-detection.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { ModelId } from './ensemble.types';
 
 const mockPrismaService = {
@@ -34,7 +34,7 @@ describe('DriftDetectionService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DriftDetectionService,
-        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: ServicePrismaService, useValue: mockPrismaService },
         { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();

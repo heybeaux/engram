@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EmbeddingProvider } from './embedding-provider.interface';
+import {
+  EmbeddingProvider,
+  EmbedOptions,
+} from './embedding-provider.interface';
 
 /**
  * Local Embedding Provider
@@ -32,14 +35,38 @@ export class LocalEmbedProvider implements EmbeddingProvider {
     );
   }
 
-  async embed(texts: string[]): Promise<number[][]> {
+  async embed(texts: string[], options?: EmbedOptions): Promise<number[][]> {
     const input = texts.length === 1 ? texts[0] : texts;
 
-    const response = await fetch(`${this.baseUrl}/v1/embeddings`, {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (options?.priority) {
+      headers['X-Priority'] = options.priority;
+    }
+
+    const fetchOptions: RequestInit = {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ input, model: this.model }),
-    });
+    };
+
+    if (options?.timeoutMs) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+      fetchOptions.signal = controller.signal;
+      try {
+        return await this.doFetch(fetchOptions);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    return this.doFetch(fetchOptions);
+  }
+
+  private async doFetch(fetchOptions: RequestInit): Promise<number[][]> {
+    const response = await fetch(`${this.baseUrl}/v1/embeddings`, fetchOptions);
 
     if (!response.ok) {
       const error = await response.text();
@@ -68,7 +95,11 @@ export class LocalEmbedProvider implements EmbeddingProvider {
   async healthCheck(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      // Increased from 5s → 30s: engram-embed /health can be delayed when
+      // the embed queue is busy (CPU-bound inference on same Tokio threads).
+      // The real fix is spawn_blocking in engram-embed, but this prevents
+      // false "down" reports in the meantime.
+      const timeout = setTimeout(() => controller.abort(), 30_000);
 
       const response = await fetch(`${this.baseUrl}/health`, {
         method: 'GET',

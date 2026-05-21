@@ -12,7 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { TeamProfileService } from './team-profile.service';
-import { CreateTeamDto } from './dto/team.dto';
+import { CreateIdentityTeamDto } from './dto/team.dto';
 
 class UpdateTeamDto {
   name?: string;
@@ -39,7 +39,7 @@ export class TeamController {
   @Post()
   @HttpCode(201)
   @ApiOperation({ summary: 'Create a team' })
-  async create(@Body() dto: CreateTeamDto) {
+  async create(@Body() dto: CreateIdentityTeamDto) {
     return this.teamService.createTeam(dto);
   }
 

@@ -33,9 +33,7 @@ export class MemoryContradictionService {
     const startTime = Date.now();
 
     if (!dto.memoryId && !dto.text) {
-      throw new BadRequestException(
-        'Either memoryId or text must be provided',
-      );
+      throw new BadRequestException('Either memoryId or text must be provided');
     }
 
     const threshold = dto.threshold ?? 0.8;
@@ -53,9 +51,7 @@ export class MemoryContradictionService {
       });
 
       if (!source) {
-        throw new NotFoundException(
-          `Memory ${dto.memoryId} not found`,
-        );
+        throw new NotFoundException(`Memory ${dto.memoryId} not found`);
       }
 
       sourceId = source.id;
@@ -72,11 +68,11 @@ export class MemoryContradictionService {
       if (embeddingRows.length > 0 && embeddingRows[0].embedding) {
         sourceEmbedding = JSON.parse(embeddingRows[0].embedding);
       } else {
-        sourceEmbedding = await this.embedding.generate(source.raw);
+        sourceEmbedding = await this.embedding.generateForRecall(source.raw);
       }
     } else {
       sourceText = dto.text!;
-      sourceEmbedding = await this.embedding.generate(dto.text!);
+      sourceEmbedding = await this.embedding.generateForRecall(dto.text!);
     }
 
     // Build WHERE conditions for the vector search

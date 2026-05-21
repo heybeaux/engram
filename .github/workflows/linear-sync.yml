@@ -1,7 +1,7 @@
 name: Linear Ticket Sync
 on:
   push:
-    branches: [main]
+    branches: [staging]
   pull_request:
     types: [opened, closed]
 

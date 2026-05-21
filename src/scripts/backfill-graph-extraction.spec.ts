@@ -117,7 +117,7 @@ describe('backfill-graph-extraction — batch logic', () => {
     }));
 
     const batchSize = 50;
-    const batches: typeof memories[] = [];
+    const batches: (typeof memories)[] = [];
 
     for (let i = 0; i < memories.length; i += batchSize) {
       batches.push(memories.slice(i, i + batchSize));
@@ -131,7 +131,7 @@ describe('backfill-graph-extraction — batch logic', () => {
   it('should handle empty memory list', () => {
     const memories: any[] = [];
     const batchSize = 50;
-    const batches: typeof memories[] = [];
+    const batches: (typeof memories)[] = [];
 
     for (let i = 0; i < memories.length; i += batchSize) {
       batches.push(memories.slice(i, i + batchSize));
@@ -145,7 +145,7 @@ describe('backfill-graph-extraction — batch logic', () => {
       id: `mem-${i}`,
     }));
     const batchSize = 50;
-    const batches: typeof memories[] = [];
+    const batches: (typeof memories)[] = [];
 
     for (let i = 0; i < memories.length; i += batchSize) {
       batches.push(memories.slice(i, i + batchSize));

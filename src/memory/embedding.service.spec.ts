@@ -2,12 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EmbeddingService, VectorSearchResult } from './embedding.service';
 import { LLMService } from '../llm/llm.service';
 import { VectorService } from '../vector/vector.service';
+import { EmbeddingService as EmbedFacade } from '../embedding/embedding.service';
 import { MemoryLayer } from '@prisma/client';
 
 describe('EmbeddingService', () => {
   let service: EmbeddingService;
   let mockLlmService: jest.Mocked<LLMService>;
   let mockVectorService: jest.Mocked<VectorService>;
+  let mockEmbedFacade: jest.Mocked<EmbedFacade>;
 
   const mockEmbedding = new Array(1536).fill(0).map(() => Math.random());
 
@@ -31,11 +33,23 @@ describe('EmbeddingService', () => {
       listProviders: jest.fn(),
     } as any;
 
+    mockEmbedFacade = {
+      embedOneWithOptions: jest.fn(),
+      embedOne: jest.fn(),
+      embed: jest.fn(),
+      getModelName: jest.fn().mockReturnValue('bge-base-en-v1.5'),
+      getDimensions: jest.fn().mockReturnValue(768),
+      healthCheck: jest.fn(),
+      getProviderName: jest.fn(),
+      getProvider: jest.fn(),
+    } as any;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EmbeddingService,
         { provide: LLMService, useValue: mockLlmService },
         { provide: VectorService, useValue: mockVectorService },
+        { provide: EmbedFacade, useValue: mockEmbedFacade },
       ],
     }).compile();
 
@@ -77,6 +91,61 @@ describe('EmbeddingService', () => {
       await expect(service.generate('test')).rejects.toThrow(
         'Embedding failed',
       );
+    });
+  });
+
+  describe('generateForRecall', () => {
+    it('should call embedOneWithOptions with recall priority and timeout', async () => {
+      const recallEmbedding = new Array(768).fill(0.5);
+      mockEmbedFacade.embedOneWithOptions.mockResolvedValue(recallEmbedding);
+
+      const result = await service.generateForRecall('what do I know about X?');
+
+      expect(mockEmbedFacade.embedOneWithOptions).toHaveBeenCalledWith(
+        'what do I know about X?',
+        { priority: 'recall', timeoutMs: 5_000 },
+      );
+      expect(result).toEqual(recallEmbedding);
+    });
+
+    it('should fall back to standard generate when priority embed fails', async () => {
+      mockEmbedFacade.embedOneWithOptions.mockRejectedValue(
+        new Error('timeout'),
+      );
+      mockLlmService.embed.mockResolvedValue({
+        embedding: mockEmbedding,
+        dimensions: 1536,
+        model: 'text-embedding-3-small',
+      });
+
+      const result = await service.generateForRecall('fallback test');
+
+      expect(result).toEqual(mockEmbedding);
+      expect(mockLlmService.embed).toHaveBeenCalledWith('fallback test');
+    });
+
+    it('should reset circuit breaker on successful recall embed', async () => {
+      // Trip the circuit breaker with failures via generate()
+      mockLlmService.embed.mockRejectedValue(new Error('down'));
+      for (let i = 0; i < 5; i++) {
+        await service.generate('fail').catch(() => {});
+      }
+
+      // Now recall succeeds via facade
+      const recallEmbedding = new Array(768).fill(0.1);
+      mockEmbedFacade.embedOneWithOptions.mockResolvedValue(recallEmbedding);
+
+      const result = await service.generateForRecall('recovery');
+      expect(result).toEqual(recallEmbedding);
+
+      // Circuit breaker should be reset — generate should work again
+      mockLlmService.embed.mockResolvedValue({
+        embedding: mockEmbedding,
+        dimensions: 1536,
+        model: 'test',
+      });
+      const normalResult = await service.generate('normal');
+      expect(normalResult).toEqual(mockEmbedding);
     });
   });
 

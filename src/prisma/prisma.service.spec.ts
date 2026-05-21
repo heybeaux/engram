@@ -2,16 +2,26 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from './prisma.service';
 import { rlsContext } from './rls-context';
 
-// Mock PrismaClient
+// Mock PrismaPg adapter
+jest.mock('@prisma/adapter-pg', () => ({
+  PrismaPg: jest.fn().mockImplementation(() => ({
+    provider: 'postgres',
+  })),
+}));
+
+// Mock PrismaClient — capture constructor options
+let capturedPrismaOpts: any;
 jest.mock('@prisma/client', () => {
   class MockPrismaClient {
     $connect = jest.fn().mockResolvedValue(undefined);
     $disconnect = jest.fn().mockResolvedValue(undefined);
     $transaction = jest.fn();
-    $use = jest.fn();
     $extends = jest.fn();
     $on = jest.fn();
     memory = { update: jest.fn(), findMany: jest.fn() };
+    constructor(opts?: any) {
+      capturedPrismaOpts = opts;
+    }
   }
   return { PrismaClient: MockPrismaClient };
 });
@@ -29,6 +39,13 @@ describe('PrismaService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('should set interactive transaction timeout to 120s', () => {
+    expect(capturedPrismaOpts.transactionOptions).toEqual({
+      maxWait: 10000,
+      timeout: 120000,
+    });
   });
 
   describe('onModuleInit', () => {

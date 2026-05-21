@@ -63,7 +63,7 @@ export class GraphController {
     if (!accountId) return null;
 
     const users = await this.prisma.user.findMany({
-      where: { agent: { accountId, deletedAt: null } },
+      where: { accountId, deletedAt: null },
       select: { id: true },
     });
     return users.length > 0 ? users.map((u) => u.id) : null;

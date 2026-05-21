@@ -4,7 +4,7 @@ import { CloudLinkService } from '../cloud-link/cloud-link.service';
 import { decrypt } from '../common/encryption.util';
 import { generateContentHash } from '../common/content-hash.util';
 
-const BATCH_SIZE = 200;
+const BATCH_SIZE = 10; // Reduced from 200 — Railway body limit is 100KB; 10 memories stays ~20KB per batch
 
 export interface ReconciliationPlan {
   localOnly: ReconciliationItem[];
@@ -210,7 +210,7 @@ export class SyncReconciliationService {
 
           // Find a default user for the account
           const defaultUser = await this.prisma.user.findFirst({
-            where: { agent: { accountId } },
+            where: { accountId },
             select: { id: true },
           });
           if (!defaultUser) {

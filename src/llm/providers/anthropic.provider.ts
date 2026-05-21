@@ -102,7 +102,9 @@ export class AnthropicProvider implements LLMProvider {
       }
       return JSON.parse(content) as T;
     } catch (e) {
-      throw new Error(`Failed to parse JSON response: ${response.content}`);
+      throw new Error(`Failed to parse JSON response: ${response.content}`, {
+        cause: e,
+      });
     }
   }
 

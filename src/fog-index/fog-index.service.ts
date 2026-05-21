@@ -59,19 +59,22 @@ export class FogIndexService {
     if (scope.userId) return [scope.userId];
 
     if (scope.agentId) {
-      const users = await this.prisma.user.findMany({
-        where: { agentId: scope.agentId, deletedAt: null },
-        select: { id: true },
+      const agent = await this.prisma.agent.findUnique({
+        where: { id: scope.agentId },
+        select: { accountId: true },
       });
-      if (users.length > 0) return users.map((u) => u.id);
+      if (agent?.accountId) {
+        const users = await this.prisma.user.findMany({
+          where: { accountId: agent.accountId, deletedAt: null },
+          select: { id: true },
+        });
+        if (users.length > 0) return users.map((u) => u.id);
+      }
     }
 
     if (scope.accountId) {
       const users = await this.prisma.user.findMany({
-        where: {
-          agent: { accountId: scope.accountId, deletedAt: null },
-          deletedAt: null,
-        },
+        where: { accountId: scope.accountId, deletedAt: null },
         select: { id: true },
       });
       if (users.length > 0) return users.map((u) => u.id);

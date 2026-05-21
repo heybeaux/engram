@@ -1,18 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DreamCycleService } from './dream-cycle.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import { ConsolidationService } from '../memory/consolidation.service';
 import { ImportanceScorerService } from '../memory/intelligence/importance-scorer.service';
 import { EmbeddingService } from '../memory/embedding.service';
 import { LLMService } from '../llm/llm.service';
 import { ConfigService } from '@nestjs/config';
 import {
-  DreamCycleDedupStage,
-  DreamCycleStalenessStage,
   DreamCyclePatternsStage,
   DreamCycleDriftStage,
   DreamCycleIdentityStage,
+  DreamCyclePendingStage,
+  DreamCycleTieringStage,
+  DreamCycleConsolidationStage,
+  DreamCycleTimelineSynthesisStage,
+  DreamCycleImportanceRescoreStage,
+  DreamCycleArchivalStage,
 } from './stages';
+import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
 
 const mockPrisma = {
   $queryRawUnsafe: jest.fn(),
@@ -65,15 +70,17 @@ const mockConfig = {
   }),
 };
 
-const mockDedupStage = {
-  run: jest
-    .fn()
-    .mockResolvedValue({ merged: 0, flagged: 0, scanned: 0, llmCalls: 0 }),
-};
-const mockStalenessStage = {
-  run: jest
-    .fn()
-    .mockResolvedValue({ archived: 0, scoresRefreshed: 0, candidates: 0 }),
+const mockPendingStage = {
+  run: jest.fn().mockResolvedValue({
+    processed: 0,
+    autoMerged: 0,
+    autoRejected: 0,
+    llmEvaluated: 0,
+    llmMerged: 0,
+    llmRejected: 0,
+    llmCalls: 0,
+    errors: 0,
+  }),
 };
 const mockPatternsStage = {
   run: jest
@@ -98,6 +105,22 @@ const mockDriftStage = {
   }),
 };
 
+const mockTieringStage = {
+  run: jest.fn().mockResolvedValue({
+    promoted: 0,
+    demoted: 0,
+    evaluated: 0,
+  }),
+};
+
+const mockConsolidationStage = {
+  run: jest.fn().mockResolvedValue({
+    consolidated: 0,
+    clusters: 0,
+    llmCalls: 0,
+  }),
+};
+
 describe('DreamCycleService', () => {
   let service: DreamCycleService;
 
@@ -105,16 +128,15 @@ describe('DreamCycleService', () => {
     jest.clearAllMocks();
 
     // Reset stage mocks to default success
-    mockDedupStage.run.mockResolvedValue({
-      merged: 0,
-      flagged: 0,
-      scanned: 0,
+    mockPendingStage.run.mockResolvedValue({
+      processed: 0,
+      autoMerged: 0,
+      autoRejected: 0,
+      llmEvaluated: 0,
+      llmMerged: 0,
+      llmRejected: 0,
       llmCalls: 0,
-    });
-    mockStalenessStage.run.mockResolvedValue({
-      archived: 0,
-      scoresRefreshed: 0,
-      candidates: 0,
+      errors: 0,
     });
     mockPatternsStage.run.mockResolvedValue({
       patternsCreated: 0,
@@ -126,21 +148,76 @@ describe('DreamCycleService', () => {
       snapshotsPersisted: 0,
       alerts: [],
     });
+    mockTieringStage.run.mockResolvedValue({
+      promoted: 0,
+      demoted: 0,
+      evaluated: 0,
+    });
+    mockConsolidationStage.run.mockResolvedValue({
+      consolidated: 0,
+      clusters: 0,
+      llmCalls: 0,
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DreamCycleService,
-        { provide: PrismaService, useValue: mockPrisma },
+        { provide: ServicePrismaService, useValue: mockPrisma },
         { provide: ConsolidationService, useValue: mockConsolidation },
         { provide: ImportanceScorerService, useValue: mockScorer },
         { provide: EmbeddingService, useValue: mockEmbedding },
         { provide: LLMService, useValue: mockLlm },
         { provide: ConfigService, useValue: mockConfig },
-        { provide: DreamCycleDedupStage, useValue: mockDedupStage },
-        { provide: DreamCycleStalenessStage, useValue: mockStalenessStage },
+        { provide: DreamCyclePendingStage, useValue: mockPendingStage },
         { provide: DreamCyclePatternsStage, useValue: mockPatternsStage },
         { provide: DreamCycleDriftStage, useValue: mockDriftStage },
         { provide: DreamCycleIdentityStage, useValue: mockIdentityStage },
+        { provide: DreamCycleTieringStage, useValue: mockTieringStage },
+        {
+          provide: DreamCycleConsolidationStage,
+          useValue: mockConsolidationStage,
+        },
+        {
+          provide: DreamCycleTimelineSynthesisStage,
+          useValue: {
+            run: jest.fn().mockResolvedValue({ synthesesCreated: 0 }),
+          },
+        },
+        {
+          provide: DreamCycleImportanceRescoreStage,
+          useValue: {
+            run: jest
+              .fn()
+              .mockResolvedValue({ rescored: 0, unchanged: 0, avgChange: 0 }),
+          },
+        },
+        {
+          provide: DreamCycleArchivalStage,
+          useValue: {
+            run: jest.fn().mockResolvedValue({
+              archived: 0,
+              skippedProtectedLayer: 0,
+              skippedRecentlyRetrieved: 0,
+              skippedFrequentlyUsed: 0,
+              byLayer: {},
+              byType: {},
+            }),
+          },
+        },
+        {
+          provide: DreamCycleRunTrackerService,
+          useValue: {
+            getTotalMemoryCount: jest.fn().mockResolvedValue(0),
+            startStage: jest.fn().mockResolvedValue({
+              id: 'stage-1',
+              runId: 'run-1',
+              stage: 'test',
+            }),
+            completeStage: jest.fn().mockResolvedValue(undefined),
+            abortStage: jest.fn().mockResolvedValue(undefined),
+            errorStage: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -306,8 +383,8 @@ describe('DreamCycleService', () => {
         userId: 'test-user',
       });
       expect(result.status).toBe('COMPLETED');
-      // Dedup not called since not in stages
-      expect(mockDedupStage.run).not.toHaveBeenCalled();
+      // Pending not called since not in stages
+      expect(mockPendingStage.run).not.toHaveBeenCalled();
     });
   });
 
@@ -323,8 +400,8 @@ describe('DreamCycleService', () => {
       mockPrisma.dreamCycleReport.create.mockResolvedValue({ id: 'report-1' });
       mockPrisma.consolidationJob.create.mockResolvedValue({ id: 'job-1' });
 
-      // Dedup stage fails
-      mockDedupStage.run.mockRejectedValueOnce(new Error('Dedup DB error'));
+      // Pending stage fails
+      mockPendingStage.run.mockRejectedValueOnce(new Error('Pending DB error'));
 
       // Report stage
       mockPrisma.memory.count.mockResolvedValue(10);
@@ -339,7 +416,7 @@ describe('DreamCycleService', () => {
       const result = await service.run({ userId: 'test-user' });
       expect(result.status).toBe('COMPLETED');
       expect(result.errors).toContainEqual(
-        expect.stringContaining('Dedup stage failed'),
+        expect.stringContaining('Pending stage failed'),
       );
     });
   });

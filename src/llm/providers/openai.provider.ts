@@ -95,7 +95,9 @@ export class OpenAIProvider implements LLMProvider {
     try {
       return JSON.parse(content) as T;
     } catch (e) {
-      throw new Error(`Failed to parse JSON response: ${content}`);
+      throw new Error(`Failed to parse JSON response: ${content}`, {
+        cause: e,
+      });
     }
   }
 

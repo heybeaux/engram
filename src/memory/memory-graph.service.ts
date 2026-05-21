@@ -30,10 +30,10 @@ export class MemoryGraphService {
       const currentUser = await this.prisma.user.findUnique({
         where: { id: userId },
       });
-      if (currentUser?.agentId) {
+      if (currentUser?.accountId) {
         const agentUser = await this.prisma.user.findFirst({
           where: {
-            agentId: currentUser.agentId,
+            accountId: currentUser.accountId,
             externalId: 'rook',
             deletedAt: null,
           },

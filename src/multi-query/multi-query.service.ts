@@ -341,7 +341,7 @@ export class MultiQueryService {
     // Use Promise.all for parallel embedding
     // The embedding service should handle batching internally if supported
     const embeddings = await Promise.all(
-      variants.map((v) => this.embedding.generate(v)),
+      variants.map((v) => this.embedding.generateForRecall(v)),
     );
     // Validate embeddings — filter out any that contain non-numeric values
     return embeddings.filter(

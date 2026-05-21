@@ -35,7 +35,15 @@ export class AwarenessSourceService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit(): Promise<void> {
-    await this.loadFromDb();
+    try {
+      await this.loadFromDb();
+    } catch (err) {
+      // Don't crash the entire server if DB isn't ready yet during startup.
+      // Awareness is non-critical — it can load lazily on first access.
+      this.logger.warn(
+        `Failed to load awareness state on startup (will retry on first access): ${err.message}`,
+      );
+    }
   }
 
   private async loadFromDb(): Promise<void> {

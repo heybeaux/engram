@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateMemoryPoolDto,
   GrantPoolAccessDto,
   AddMemoryToPoolDto,
+  BulkAddMemoriesToPoolDto,
 } from './dto/memory-pool.dto';
 
 @Injectable()
@@ -75,27 +80,63 @@ export class MemoryPoolService {
 
   async grantAccess(poolId: string, dto: GrantPoolAccessDto) {
     await this.getById(poolId);
-    return this.prisma.poolGrant.upsert({
-      where: {
-        poolId_agentSessionId: { poolId, agentSessionId: dto.agentSessionId },
-      },
-      update: {
-        permission: (dto.permission ?? 'READ') as any,
-        grantedBy: dto.grantedBy,
-      },
-      create: {
-        poolId,
-        agentSessionId: dto.agentSessionId,
-        permission: (dto.permission ?? 'READ') as any,
-        grantedBy: dto.grantedBy,
-      },
-    });
+
+    if (!dto.agentSessionId && !dto.agentId) {
+      throw new BadRequestException('Provide either agentSessionId or agentId');
+    }
+    if (dto.agentSessionId && dto.agentId) {
+      throw new BadRequestException(
+        'Provide only one of agentSessionId or agentId',
+      );
+    }
+
+    if (dto.agentSessionId) {
+      return this.prisma.poolGrant.upsert({
+        where: {
+          poolId_agentSessionId: { poolId, agentSessionId: dto.agentSessionId },
+        },
+        update: {
+          permission: (dto.permission ?? 'READ') as any,
+          grantedBy: dto.grantedBy,
+        },
+        create: {
+          poolId,
+          agentSessionId: dto.agentSessionId,
+          permission: (dto.permission ?? 'READ') as any,
+          grantedBy: dto.grantedBy,
+        },
+      });
+    } else {
+      return this.prisma.poolGrant.upsert({
+        where: {
+          poolId_agentId: { poolId, agentId: dto.agentId! },
+        },
+        update: {
+          permission: (dto.permission ?? 'READ') as any,
+          grantedBy: dto.grantedBy,
+        },
+        create: {
+          poolId,
+          agentId: dto.agentId!,
+          permission: (dto.permission ?? 'READ') as any,
+          grantedBy: dto.grantedBy,
+        },
+      });
+    }
   }
 
   async revokeAccess(poolId: string, agentSessionId: string) {
     return this.prisma.poolGrant.delete({
       where: {
         poolId_agentSessionId: { poolId, agentSessionId },
+      },
+    });
+  }
+
+  async revokeAgentAccess(poolId: string, agentId: string) {
+    return this.prisma.poolGrant.delete({
+      where: {
+        poolId_agentId: { poolId, agentId },
       },
     });
   }
@@ -123,13 +164,14 @@ export class MemoryPoolService {
    * Resolve all pool IDs accessible to a given agent session.
    * Rules:
    * 1. All GLOBAL pools for this user
-   * 2. All SHARED pools where this session has a PoolGrant
+   * 2. All SHARED pools where this session has a PoolGrant (cross-user sharing supported)
    * 3. All PRIVATE pools created by this session
-   * 4. If session has a parentKey, include parent's GLOBAL pools
+   * 4. All pools granted to this agent identity (persistent, survives session rotation)
    */
   async getAccessiblePoolIds(
     sessionKey: string,
     userId: string,
+    agentId?: string,
   ): Promise<string[]> {
     // 1. Global pools
     const globalPools = await this.prisma.memoryPool.findMany({
@@ -143,16 +185,14 @@ export class MemoryPoolService {
       include: { poolGrants: { select: { poolId: true } } },
     });
 
-    // Shared pools via grants
+    // Shared pools via session grants — grant is the authorization, no userId filter
     const grantedPoolIds = agentSession?.poolGrants.map((g) => g.poolId) ?? [];
 
-    // Filter to only SHARED pools for this user
     const sharedPools =
       grantedPoolIds.length > 0
         ? await this.prisma.memoryPool.findMany({
             where: {
               id: { in: grantedPoolIds },
-              userId,
               visibility: 'SHARED',
               archivedAt: null,
             },
@@ -171,21 +211,46 @@ export class MemoryPoolService {
       select: { id: true },
     });
 
-    // 4. Parent's global pools (if sub-agent)
-    let parentGlobalPools: { id: string }[] = [];
-    if (agentSession?.parentKey) {
-      // Parent's global pools are already included in step 1 (same user),
-      // but this handles cross-user scenarios if ever needed
-      parentGlobalPools = [];
+    // 4. Agent-level grants (persistent across sessions)
+    let agentGrantedPoolIds: string[] = [];
+    if (agentId) {
+      const agentGrants = await this.prisma.poolGrant.findMany({
+        where: { agentId },
+        select: { poolId: true },
+      });
+      agentGrantedPoolIds = agentGrants.map((g) => g.poolId);
     }
 
     const allIds = new Set([
       ...globalPools.map((p) => p.id),
       ...sharedPools.map((p) => p.id),
       ...privatePools.map((p) => p.id),
-      ...parentGlobalPools.map((p) => p.id),
+      ...agentGrantedPoolIds,
     ]);
 
     return Array.from(allIds);
+  }
+
+  async addMemoriesBulk(
+    poolId: string,
+    dto: BulkAddMemoriesToPoolDto,
+  ): Promise<{ added: number; skipped: number }> {
+    await this.getById(poolId);
+
+    const data = dto.memoryIds.map((memoryId) => ({
+      memoryId,
+      poolId,
+      addedBy: dto.addedBy,
+    }));
+
+    const result = await this.prisma.memoryPoolMembership.createMany({
+      data,
+      skipDuplicates: true,
+    });
+
+    return {
+      added: result.count,
+      skipped: dto.memoryIds.length - result.count,
+    };
   }
 }

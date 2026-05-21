@@ -99,6 +99,47 @@ describe('HEY-176: Dream Cycle Identity Consolidation Stage', () => {
       expect(mockPrisma.memory.updateMany).toHaveBeenCalled();
     });
 
+    it('should include userId in updateMany when marking memories as processed', async () => {
+      const memories = Array.from({ length: 10 }, (_, i) => ({
+        id: `mem-${i}`,
+        raw: `Identity memory ${i}`,
+        layer: 'IDENTITY',
+        memoryType: i < 3 ? 'PREFERENCE' : 'FACT',
+        subjectType: 'USER',
+        agentId: null,
+        source: 'EXPLICIT_STATEMENT',
+        effectiveScore: 0.8,
+        createdAt: new Date(),
+        metadata: null,
+      }));
+
+      mockPrisma.memory.findMany.mockResolvedValue(memories);
+      mockPrisma.identitySnapshot.findFirst.mockResolvedValue(null);
+      mockPrisma.identitySnapshot.create.mockResolvedValue({
+        id: 'snapshot-1',
+      });
+
+      mockLlm.chat.mockResolvedValue({
+        content: JSON.stringify({
+          capabilities: [
+            { name: 'TypeScript', confidence: 0.9, lastSeen: '2025-01-15' },
+          ],
+          preferences: { style: 'concise' },
+          trustScores: { accuracy: 0.85 },
+          behavioralTraits: [],
+        }),
+      });
+
+      await stage.run('user-1', false, 5, 'report-1');
+
+      // updateMany must scope by userId to prevent cross-account leakage
+      expect(mockPrisma.memory.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: 'user-1' }),
+        }),
+      );
+    });
+
     it('should not create snapshot in dry run mode', async () => {
       const memories = Array.from({ length: 10 }, (_, i) => ({
         id: `mem-${i}`,

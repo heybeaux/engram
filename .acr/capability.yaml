@@ -1,0 +1,47 @@
+name: engram
+type: capability
+version: 1.0.0
+description: "Memory faculty for AI agents — type-aware, time-aware, safety-critical. Open source. Cloud and local modes."
+
+provides:
+  - memory-faculty
+  - persistent-memory
+  - embedding-recall
+
+requires:
+  tools: []
+  capabilities: []
+  context: []
+
+budget:
+  index: 20
+  summary: 200
+  standard: 1250
+  deep: 2500
+
+activation:
+  triggers:
+    - type: pattern
+      match: "(engram|openengram|memory faculty|recall|/v1/memories|engram-embed|/v1/sessions/index)"
+  trigger_logic: OR
+  co_activates: [sonder]
+  conflicts: []
+
+permissions:
+  data:
+    engram_metadata: read-only
+
+behavioral:
+  core: |
+    When discussing or working on Engram:
+    1. Repo: https://github.com/heybeaux/engram. Default branch is `staging` (not main — they're diverged, see standard.md).
+    2. Local dev runs from /Users/beauxwalton/projects/engram (NOT ~/engram — old checkout).
+    3. Three local instances: 3002 com.engram.api (default), 3101 com.engram.endeavour, 3005 com.engram.code.
+    4. Open PRs against `staging` until main↔staging is reconciled.
+    5. Cloud prod is Railway service `proud-purpose` in project `open-engram`.
+  overlays: []
+
+verification:
+  checklist:
+    - "Used /Users/beauxwalton/projects/engram, not ~/engram"
+    - "PR base was `staging` (until reconciled)"

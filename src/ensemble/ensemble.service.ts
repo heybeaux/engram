@@ -16,6 +16,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
+import { rlsContext } from '../prisma/rls-context';
 import { EmbeddingService } from '../embedding/embedding.service';
 import { CloudEnsembleService } from '../embedding/cloud-ensemble.service';
 import { CohereEmbeddingProvider } from '../embedding/providers';
@@ -43,6 +44,7 @@ import {
   CoverageStats,
   MemoryEmbeddingStatus,
   ABTestResult,
+  DEFAULT_ACTIVE_MODELS,
 } from './ensemble.types';
 
 @Injectable()
@@ -63,7 +65,7 @@ export class EnsembleService implements OnModuleInit {
     // Models can be configured via ENSEMBLE_MODELS env var (comma-separated)
     const modelsEnv = this.configService.get<string>(
       'ENSEMBLE_MODELS',
-      'bge-base,minilm,nomic',
+      DEFAULT_ACTIVE_MODELS.join(','),
     );
     const models = modelsEnv.split(',').map((m) => m.trim()) as ModelId[];
 
@@ -132,35 +134,37 @@ export class EnsembleService implements OnModuleInit {
   async handleMemoryCreated(event: MemoryCreatedEvent): Promise<void> {
     if (!this.config.enabled) return;
 
-    try {
-      // Fetch the full memory content
-      const memory = await this.prisma.memory.findUnique({
-        where: { id: event.memoryId },
-        select: { id: true, raw: true },
-      });
+    // Escape any inherited AsyncLocalStorage tx from the emitter's request.
+    // Async listeners outlive the request transaction; reusing tx → "Transaction already closed".
+    await rlsContext.run(undefined as any, async () => {
+      try {
+        const memory = await this.prisma.memory.findUnique({
+          where: { id: event.memoryId },
+          select: { id: true, raw: true },
+        });
 
-      if (!memory) {
-        this.logger.warn(
-          `Memory ${event.memoryId} not found for ensemble embedding`,
+        if (!memory) {
+          this.logger.warn(
+            `Memory ${event.memoryId} not found for ensemble embedding`,
+          );
+          return;
+        }
+
+        await this.upsert({
+          memoryId: memory.id,
+          content: memory.raw,
+          userId: event.userId,
+        });
+
+        this.logger.debug(
+          `Ensemble embeddings created for memory ${event.memoryId}`,
         );
-        return;
+      } catch (err) {
+        this.logger.error(
+          `Failed to create ensemble embeddings for ${event.memoryId}: ${err}`,
+        );
       }
-
-      await this.upsert({
-        memoryId: memory.id,
-        content: memory.raw,
-        userId: event.userId,
-      });
-
-      this.logger.debug(
-        `Ensemble embeddings created for memory ${event.memoryId}`,
-      );
-    } catch (err) {
-      // Non-fatal — memory exists with single embedding, ensemble can be backfilled
-      this.logger.error(
-        `Failed to create ensemble embeddings for ${event.memoryId}: ${err}`,
-      );
-    }
+    });
   }
 
   /**
@@ -192,9 +196,9 @@ export class EnsembleService implements OnModuleInit {
       // User → Agent → Account
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { agent: { select: { account: { select: { plan: true } } } } },
+        select: { account: { select: { plan: true } } },
       });
-      const account = user?.agent?.account;
+      const account = user?.account;
       const plan: Plan = account?.plan ?? 'FREE';
       return PLAN_LIMITS[plan].ensembleModels;
     } catch (err) {
@@ -203,6 +207,14 @@ export class EnsembleService implements OnModuleInit {
       );
       return PLAN_LIMITS.FREE.ensembleModels;
     }
+  }
+
+  /**
+   * Get the model IDs that EnsembleService has configured (from env/cloud init).
+   * Used by nightly-reembed to avoid querying DB defaults that don't match cloud providers.
+   */
+  getConfiguredModelIds(): ModelId[] {
+    return [...this.config.models];
   }
 
   /**

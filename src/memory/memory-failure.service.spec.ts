@@ -12,6 +12,7 @@ const mockPrisma = {
 
 const mockEmbedding = {
   generate: jest.fn(),
+  generateForRecall: jest.fn(),
 };
 
 const MOCK_EMBEDDING = Array.from({ length: 1536 }, (_, i) => i * 0.001);
@@ -32,6 +33,7 @@ describe('MemoryFailureService', () => {
 
     service = module.get<MemoryFailureService>(MemoryFailureService);
     mockEmbedding.generate.mockResolvedValue(MOCK_EMBEDDING);
+    mockEmbedding.generateForRecall.mockResolvedValue(MOCK_EMBEDDING);
   });
 
   // ===================== findFailures =====================
@@ -77,7 +79,9 @@ describe('MemoryFailureService', () => {
       const result = await service.findFailures('user-1', baseDto);
 
       expect(result.failures).toHaveLength(1);
-      expect(mockEmbedding.generate).toHaveBeenCalledWith('deploy the API');
+      expect(mockEmbedding.generateForRecall).toHaveBeenCalledWith(
+        'deploy the API',
+      );
     });
 
     it('should work with no userId (account-wide search)', async () => {
@@ -105,8 +109,8 @@ describe('MemoryFailureService', () => {
       // Default limit 10 and minSimilarity 0.7 should be in query params
       const callArgs = mockPrisma.$queryRawUnsafe.mock.calls[0];
       const params = callArgs.slice(1);
-      expect(params).toContain(10);   // limit
-      expect(params).toContain(0.7);  // minSimilarity
+      expect(params).toContain(10); // limit
+      expect(params).toContain(0.7); // minSimilarity
     });
 
     it('should respect custom limit and minSimilarity', async () => {
@@ -151,26 +155,32 @@ describe('MemoryFailureService', () => {
     it('should return empty failures when no rows match', async () => {
       mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
 
-      const result = await service.findFailures('user-1', { goal: 'no failures here' });
+      const result = await service.findFailures('user-1', {
+        goal: 'no failures here',
+      });
 
       expect(result.failures).toEqual([]);
       expect(result.total).toBe(0);
     });
 
     it('should propagate embedding errors', async () => {
-      mockEmbedding.generate.mockRejectedValue(new Error('Embedding service unavailable'));
+      mockEmbedding.generateForRecall.mockRejectedValue(
+        new Error('Embedding service unavailable'),
+      );
 
-      await expect(
-        service.findFailures('user-1', baseDto),
-      ).rejects.toThrow('Embedding service unavailable');
+      await expect(service.findFailures('user-1', baseDto)).rejects.toThrow(
+        'Embedding service unavailable',
+      );
     });
 
     it('should propagate database errors', async () => {
-      mockPrisma.$queryRawUnsafe.mockRejectedValue(new Error('DB connection error'));
+      mockPrisma.$queryRawUnsafe.mockRejectedValue(
+        new Error('DB connection error'),
+      );
 
-      await expect(
-        service.findFailures('user-1', baseDto),
-      ).rejects.toThrow('DB connection error');
+      await expect(service.findFailures('user-1', baseDto)).rejects.toThrow(
+        'DB connection error',
+      );
     });
 
     it('should include latencyMs in result', async () => {
@@ -208,7 +218,7 @@ describe('MemoryFailureService', () => {
       mockPrisma.memoryChainLink.findMany.mockResolvedValue([]);
 
       const memories = [baseMemory('mem-1'), baseMemory('mem-2')];
-      const result = await service.attachChains(memories as any) as any[];
+      const result = (await service.attachChains(memories as any)) as any[];
 
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual(memories[0]);
@@ -237,10 +247,10 @@ describe('MemoryFailureService', () => {
       ]);
 
       const memories = [baseMemory('mem-1')];
-      const result = await service.attachChains(memories as any) as any[];
+      const result = (await service.attachChains(memories as any)) as any[];
 
-      expect((result[0] as any).chainedMemories).toHaveLength(1);
-      expect((result[0] as any).chainedMemories[0]).toEqual({
+      expect(result[0].chainedMemories).toHaveLength(1);
+      expect(result[0].chainedMemories[0]).toEqual({
         memory: linkedMemory,
         linkType: 'caused_by',
         confidence: 0.9,
@@ -262,10 +272,10 @@ describe('MemoryFailureService', () => {
       ]);
 
       const memories = [baseMemory('mem-1')];
-      const result = await service.attachChains(memories as any) as any[];
+      const result = (await service.attachChains(memories as any)) as any[];
 
-      expect((result[0] as any).chainedMemories).toHaveLength(1);
-      expect((result[0] as any).chainedMemories[0]).toEqual({
+      expect(result[0].chainedMemories).toHaveLength(1);
+      expect(result[0].chainedMemories[0]).toEqual({
         memory: sourceMemory,
         linkType: 'led_to',
         confidence: 0.75,
@@ -286,17 +296,21 @@ describe('MemoryFailureService', () => {
       ]);
 
       const memories = [baseMemory('mem-1'), baseMemory('mem-2')];
-      const result = await service.attachChains(memories as any) as any[];
+      const result = (await service.attachChains(memories as any)) as any[];
 
-      expect((result[0] as any).chainedMemories).toHaveLength(1);
-      expect((result[1] as any).chainedMemories).toEqual([]);
+      expect(result[0].chainedMemories).toHaveLength(1);
+      expect(result[1].chainedMemories).toEqual([]);
     });
 
     it('should query with the correct memory IDs', async () => {
       mockPrisma.memoryChainLink.findMany.mockResolvedValue([]);
 
-      const memories = [baseMemory('mem-a'), baseMemory('mem-b'), baseMemory('mem-c')];
-      await service.attachChains(memories as any) as any[];
+      const memories = [
+        baseMemory('mem-a'),
+        baseMemory('mem-b'),
+        baseMemory('mem-c'),
+      ];
+      (await service.attachChains(memories as any)) as any[];
 
       expect(mockPrisma.memoryChainLink.findMany).toHaveBeenCalledWith({
         where: {
@@ -313,7 +327,7 @@ describe('MemoryFailureService', () => {
       mockPrisma.memoryChainLink.findMany.mockResolvedValue([]);
 
       const memories = [baseMemory('mem-1')];
-      const result = await service.attachChains(memories as any, 5) as any[];
+      const result = (await service.attachChains(memories as any, 5)) as any[];
 
       expect(result).toHaveLength(1);
     });

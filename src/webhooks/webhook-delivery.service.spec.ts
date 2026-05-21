@@ -5,6 +5,18 @@ import { WebhookService } from './webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MemoryCreatedEvent } from '../events/event-types';
 
+// Mock URL validator to avoid real DNS lookups in tests
+jest.mock('./url-validator', () => ({
+  validateWebhookUrl: jest.fn().mockResolvedValue(undefined),
+  validateWebhookUrlSync: jest.fn(),
+  WebhookUrlValidationError: class WebhookUrlValidationError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'WebhookUrlValidationError';
+    }
+  },
+}));
+
 // Mock fetch globally
 const mockFetch = jest.fn();
 (global as any).fetch = mockFetch;

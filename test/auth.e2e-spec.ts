@@ -210,7 +210,7 @@ describe('Auth Flow (e2e)', () => {
         include: { user: true },
       });
       expect(memory).not.toBeNull();
-      expect(memory!.user.agentId).toBe(agentAId);
+      expect(memory!.user.accountId).toBe(accountId);
       expect(memory!.user.externalId).toBe(userIdA);
     });
 
@@ -224,7 +224,7 @@ describe('Auth Flow (e2e)', () => {
         .expect(201);
 
       const user = await prisma.user.findFirst({
-        where: { externalId: newUserId, agentId: agentAId },
+        where: { externalId: newUserId, accountId },
       });
       expect(user).not.toBeNull();
     });
@@ -237,7 +237,7 @@ describe('Auth Flow (e2e)', () => {
         .expect(201);
 
       const user = await prisma.user.findFirst({
-        where: { externalId: 'default', agentId: agentAId },
+        where: { externalId: 'default', accountId },
       });
       expect(user).not.toBeNull();
     });
@@ -291,7 +291,7 @@ describe('Auth Flow (e2e)', () => {
         where: { id: res.body.id },
         include: { user: true },
       });
-      expect(memory!.user.agentId).toBe(agentAId);
+      expect(memory!.user.accountId).toBe(accountId);
     });
   });
 

@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  ArrayMinSize,
+  ArrayMaxSize,
+} from 'class-validator';
 import { PoolVisibility, PoolPermission } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -24,7 +31,12 @@ export class CreateMemoryPoolDto {
 
 export class GrantPoolAccessDto {
   @IsString()
-  agentSessionId: string; // AgentSession.id
+  @IsOptional()
+  agentSessionId?: string; // AgentSession.id
+
+  @IsString()
+  @IsOptional()
+  agentId?: string; // Agent.id
 
   @ApiPropertyOptional({ enum: ['READ', 'WRITE', 'ADMIN'], type: String })
   @IsEnum(PoolPermission)
@@ -38,6 +50,17 @@ export class GrantPoolAccessDto {
 export class AddMemoryToPoolDto {
   @IsString()
   memoryId: string;
+
+  @IsString()
+  addedBy: string;
+}
+
+export class BulkAddMemoriesToPoolDto {
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  memoryIds: string[];
 
   @IsString()
   addedBy: string;

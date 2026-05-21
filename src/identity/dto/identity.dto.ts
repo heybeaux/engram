@@ -203,3 +203,19 @@ export class IdentityProfileResponseDto {
   trustSignals?: TrustSignalsSummaryDto;
   recentPatterns?: BehavioralPatternDto[];
 }
+
+// ── Active Projects Query ─────────────────────────────────────────────
+
+export class ActiveProjectDto {
+  project: string;
+  memoryCount: number;
+  latestActivity: Date;
+  earliestActivity: Date;
+  memoryTypes: string[];
+  agents: string[];
+}
+
+export class ActiveProjectsResponseDto {
+  projects: ActiveProjectDto[];
+  totalProjects: number;
+}

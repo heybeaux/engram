@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { generateContentHash } from '../common/content-hash.util';
 import { SyncPushDto, SyncPushResponse } from './dto/sync-push.dto';
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 10; // Reduced from 50 — Railway cloud has 100KB body limit; 10 memories+embeddings stays ~20KB
 const BATCH_DELAY_MS = 200;
 const MAX_SYNC_DURATION_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -99,7 +99,12 @@ export class CloudSyncPushService {
       }
 
       try {
-        const result = await this.syncBatchToCloud(batch, apiKey, instanceId);
+        const result = await this.syncBatchToCloud(
+          batch,
+          apiKey,
+          instanceId,
+          db,
+        );
         syncedCount += result.synced;
         newCount += result.newCount;
         updatedCount += result.updatedCount;
@@ -141,6 +146,7 @@ export class CloudSyncPushService {
     memories: any[],
     apiKey: string,
     instanceId: string | null,
+    db?: PrismaClient | PrismaService,
   ): Promise<{
     synced: number;
     errors: number;
@@ -222,7 +228,9 @@ export class CloudSyncPushService {
         item.status === 'skipped'
       ) {
         try {
-          await this.prisma.memory.update({
+          // Use the passed-in db client (not this.prisma) to avoid
+          // stale RLS transaction proxy when running in background
+          await (db ?? this.prisma).memory.update({
             where: { id: item.sourceMemoryId },
             data: { cloudSyncedAt: new Date() },
           });

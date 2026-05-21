@@ -1,0 +1,267 @@
+{
+  "timestamp": "2026-03-04T03:40:53.628Z",
+  "engramUrl": "http://localhost:3002",
+  "userId": "beaux",
+  "totalScenarios": 22,
+  "passed": 16,
+  "failed": 6,
+  "recallPercent": 72.72727272727273,
+  "results": [
+    {
+      "scenario": "Should recall spouse name",
+      "query": "What's Beaux's wife's name?",
+      "passed": true,
+      "matchedContent": [
+        "Deanna"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux's wife is named Deanna.",
+      "duration": 91
+    },
+    {
+      "scenario": "Should recall Friday deploy rule",
+      "query": "deployment practices",
+      "passed": false,
+      "matchedContent": [],
+      "missedContent": [
+        "never deploys on Fridays"
+      ],
+      "topResultPreview": "I should consider developing a comprehensive CI/CD skill to improve deployment processes.",
+      "duration": 44
+    },
+    {
+      "scenario": "Should recall martial arts style and instructor",
+      "query": "martial arts training",
+      "passed": true,
+      "matchedContent": [
+        "Wing Chun",
+        "Sifu Liu Ping"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux trained Shaolin Kung Fu in China for 5 months (late Dec 2012 - May 2013). His Tumblr blog about it: beaux-beaux.tu",
+      "duration": 47
+    },
+    {
+      "scenario": "Should recall children's names",
+      "query": "Beaux's children",
+      "passed": true,
+      "matchedContent": [
+        "Stella",
+        "Odin"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux has kids.",
+      "duration": 45
+    },
+    {
+      "scenario": "Should recall coffee habits",
+      "query": "coffee preferences",
+      "passed": false,
+      "matchedContent": [
+        "latte"
+      ],
+      "missedContent": [
+        "drip"
+      ],
+      "topResultPreview": "Engram 'coffee problem' insight: The failure to surface Beaux's coffee preference wasn't a scoring problem — it was a cl",
+      "duration": 40
+    },
+    {
+      "scenario": "Should recall white over dark chocolate preference",
+      "query": "chocolate preference",
+      "passed": true,
+      "matchedContent": [
+        "white"
+      ],
+      "missedContent": [],
+      "topResultPreview": "The classification problem identified in the IDENTITY memory regarding Beaux's coffee preference reflects a broader issu",
+      "duration": 249
+    },
+    {
+      "scenario": "Should recall military branch and corps",
+      "query": "military service",
+      "passed": false,
+      "matchedContent": [],
+      "missedContent": [
+        "Australian Army",
+        "RAEME"
+      ],
+      "topResultPreview": "GEN-76: Replaced hardcoded billing ($399/month, March 02 2026) on team page with dynamic Stripe subscription data. Exten",
+      "duration": 264
+    },
+    {
+      "scenario": "Should recall ADHD medication",
+      "query": "ADHD medication",
+      "passed": false,
+      "matchedContent": [],
+      "missedContent": [
+        "Vyvanse"
+      ],
+      "topResultPreview": "Beaux on ADHD and focus: 'With ADHD it's like the anti-Kaizen. Instead of minor improvements each time, ADHD introduces ",
+      "duration": 273
+    },
+    {
+      "scenario": "Should recall thyroid medication",
+      "query": "thyroid medication",
+      "passed": false,
+      "matchedContent": [],
+      "missedContent": [
+        "Synthroid"
+      ],
+      "topResultPreview": "WhaleHawk is a sales intelligence platform for healthcare. AI-powered research tools that help medical device sales team",
+      "duration": 278
+    },
+    {
+      "scenario": "Should recall WhaleHawk tech stack",
+      "query": "WhaleHawk stack",
+      "passed": true,
+      "matchedContent": [
+        "NestJS",
+        "Prisma",
+        "PostgreSQL",
+        "Pinecone"
+      ],
+      "missedContent": [],
+      "topResultPreview": "WhaleHawk is a sales intelligence platform for healthcare. AI-powered research tools that help medical device sales team",
+      "duration": 272
+    },
+    {
+      "scenario": "Should recall Engram runs on port 3001",
+      "query": "Engram port",
+      "passed": true,
+      "matchedContent": [
+        "3001"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Engram is currently running on port 3001.",
+      "duration": 280
+    },
+    {
+      "scenario": "Should recall engram-embed runs on port 8080",
+      "query": "engram-embed port",
+      "passed": true,
+      "matchedContent": [
+        "8080"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Engram is running on port 3001.",
+      "duration": 273
+    },
+    {
+      "scenario": "Should recall UltraEdge tech stack",
+      "query": "UltraEdge stack",
+      "passed": true,
+      "matchedContent": [
+        "React Native",
+        "Expo",
+        "Supabase"
+      ],
+      "missedContent": [],
+      "topResultPreview": "UltraEdge is a race-day focused mobile app for endurance event logistics. Tech stack: React Native + Expo + Supabase. Re",
+      "duration": 274
+    },
+    {
+      "scenario": "Should recall birthday date",
+      "query": "Beaux's birthday",
+      "passed": false,
+      "matchedContent": [],
+      "missedContent": [
+        "August 8",
+        "1985"
+      ],
+      "topResultPreview": "Beaux has kids.",
+      "duration": 272
+    },
+    {
+      "scenario": "Should recall location",
+      "query": "Beaux's location",
+      "passed": true,
+      "matchedContent": [
+        "Powell River"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux's external ID is 'Beaux'.",
+      "duration": 275
+    },
+    {
+      "scenario": "Should recall GC co-founders",
+      "query": "Generosity Catalyst co-founders",
+      "passed": true,
+      "matchedContent": [
+        "Trevan",
+        "Matt"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux is a co-founder of Generosity Catalyst.",
+      "duration": 275
+    },
+    {
+      "scenario": "Should recall SOC 2 target date",
+      "query": "SOC 2 compliance target",
+      "passed": true,
+      "matchedContent": [
+        "February 2026"
+      ],
+      "missedContent": [],
+      "topResultPreview": "WhaleHawk is pursuing SOC 2 Type II compliance with a target of February 2026. They are building a Salesforce AppExchang",
+      "duration": 276
+    },
+    {
+      "scenario": "Should recall preferred TTS voice",
+      "query": "TTS voice preference",
+      "passed": true,
+      "matchedContent": [
+        "en-GB-RyanNeural"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux&#x27;s preferred TTS voice is en-GB-RyanNeural (British Ryan).",
+      "duration": 277
+    },
+    {
+      "scenario": "Should recall prisma migrate dev warning",
+      "query": "prisma migrate dev danger",
+      "passed": true,
+      "matchedContent": [
+        "resets",
+        "database"
+      ],
+      "missedContent": [],
+      "topResultPreview": "CRITICAL LESSON: Never run prisma migrate dev on a database with real data. It RESETS the database, dropping all tables ",
+      "duration": 280
+    },
+    {
+      "scenario": "Should recall dog name and breed",
+      "query": "Beaux's dog",
+      "passed": true,
+      "matchedContent": [
+        "Kali",
+        "husky"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux has kids.",
+      "duration": 270
+    },
+    {
+      "scenario": "Should recall martial arts academy city",
+      "query": "Wing Chun academy location",
+      "passed": true,
+      "matchedContent": [
+        "Yantai"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux studied Wing Chun and Baji fist at a martial arts academy in Yantai, in the Muping district of China. His Wing Chu",
+      "duration": 272
+    },
+    {
+      "scenario": "Should recall learning philosophy",
+      "query": "Beaux's skill acquisition philosophy",
+      "passed": true,
+      "matchedContent": [
+        "practice the basics"
+      ],
+      "missedContent": [],
+      "topResultPreview": "Beaux's philosophy on skill acquisition: 'Always watch the masters and practice the basics. Do the thing. Do the thing a",
+      "duration": 277
+    }
+  ]
+}

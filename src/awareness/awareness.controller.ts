@@ -18,6 +18,7 @@ import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { AwarenessConfig } from './config/awareness.config';
 import { InsightFeedbackDto } from './dto/insight-feedback.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { Agent } from '../common/decorators/user-id.decorator';
 import { NotificationConfigDto } from './dto/notification-config.dto';
 
 /**
@@ -37,14 +38,31 @@ export class AwarenessController {
   @Get('insights')
   @HttpCode(200)
   async listInsights(
+    @Agent() agent: any,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     const take = limit ? Math.min(parseInt(limit, 10), 100) : 50;
     const skip = offset ? parseInt(offset, 10) : 0;
 
+    // Scope insights to the requesting account when we have one. RLS still
+    // gates by account at the DB layer; this explicit filter just makes the
+    // intent clear. When no agent context is available (e.g. instance-key-only
+    // auth path), fall back to RLS-only filtering instead of 500ing.
+    const where: any = { layer: 'INSIGHT', deletedAt: null };
+    if (agent?.accountId) {
+      const accountUsers = await this.prisma.user.findMany({
+        where: { accountId: agent.accountId, deletedAt: null },
+        select: { id: true },
+      });
+      const accountUserIds = accountUsers.map((u) => u.id);
+      if (accountUserIds.length > 0) {
+        where.userId = { in: accountUserIds };
+      }
+    }
+
     const memories = await this.prisma.memory.findMany({
-      where: { layer: 'INSIGHT', deletedAt: null },
+      where,
       orderBy: { createdAt: 'desc' },
       take,
       skip,
@@ -93,7 +111,7 @@ export class AwarenessController {
     };
   }
 
-  @Get('awareness/status')
+  @Get('status')
   @HttpCode(200)
   getStatus() {
     return {
@@ -110,7 +128,7 @@ export class AwarenessController {
     };
   }
 
-  @Post('awareness/cycle')
+  @Post('cycle')
   @HttpCode(200)
   async triggerCycle(@Query('accountId') accountId?: string) {
     if (!this.wakingCycle) {

@@ -1,4 +1,15 @@
-import { Injectable, Optional, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import {
+  Injectable,
+  Optional,
+  Logger,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  TraceTimelineDto,
+  TraceTimelineResponse,
+  TimelineEntry,
+} from './dto/trace-timeline.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
 import { TemporalParserService } from './temporal/temporal-parser.service';
@@ -6,6 +17,7 @@ import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import { MultiQueryService } from '../multi-query/multi-query.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
+import { QueryLogService } from '../memory-access-log/query-log.service';
 import {
   AnticipatoryService,
   AnticipatoryRunResult,
@@ -21,6 +33,10 @@ import {
   QueryResult,
   ContextResult,
 } from './memory.types';
+import { RecallWeightService } from './recall-weight.service';
+import { MemoryQueryRankingService } from './memory-query-ranking.service';
+import { MemoryQueryContextService } from './memory-query-context.service';
+import { MemoryFailureService } from './memory-failure.service';
 
 @Injectable()
 export class MemoryQueryService {
@@ -29,31 +45,53 @@ export class MemoryQueryService {
     private prisma: PrismaService,
     private embedding: EmbeddingService,
     private temporalParser: TemporalParserService,
+    private recallWeightService: RecallWeightService,
+    private rankingService: MemoryQueryRankingService,
+    private contextService: MemoryQueryContextService,
     @Optional() private multiQueryService?: MultiQueryService,
     @Optional() private memoryPoolService?: MemoryPoolService,
     @Optional() private memoryAccessLogService?: MemoryAccessLogService,
     @Optional() private anticipatoryService?: AnticipatoryService,
+    @Optional() private queryLogService?: QueryLogService,
+    @Optional() private memoryFailureService?: MemoryFailureService,
   ) {}
 
   /**
    * Semantic search for memories
    */
   async recall(
-    userId: string | string[],
+    userId: string | string[] | null,
     dto: QueryMemoryDto,
   ): Promise<QueryResult> {
     const startTime = Date.now();
-    // Normalize userId for Prisma where clauses
-    const userIdFilter = Array.isArray(userId) ? { in: userId } : userId;
+
+    // ENG-48: Reject timeline type until Phase 1 timeline table lands
+    if (dto.type === 'timeline') {
+      throw new BadRequestException(
+        'type="timeline" is not yet supported. Timeline queries will be available in a future release.',
+      );
+    }
+
+    // ENG-109: Normalize userId for Prisma where clauses.
+    // If null (no X-AM-User-ID header), omit filter to query all account users.
+    const userIdFilter =
+      userId === null
+        ? undefined
+        : Array.isArray(userId)
+          ? { in: userId }
+          : userId;
 
     // v0.9: Use explicit poolIds if provided, otherwise resolve from agentSessionKey
     let poolIds: string[] | undefined = dto.poolIds;
-    const singleUserId = Array.isArray(userId) ? userId[0] : userId;
+    const singleUserId = Array.isArray(userId)
+      ? userId[0]
+      : (userId ?? undefined);
     if (!poolIds && dto.agentSessionKey && this.memoryPoolService) {
       try {
         poolIds = await this.memoryPoolService.getAccessiblePoolIds(
           dto.agentSessionKey,
-          singleUserId,
+          singleUserId ?? 'default',
+          dto.agentId,
         );
       } catch (err) {
         this.logger.warn(
@@ -84,28 +122,55 @@ export class MemoryQueryService {
       });
     }
 
-    // 2. Generate query embedding
-    const queryEmbedding = await this.embedding.generate(searchQuery);
+    // 2. Generate query embedding (priority path — skips batch queue)
+    const queryEmbedding = await this.embedding.generateForRecall(searchQuery);
 
     const subjectTypeFilter = this.buildSubjectTypeFilter(dto);
     const visibilityFilter = this.buildVisibilityFilter(dto);
+    const metadataFilter = this.buildMetadataFilter(dto);
     const limit = dto.limit ?? 10;
+
+    // ENG-42: Extract filter params for vector search
+    // ENG-48: Merge arc tag into filterTags
+    let filterTags = dto.filter?.tags ? [...dto.filter.tags] : undefined;
+    if (dto.arc) {
+      filterTags = filterTags ? [...filterTags, dto.arc] : [dto.arc];
+    }
+    const filterMetadata = dto.filter?.metadata;
+
+    // ENG-48: Build temporal range filter from explicit after/before params
+    const temporalRangeFilter = this.buildTemporalRangeFilter(dto);
 
     let scoredMemories: MemoryWithScore[];
 
     if (hasTemporalIntent) {
       // TEMPORAL PATH
+      // ENG-48: Merge explicit after/before with temporal parser range
+      const temporalCreatedAt: Record<string, any> = {
+        gte: parsed.temporalFilter!.start,
+        lte: parsed.temporalFilter!.end,
+      };
+      if (dto.after) {
+        const afterDate = new Date(dto.after);
+        if (afterDate > temporalCreatedAt.gte)
+          temporalCreatedAt.gte = afterDate;
+      }
+      if (dto.before) {
+        const beforeDate = new Date(dto.before);
+        if (beforeDate < temporalCreatedAt.lte)
+          temporalCreatedAt.lte = beforeDate;
+      }
+
       const temporalMemories = await this.prisma.memory.findMany({
         where: {
           userId: userIdFilter,
           deletedAt: null,
           supersededById: null,
-          createdAt: {
-            gte: parsed.temporalFilter!.start,
-            lte: parsed.temporalFilter!.end,
-          },
+          searchable: { not: false },
+          createdAt: temporalCreatedAt,
           ...subjectTypeFilter,
           ...visibilityFilter,
+          ...metadataFilter,
         },
         include: { extraction: true },
         orderBy: { createdAt: 'desc' },
@@ -119,15 +184,21 @@ export class MemoryQueryService {
       );
 
       const vectorResults = await this.embedding.search(
-        userId,
+        userId ?? 'default',
         queryEmbedding,
         200,
         dto.layers as any,
         undefined,
         poolIds,
+        searchQuery,
+        filterTags,
+        filterMetadata,
       );
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
 
+      // Pass 120 candidates to the reranker (not just `limit`=20).
+      // The reranker needs a wide pool to surface the best temporal match.
+      const TEMPORAL_RERANK_POOL = 120;
       scoredMemories = temporalMemories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0.1;
@@ -145,67 +216,248 @@ export class MemoryQueryService {
             true,
           );
 
-          return { ...memory, score: blendedScore } as MemoryWithScore;
+          const adjustedScore =
+            blendedScore *
+            this.recallWeightService.recallWeight(memory) *
+            this.rankingService.getImportanceMultiplier(memory);
+          return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, limit);
+        .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
     } else {
-      // STANDARD PATH
+      // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
+      const candidateLimit = Math.max(200, limit * 20);
       const vectorResults = await this.embedding.search(
-        userId,
+        userId ?? 'default',
         queryEmbedding,
-        limit,
+        candidateLimit,
         dto.layers as any,
         undefined,
         poolIds,
+        searchQuery,
+        filterTags,
+        filterMetadata,
       );
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       const memoryIds = vectorResults.map((r) => r.id);
+
+      // BM25/tsvector hybrid: safety net for exact-keyword queries
+      // Skip inline FTS when in pool-only mode (poolIds set, no userId) — pool JOIN is the auth boundary
+      const ftsResultIds = new Set<string>();
+      const skipFts = poolIds && poolIds.length > 0 && !singleUserId;
+      try {
+        // ENG-109: When no userId, omit user_id filter to search all account memories
+        const ftsResults = skipFts
+          ? []
+          : singleUserId
+            ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM memories
+               WHERE user_id = $1
+                 AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
+                 AND deleted_at IS NULL
+                 AND superseded_by_id IS NULL
+                 AND searchable IS NOT FALSE
+               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
+               LIMIT 100`,
+                singleUserId ?? 'default',
+                searchQuery,
+              )
+            : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM memories
+               WHERE to_tsvector('english', raw) @@ websearch_to_tsquery('english', $1)
+                 AND deleted_at IS NULL
+                 AND superseded_by_id IS NULL
+                 AND searchable IS NOT FALSE
+               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
+               LIMIT 100`,
+                searchQuery,
+              );
+        let ftsAdded = 0;
+        for (const row of ftsResults) {
+          ftsResultIds.add(row.id);
+          if (!scoreMap.has(row.id)) {
+            scoreMap.set(row.id, 0.75);
+            memoryIds.push(row.id);
+            ftsAdded++;
+          } else {
+            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.75));
+          }
+        }
+        if (ftsAdded > 0) {
+          this.logger.debug(
+            `[Recall] BM25 hybrid: injected ${ftsAdded} FTS-only candidates`,
+          );
+        }
+
+        // ILIKE fallback
+        if (ftsResults.length === 0) {
+          const words = searchQuery
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((w) => w.length >= 4);
+          if (words.length > 0) {
+            try {
+              // ENG-109: Adjust parameter indices when no userId
+              const paramOffset = singleUserId ? 2 : 1;
+              const ilikeConditions = words
+                .map((_, i) => `LOWER(raw) LIKE $${i + paramOffset}`)
+                .join(' OR ');
+              const ilikeParams = words.map((w) => `%${w}%`);
+              const ilikeResults = singleUserId
+                ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                    `SELECT id FROM memories
+                     WHERE user_id = $1
+                       AND (${ilikeConditions})
+                       AND deleted_at IS NULL
+                       AND superseded_by_id IS NULL
+                       AND searchable IS NOT FALSE
+                     LIMIT 20`,
+                    singleUserId ?? 'default',
+                    ...ilikeParams,
+                  )
+                : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                    `SELECT id FROM memories
+                     WHERE (${ilikeConditions})
+                       AND deleted_at IS NULL
+                       AND superseded_by_id IS NULL
+                       AND searchable IS NOT FALSE
+                     LIMIT 20`,
+                    ...ilikeParams,
+                  );
+              let ilikeAdded = 0;
+              for (const row of ilikeResults) {
+                ftsResultIds.add(row.id);
+                if (!scoreMap.has(row.id)) {
+                  scoreMap.set(row.id, 0.7);
+                  memoryIds.push(row.id);
+                  ilikeAdded++;
+                } else {
+                  scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.7));
+                }
+              }
+              if (ilikeAdded > 0) {
+                this.logger.debug(
+                  `[Recall] ILIKE fallback: rescued ${ilikeAdded} candidates`,
+                );
+              }
+            } catch (ilikeError) {
+              this.logger.debug(
+                `[Recall] ILIKE fallback skipped: ${(ilikeError as Error).message}`,
+              );
+            }
+          }
+        }
+      } catch (ftsError) {
+        this.logger.debug(
+          `[Recall] BM25 hybrid skipped: ${(ftsError as Error).message}`,
+        );
+      }
 
       const memories = await this.prisma.memory.findMany({
         where: {
           id: { in: memoryIds },
           deletedAt: null,
           supersededById: null,
+          searchable: { not: false },
           ...subjectTypeFilter,
           ...visibilityFilter,
+          ...metadataFilter,
+          ...temporalRangeFilter,
         },
         include: { extraction: true },
       });
 
-      scoredMemories = memories
+      const sorted = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
-          const importanceScore =
-            memory.effectiveScore ?? memory.importanceScore;
-          const blendedScore = this.temporalParser.blendScores(
-            semanticScore,
-            0.5,
-            importanceScore,
-            false,
-          );
-
-          return { ...memory, score: blendedScore } as MemoryWithScore;
+          return { ...memory, score: semanticScore } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+      const RERANK_POOL = sorted.length;
+
+      const topIds = new Set(sorted.map((m) => m.id));
+      const memoryMap = new Map(sorted.map((m) => [m.id, m]));
+      const forcedFts: MemoryWithScore[] = [];
+      for (const id of ftsResultIds) {
+        if (!topIds.has(id)) {
+          const mem = memoryMap.get(id);
+          if (mem) {
+            forcedFts.push({ ...mem, score: 0.75 } as MemoryWithScore);
+          }
+        }
+      }
+      this.logger.debug(
+        `[Recall] Reranker pool: ${RERANK_POOL} vector + ${forcedFts.length} FTS-only = ${RERANK_POOL + forcedFts.length} total candidates`,
+      );
+      scoredMemories = [...sorted, ...forcedFts];
+    }
+
+    // ── ENG-27: Usage-Weighted Re-ranking ────────────────────────────
+    try {
+      scoredMemories =
+        await this.rankingService.applyUsageWeighting(scoredMemories);
+    } catch (error) {
+      this.logger.warn(
+        `[Recall] Usage weighting failed, proceeding without: ${(error as Error)?.message}`,
+      );
+    }
+
+    // ── ENG-32: Graph Recall Merge ─────────────────────────────────────
+    try {
+      scoredMemories = await this.rankingService.mergeGraphResults(
+        scoredMemories,
+        dto.query,
+        singleUserId ?? 'default',
+        limit,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `[Recall] Graph recall merge failed: ${(error as Error)?.message}`,
+      );
     }
 
     // ── Active Insight Surfacing ──────────────────────────────────────
-    // Inject high-confidence, unacknowledged INSIGHT memories that are
-    // semantically relevant to the query. Insights get boosted to appear
-    // near the top of results so agents actually see them.
-    scoredMemories = await this.surfaceInsights(
+    scoredMemories = await this.rankingService.surfaceInsights(
       scoredMemories,
-      Array.isArray(userId) ? userId : [userId],
+      Array.isArray(userId) ? userId : userId ? [userId] : [],
       searchQuery,
       limit,
       queryEmbedding,
     );
 
+    // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
+    const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
+    scoredMemories = await this.rankingService.applyReranking(
+      scoredMemories,
+      rerankQuery,
+      limit,
+    );
+
+    // v1.7: Agent-scoped filter
+    if (dto.filterAgentId) {
+      scoredMemories = scoredMemories.filter(
+        (m) => m.agentId === dto.filterAgentId,
+      );
+    }
+
+    // v1.7: Agent boost
+    if (dto.agentBoost && dto.agentBoost > 1.0 && dto.agentId) {
+      scoredMemories = scoredMemories.map((m) => {
+        if (m.agentId === dto.agentId && m.score != null) {
+          return { ...m, score: m.score * dto.agentBoost! };
+        }
+        return m;
+      });
+      scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    }
+
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
-      result = (await this.attachChains(scoredMemories)) as MemoryWithScore[];
+      result = ((await this.memoryFailureService?.attachChains(
+        scoredMemories,
+      )) ?? scoredMemories) as MemoryWithScore[];
     }
 
     const resultIds = result.map((m) => m.id);
@@ -232,7 +484,7 @@ export class MemoryQueryService {
       }
     }
 
-    // v1.6: Anticipatory Recall — run in parallel-ish (after standard recall)
+    // v1.6: Anticipatory Recall
     let anticipatoryMeta:
       | import('../anticipatory/dto/anticipatory.dto').AnticipatoryMeta
       | undefined;
@@ -241,7 +493,7 @@ export class MemoryQueryService {
         const excludeIds = new Set(result.map((m) => m.id));
         const areResult = await this.anticipatoryService.run(
           dto.query,
-          singleUserId,
+          singleUserId ?? 'default',
           excludeIds,
           dto.anticipatory,
         );
@@ -256,10 +508,29 @@ export class MemoryQueryService {
       }
     }
 
+    const latencyMs = Date.now() - startTime;
+
+    // Fire-and-forget query log for re-ranker training
+    if (this.queryLogService) {
+      this.queryLogService.logQuery({
+        queryText: dto.query,
+        queryEmbedding: queryEmbedding,
+        agentId: dto.agentId,
+        sessionKey: dto.agentSessionKey,
+        results: result.map((m, i) => ({
+          memoryId: m.id,
+          cosineScore: m.score ?? 0,
+          rank: i + 1,
+        })),
+        latencyMs,
+      });
+    }
+
     return {
+      recallId: randomUUID(),
       memories: result,
       queryTokens: dto.query.split(/\s+/).length,
-      latencyMs: Date.now() - startTime,
+      latencyMs,
       ...(anticipatoryMeta ? { anticipatoryMeta } : {}),
     };
   }
@@ -275,112 +546,10 @@ export class MemoryQueryService {
   }
 
   /**
-   * Surface relevant INSIGHT memories by injecting them into recall results.
-   *
-   * Finds unacknowledged, high-confidence insights and boosts their score
-   * so they appear near the top of results. Insights that aren't semantically
-   * relevant to the current query are excluded.
-   *
-   * @param existingResults - Current recall results
-   * @param userIds - User IDs to scope the insight query
-   * @param query - The original search query text
-   * @param limit - Max total results to return
-   */
-  private async surfaceInsights(
-    existingResults: MemoryWithScore[],
-    userIds: string[],
-    query: string,
-    limit: number,
-    cachedQueryEmbedding?: number[],
-  ): Promise<MemoryWithScore[]> {
-    try {
-      // Find recent, high-confidence INSIGHT memories
-      const insights = await this.prisma.memory.findMany({
-        where: {
-          userId: { in: userIds },
-          layer: 'INSIGHT',
-          deletedAt: null,
-          importanceScore: { gte: 0.6 }, // confidence threshold
-          // Only surface insights from the last 14 days
-          createdAt: { gt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
-        },
-        include: { extraction: true },
-        orderBy: { importanceScore: 'desc' },
-        take: 5,
-      });
-
-      if (insights.length === 0) return existingResults;
-
-      // HEY-135: Reuse cached query embedding to avoid redundant API call (~500ms saved)
-      const queryEmbedding =
-        cachedQueryEmbedding ?? (await this.embedding.generate(query));
-
-      // HEY-135: Use vector search to find semantic similarity instead of
-      // re-embedding each insight individually (saves N embedding API calls, ~1-2s)
-      const insightIds = new Set(insights.map((i) => i.id));
-      const insightScoreMap = new Map<string, number>();
-
-      const vectorResults = await this.embedding.search(
-        userIds,
-        queryEmbedding,
-        50,
-        ['INSIGHT' as MemoryLayer],
-      );
-      for (const r of vectorResults) {
-        if (insightIds.has(r.id)) {
-          insightScoreMap.set(r.id, r.score);
-        }
-      }
-
-      // Filter by relevance using vector search scores
-      const relevantInsights: MemoryWithScore[] = [];
-      const existingIds = new Set(existingResults.map((r) => r.id));
-
-      for (const insight of insights) {
-        // Skip if already in results
-        if (existingIds.has(insight.id)) continue;
-
-        const similarity = insightScoreMap.get(insight.id);
-        if (similarity === undefined) continue;
-
-        // Only surface if moderately relevant (> 0.3 similarity)
-        if (similarity > 0.3) {
-          // Boost score: base similarity + confidence bonus
-          const boostedScore = similarity + insight.importanceScore * 0.3;
-          relevantInsights.push({
-            ...insight,
-            score: boostedScore,
-          } as MemoryWithScore);
-        }
-      }
-
-      if (relevantInsights.length === 0) return existingResults;
-
-      // Merge: insert insights into results, maintaining sort order
-      const merged = [...existingResults, ...relevantInsights]
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, limit);
-
-      this.logger.log(
-        `[Recall] Surfaced ${relevantInsights.length} INSIGHT memories (of ${insights.length} candidates)`,
-      );
-
-      return merged;
-    } catch (error) {
-      // Never let insight surfacing break recall
-      this.logger.warn(
-        `[Recall] Insight surfacing failed, skipping: ${(error as Error)?.message || error}`,
-        (error as Error)?.stack,
-      );
-      return existingResults;
-    }
-  }
-
-  /**
    * Perform recall using multi-query retrieval
    */
   private async recallWithMultiQuery(
-    userId: string | string[],
+    userId: string | string[] | null,
     dto: QueryMemoryDto,
     startTime: number,
     poolIds?: string[],
@@ -399,7 +568,7 @@ export class MemoryQueryService {
 
     const multiQueryResult = await this.multiQueryService!.search(
       dto.query,
-      userId,
+      userId ?? [],
       {
         topK: dto.limit ?? 10,
         layers: dto.layers as any,
@@ -412,14 +581,17 @@ export class MemoryQueryService {
     const memoryIds = multiQueryResult.results.map((r) => r.memoryId);
     const subjectTypeFilter = this.buildSubjectTypeFilter(dto);
     const visibilityFilterMQ = this.buildVisibilityFilter(dto);
+    const metadataFilterMQ = this.buildMetadataFilter(dto);
 
     const memories = await this.prisma.memory.findMany({
       where: {
         id: { in: memoryIds },
         deletedAt: null,
         supersededById: null,
+        searchable: { not: false },
         ...subjectTypeFilter,
         ...visibilityFilterMQ,
+        ...metadataFilterMQ,
       },
       include: { extraction: true },
     });
@@ -433,14 +605,18 @@ export class MemoryQueryService {
         const multiQueryScore = scoreMap.get(memory.id) ?? 0;
         const importanceScore = memory.effectiveScore ?? memory.importanceScore;
         const blendedScore = multiQueryScore * 0.8 + importanceScore * 0.2;
+        const adjustedScore =
+          blendedScore * this.recallWeightService.recallWeight(memory);
 
-        return { ...memory, score: blendedScore } as MemoryWithScore;
+        return { ...memory, score: adjustedScore } as MemoryWithScore;
       })
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
     let result: MemoryWithScore[] = scoredMemories;
     if (dto.includeChains) {
-      result = (await this.attachChains(scoredMemories)) as MemoryWithScore[];
+      result = ((await this.memoryFailureService?.attachChains(
+        scoredMemories,
+      )) ?? scoredMemories) as MemoryWithScore[];
     }
 
     const resultIds = result.map((m) => m.id);
@@ -489,7 +665,7 @@ export class MemoryQueryService {
         const excludeIds = new Set(result.map((m) => m.id));
         const areResult = await this.anticipatoryService.run(
           dto.query,
-          Array.isArray(userId) ? userId[0] : userId,
+          Array.isArray(userId) ? userId[0] : (userId ?? 'default'),
           excludeIds,
           dto.anticipatory,
         );
@@ -504,10 +680,29 @@ export class MemoryQueryService {
       }
     }
 
+    const latencyMsMq = Date.now() - startTime;
+
+    // Fire-and-forget query log for re-ranker training (multi-query path)
+    if (this.queryLogService) {
+      this.queryLogService.logQuery({
+        queryText: dto.query,
+        queryEmbedding: [], // multi-query uses multiple embeddings; omit to avoid picking one arbitrarily
+        agentId: dto.agentId,
+        sessionKey: dto.agentSessionKey,
+        results: result.map((m, i) => ({
+          memoryId: m.id,
+          cosineScore: m.score ?? 0,
+          rank: i + 1,
+        })),
+        latencyMs: latencyMsMq,
+      });
+    }
+
     return {
+      recallId: randomUUID(),
       memories: result,
       queryTokens: dto.query.split(/\s+/).length,
-      latencyMs: Date.now() - startTime,
+      latencyMs: latencyMsMq,
       multiQuery: multiQueryMetadata,
       explanations,
       ...(anticipatoryMeta2 ? { anticipatoryMeta: anticipatoryMeta2 } : {}),
@@ -515,266 +710,82 @@ export class MemoryQueryService {
   }
 
   /**
-   * Load context for session start
+   * Load context for session start — delegates to MemoryQueryContextService
    */
   async loadContext(
     userId: string,
     dto: LoadContextDto,
   ): Promise<ContextResult> {
-    const layers: ContextResult['layers'] = {
-      identity: 0,
-      project: 0,
-      session: 0,
-    };
-    const memories: Memory[] = [];
-    const evictions: Array<{ id: string; reason: string }> = [];
-
-    const LAYER_BUDGETS = {
-      identity: dto.maxTokens ? Math.floor(dto.maxTokens * 0.44) : 800,
-      project: dto.maxTokens ? Math.floor(dto.maxTokens * 0.33) : 600,
-      session: dto.maxTokens ? Math.floor(dto.maxTokens * 0.22) : 400,
-    };
-    const CONSTRAINT_RESERVE = Math.min(
-      200,
-      Math.floor(LAYER_BUDGETS.identity * 0.25),
-    );
-
-    // Fire all independent layer queries in parallel for lower latency
-    const identityPromise = this.prisma.memory.findMany({
-      where: {
-        userId,
-        layer: MemoryLayer.IDENTITY,
-        subjectType: SubjectType.USER,
-        deletedAt: null,
-        supersededById: null,
-        userHidden: false,
-      },
-      orderBy: [
-        { effectiveScore: 'desc' },
-        { confidence: 'desc' },
-        { priority: 'asc' },
-        { userPinned: 'desc' },
-        { createdAt: 'desc' },
-      ],
-      take: 200,
-    });
-
-    const projectPromise = dto.projectId
-      ? this.prisma.memory.findMany({
-          where: {
-            userId,
-            projectId: dto.projectId,
-            layer: MemoryLayer.PROJECT,
-            deletedAt: null,
-            supersededById: null,
-            userHidden: false,
-          },
-          orderBy: [
-            { effectiveScore: 'desc' },
-            { confidence: 'desc' },
-            { priority: 'asc' },
-            { userPinned: 'desc' },
-            { createdAt: 'desc' },
-          ],
-          take: 100,
-        })
-      : Promise.resolve([]);
-
-    const sessionPromise = this.prisma.memory.findMany({
-      where: {
-        userId,
-        layer: MemoryLayer.SESSION,
-        deletedAt: null,
-        supersededById: null,
-        userHidden: false,
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      },
-      orderBy: [
-        { effectiveScore: 'desc' },
-        { confidence: 'desc' },
-        { priority: 'asc' },
-        { createdAt: 'desc' },
-      ],
-      take: 100,
-    });
-
-    const agentPromise = dto.agentId
-      ? this.prisma.memory.findMany({
-          where: {
-            agentId: dto.agentId,
-            subjectType: SubjectType.AGENT,
-            deletedAt: null,
-            supersededById: null,
-            userHidden: false,
-          },
-          orderBy: [
-            { effectiveScore: 'desc' },
-            { priority: 'asc' },
-            { createdAt: 'desc' },
-          ],
-          take: 20,
-        })
-      : Promise.resolve([]);
-
-    const [
-      identityCandidates,
-      projectCandidates,
-      sessionCandidates,
-      agentMemories,
-    ] = await Promise.all([
-      identityPromise,
-      projectPromise,
-      sessionPromise,
-      agentPromise,
-    ]);
-
-    // 1. Process IDENTITY layer
-    const { selected: identityMemories, evicted: identityEvicted } =
-      this.selectMemoriesForBudget(
-        identityCandidates,
-        LAYER_BUDGETS.identity,
-        CONSTRAINT_RESERVE,
-      );
-    memories.push(...identityMemories);
-    layers.identity = identityMemories.length;
-    evictions.push(
-      ...identityEvicted.map((m) => ({ id: m.id, reason: 'identity_budget' })),
-    );
-
-    // 2. Process PROJECT layer
-    if (dto.projectId && projectCandidates.length > 0) {
-      const { selected: projectMemories, evicted: projectEvicted } =
-        this.selectMemoriesForBudget(
-          projectCandidates,
-          LAYER_BUDGETS.project,
-          0,
-        );
-      memories.push(...projectMemories);
-      layers.project = projectMemories.length;
-      evictions.push(
-        ...projectEvicted.map((m) => ({ id: m.id, reason: 'project_budget' })),
-      );
-    }
-
-    // 3. Process SESSION layer
-    const { selected: sessionMemories, evicted: sessionEvicted } =
-      this.selectMemoriesForBudget(sessionCandidates, LAYER_BUDGETS.session, 0);
-    memories.push(...sessionMemories);
-    layers.session = sessionMemories.length;
-    evictions.push(
-      ...sessionEvicted.map((m) => ({ id: m.id, reason: 'session_budget' })),
-    );
-
-    // 4. Process agent self-memories
-    if (agentMemories.length > 0) {
-      memories.push(...agentMemories);
-      layers.agent = agentMemories.length;
-    }
-
-    // 5. Format
-    const context = this.formatContext(memories, dto.maxTokens ?? 4000);
-
-    if (evictions.length > 0) {
-      this.logger.log('[Memory] Context evictions:', {
-        userId,
-        totalEvicted: evictions.length,
-        byReason: evictions.reduce(
-          (acc, e) => {
-            acc[e.reason] = (acc[e.reason] || 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>,
-        ),
-      });
-    }
-
-    return {
-      context: context.text,
-      tokenCount: context.tokens,
-      memoriesIncluded: memories.length,
-      layers,
-    };
+    return this.contextService.loadContext(userId, dto);
   }
 
   /**
-   * Select memories that fit within a token budget
+   * Select memories that fit within a token budget — delegates to MemoryQueryContextService
    */
   selectMemoriesForBudget(
     candidates: Memory[],
     budget: number,
     constraintReserve: number,
   ): { selected: Memory[]; evicted: Memory[] } {
-    const selected: Memory[] = [];
-    const evicted: Memory[] = [];
-    let usedTokens = 0;
-
-    const estimateTokens = (m: Memory) => Math.ceil(m.raw.length / 4);
-
-    // Phase 0: Safety-critical
-    const safetyCritical = candidates.filter((m) => m.safetyCritical);
-    for (const memory of safetyCritical) {
-      const tokens = estimateTokens(memory);
-      selected.push(memory);
-      usedTokens += tokens;
-    }
-
-    // Phase 1: CONSTRAINTS
-    const constraints = candidates.filter(
-      (m) => m.priority === 1 && !m.safetyCritical,
+    return this.contextService.selectMemoriesForBudget(
+      candidates,
+      budget,
+      constraintReserve,
     );
-    let constraintTokens = 0;
-
-    for (const memory of constraints) {
-      const tokens = estimateTokens(memory);
-      if (
-        constraintTokens + tokens <= constraintReserve ||
-        constraintReserve === 0
-      ) {
-        selected.push(memory);
-        constraintTokens += tokens;
-        usedTokens += tokens;
-      } else if (usedTokens + tokens <= budget) {
-        selected.push(memory);
-        usedTokens += tokens;
-      } else {
-        evicted.push(memory);
-      }
-    }
-
-    // Phase 2: Fill remaining
-    for (const memory of candidates) {
-      if (selected.includes(memory)) continue;
-      const tokens = estimateTokens(memory);
-      if (usedTokens + tokens <= budget) {
-        selected.push(memory);
-        usedTokens += tokens;
-      } else {
-        evicted.push(memory);
-      }
-    }
-
-    return { selected, evicted };
   }
 
   /**
-   * Build subject type filter for queries
-   */
-  /**
-   * HEY-174: Build visibility filter for cross-agent memory sharing.
-   * When visibility filter is provided, applies scoping rules:
-   * - PRIVATE: only the querying user's own memories
-   * - TEAM: memories visible to the team (same account)
-   * - PUBLIC: memories visible to everyone
-   * When no filter is provided, defaults to showing own private + team + public.
+   * Build visibility filter for cross-agent memory sharing.
    */
   buildVisibilityFilter(dto: QueryMemoryDto): Record<string, any> {
     if (dto.visibility && dto.visibility.length > 0) {
       return { visibility: { in: dto.visibility } };
     }
-    // Default: no filter (backward compatible — all memories for the queried userId)
     return {};
   }
 
+  /**
+   * ENG-48: Build Prisma WHERE clause for explicit after/before date range.
+   */
+  buildTemporalRangeFilter(dto: QueryMemoryDto): Record<string, any> {
+    if (!dto.after && !dto.before) return {};
+    const createdAt: Record<string, any> = {};
+    if (dto.after) createdAt.gte = new Date(dto.after);
+    if (dto.before) createdAt.lte = new Date(dto.before);
+    return { createdAt };
+  }
+
+  /**
+   * ENG-42: Build Prisma WHERE clause for tag + metadata pre-filtering.
+   */
+  buildMetadataFilter(dto: QueryMemoryDto): Record<string, any> {
+    const filter: Record<string, any> = {};
+
+    // ENG-42 + ENG-48: Merge filter.tags and arc into a single hasEvery filter
+    const allTags = [
+      ...(dto.filter?.tags ?? []),
+      ...(dto.arc ? [dto.arc] : []),
+    ];
+    if (allTags.length > 0) {
+      filter.tags = { hasEvery: allTags };
+    }
+
+    if (dto.filter?.metadata && Object.keys(dto.filter.metadata).length > 0) {
+      // Prisma JSON path filter: memory.metadata must contain every key-value pair
+      const andConditions = Object.entries(dto.filter.metadata).map(
+        ([key, value]) => ({
+          metadata: { path: [key], equals: value },
+        }),
+      );
+      filter.AND = andConditions;
+    }
+
+    return filter;
+  }
+
+  /**
+   * Build subject type filter for queries
+   */
   buildSubjectTypeFilter(dto: QueryMemoryDto): Record<string, any> {
     const filter: Record<string, any> = {};
 
@@ -800,109 +811,101 @@ export class MemoryQueryService {
     return filter;
   }
 
-  private async attachChains(
-    memories: MemoryWithExtraction[],
-    maxDepth: number = 3,
-  ): Promise<MemoryWithExtraction[]> {
-    const memoryIds = memories.map((m) => m.id);
-    if (memoryIds.length === 0) return memories;
-
-    const chainLinks = await this.prisma.memoryChainLink.findMany({
-      where: {
-        OR: [{ sourceId: { in: memoryIds } }, { targetId: { in: memoryIds } }],
-      },
-      include: {
-        source: true,
-        target: true,
-      },
-    });
-
-    if (chainLinks.length === 0) return memories;
-
-    // Build chain map per memory
-    const chainMap = new Map<
-      string,
-      Array<{ memory: any; linkType: string; confidence: number }>
-    >();
-
-    for (const link of chainLinks) {
-      for (const memoryId of memoryIds) {
-        if (link.sourceId === memoryId) {
-          const arr = chainMap.get(memoryId) ?? [];
-          arr.push({
-            memory: link.target,
-            linkType: link.linkType,
-            confidence: link.confidence,
-          });
-          chainMap.set(memoryId, arr);
-        }
-        if (link.targetId === memoryId) {
-          const arr = chainMap.get(memoryId) ?? [];
-          arr.push({
-            memory: link.source,
-            linkType: link.linkType,
-            confidence: link.confidence,
-          });
-          chainMap.set(memoryId, arr);
-        }
-      }
-    }
-
-    return memories.map((m) => ({
-      ...m,
-      chainedMemories: chainMap.get(m.id) ?? [],
-    }));
-  }
-
+  /**
+   * Format context — delegates to MemoryQueryContextService
+   */
   formatContext(
     memories: Memory[],
     maxTokens: number,
   ): { text: string; tokens: number } {
-    const lines: string[] = [];
-    let estimatedTokens = 0;
+    return this.contextService.formatContext(memories, maxTokens);
+  }
 
-    const identity = memories.filter((m) => m.layer === MemoryLayer.IDENTITY);
-    const project = memories.filter((m) => m.layer === MemoryLayer.PROJECT);
-    const session = memories.filter((m) => m.layer === MemoryLayer.SESSION);
+  async traceTimeline(
+    agentId: string,
+    dto: TraceTimelineDto,
+  ): Promise<TraceTimelineResponse> {
+    const { topic, startDate, endDate, method = 'keyword', limit = 100 } = dto;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
-    if (identity.length > 0) {
-      lines.push('## User Identity');
-      for (const m of identity) {
-        const line = `- ${m.raw}`;
-        const tokens = line.split(/\s+/).length;
-        if (estimatedTokens + tokens > maxTokens) break;
-        lines.push(line);
-        estimatedTokens += tokens;
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        raw: string;
+        memory_type: string;
+        importance_score: number;
+        created_at: Date;
+      }>
+    >(
+      `SELECT id, raw, memory_type, importance_score, created_at
+       FROM memories
+       WHERE agent_id = $1
+         AND searchable = true
+         AND deleted_at IS NULL
+         AND raw ILIKE '%' || $2 || '%'
+         AND created_at >= $3
+         AND created_at <= $4
+       ORDER BY created_at ASC
+       LIMIT $5`,
+      agentId,
+      topic,
+      start,
+      end,
+      limit,
+    );
+
+    // Group by day
+    const entriesByDate = new Map<string, TimelineEntry>();
+    for (const row of rows) {
+      const dateKey = row.created_at.toISOString().split('T')[0];
+      let entry = entriesByDate.get(dateKey);
+      if (!entry) {
+        entry = { date: dateKey, memories: [] };
+        entriesByDate.set(dateKey, entry);
       }
-      lines.push('');
+      entry.memories.push({
+        id: row.id,
+        raw: row.raw,
+        memoryType: row.memory_type,
+        importanceScore: Number(row.importance_score),
+        createdAt: row.created_at,
+      });
     }
 
-    if (project.length > 0) {
-      lines.push('## Current Project');
-      for (const m of project) {
-        const line = `- ${m.raw}`;
-        const tokens = line.split(/\s+/).length;
-        if (estimatedTokens + tokens > maxTokens) break;
-        lines.push(line);
-        estimatedTokens += tokens;
-      }
-      lines.push('');
+    // Generate all days in range for gap detection
+    const allDays: string[] = [];
+    const current = new Date(start);
+    current.setUTCHours(0, 0, 0, 0);
+    const endNorm = new Date(end);
+    endNorm.setUTCHours(0, 0, 0, 0);
+    while (current <= endNorm) {
+      allDays.push(current.toISOString().split('T')[0]);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
-    if (session.length > 0) {
-      lines.push('## Recent Context');
-      for (const m of session) {
-        const line = `- ${m.raw}`;
-        const tokens = line.split(/\s+/).length;
-        if (estimatedTokens + tokens > maxTokens) break;
-        lines.push(line);
-        estimatedTokens += tokens;
-      }
-    }
+    const gaps = allDays.filter((day) => !entriesByDate.has(day));
+    const daysWithMemories = allDays.length - gaps.length;
+    const coverage =
+      allDays.length > 0
+        ? Math.round((daysWithMemories / allDays.length) * 10000) / 100
+        : 0;
+
+    // Sort entries chronologically
+    const entries = Array.from(entriesByDate.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
 
     return {
-      text: lines.join('\n'),
-      tokens: estimatedTokens,
+      topic,
+      range: {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0],
+      },
+      totalMemories: rows.length,
+      entries,
+      gaps,
+      coverage,
     };
   }
 }

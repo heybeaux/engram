@@ -12,7 +12,7 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import {
   ModelId,
   MODEL_CONFIGS,
@@ -50,7 +50,7 @@ export interface EnsembleSearchResult {
 export class PgVectorEnsembleProvider {
   private readonly logger = new Logger(PgVectorEnsembleProvider.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: ServicePrismaService) {}
 
   /**
    * Upsert a single embedding for a memory/model pair
@@ -82,13 +82,14 @@ export class PgVectorEnsembleProvider {
    */
   async upsertEmbeddings(records: EnsembleEmbeddingRecord[]): Promise<void> {
     // Use a transaction for atomicity
-    await this.prisma.$transaction(async (tx) => {
-      for (const record of records) {
-        const embeddingStr = `[${record.embedding.join(',')}]`;
-        const now = new Date();
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const record of records) {
+          const embeddingStr = `[${record.embedding.join(',')}]`;
+          const now = new Date();
 
-        await tx.$executeRawUnsafe(
-          `
+          await tx.$executeRawUnsafe(
+            `
           INSERT INTO memory_embeddings (id, memory_id, model_id, dimensions, embedding, created_at, updated_at)
           VALUES (gen_random_uuid()::text, $1, $2, $3, $4::vector, $5, $5)
           ON CONFLICT (memory_id, model_id) 
@@ -97,19 +98,31 @@ export class PgVectorEnsembleProvider {
             dimensions = $3,
             updated_at = $5
           `,
-          record.memoryId,
-          record.modelId,
-          record.dimensions,
-          embeddingStr,
-          now,
-        );
-      }
-    });
+            record.memoryId,
+            record.modelId,
+            record.dimensions,
+            embeddingStr,
+            now,
+          );
+        }
+      },
+      { timeout: 120000 },
+    );
   }
 
   /**
    * Query embeddings for a specific model
    * Uses cosine distance for similarity search
+   *
+   * Each call runs in its own $transaction to get an independent pooled
+   * connection. $transaction is in NON_TRANSACTIONAL_PROPS so the PrismaService
+   * proxy bypasses the surrounding RLS transaction and opens a fresh connection.
+   * This prevents 25P02 "current transaction is aborted" errors from propagating
+   * across parallel model queries that share the RLS transaction connection.
+   *
+   * The memories RLS policy is: rls_account_id() IS NULL OR user_id IN (...).
+   * Without SET LOCAL the policy returns NULL → passes for all rows (admin mode).
+   * User scoping is enforced by the explicit m.user_id = $4 WHERE clause.
    */
   async queryByModel(
     options: EnsembleSearchOptions,
@@ -117,17 +130,15 @@ export class PgVectorEnsembleProvider {
     const embeddingStr = `[${options.embedding.join(',')}]`;
     const dimensions = options.embedding.length;
 
-    // Join with memories table to filter by userId
-    const results = await this.prisma.$queryRawUnsafe<
-      Array<{ memory_id: string; score: number }>
-    >(
-      `
-      SELECT 
+    const results = await this.prisma.$transaction(async (tx) =>
+      tx.$queryRawUnsafe<Array<{ memory_id: string; score: number }>>(
+        `
+      SELECT
         me.memory_id,
         1 - (me.embedding <=> $1::vector) as score
       FROM memory_embeddings me
       JOIN memories m ON m.id = me.memory_id
-      WHERE me.model_id = $2 
+      WHERE me.model_id = $2
         AND me.dimensions = $3
         AND me.embedding IS NOT NULL
         AND m.user_id = $4
@@ -135,11 +146,12 @@ export class PgVectorEnsembleProvider {
       ORDER BY me.embedding <=> $1::vector
       LIMIT $5
       `,
-      embeddingStr,
-      options.modelId,
-      dimensions,
-      options.userId,
-      options.limit,
+        embeddingStr,
+        options.modelId,
+        dimensions,
+        options.userId,
+        options.limit,
+      ),
     );
 
     return results.map((r) => ({

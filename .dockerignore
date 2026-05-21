@@ -29,5 +29,4 @@ scripts/
 docker-compose.override.yml*
 .eslintrc*
 .prettierrc*
-tsconfig.build.json
-nest-cli.json
+# tsconfig.build.json and nest-cli.json must be included for nest build (SWC) to output dist/main.js

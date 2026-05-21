@@ -23,7 +23,8 @@ import { DelegationTemplateService } from './delegation-template.service';
 import { TrustProfileService } from './trust-profile.service';
 import { DelegationContractService } from './delegation-contract.service';
 import { ChallengeService } from './challenge.service';
-import { CreateTeamDto } from './dto/team.dto';
+import { IdentityService } from './identity.service';
+import { CreateIdentityTeamDto } from './dto/team.dto';
 import { ImportIdentityDto } from './dto/portable-identity.dto';
 import {
   CreateTaskCompletionDto,
@@ -53,7 +54,23 @@ export class IdentityController {
     private readonly trustProfileService: TrustProfileService,
     private readonly delegationContractService: DelegationContractService,
     private readonly challengeService: ChallengeService,
+    private readonly identityService: IdentityService,
   ) {}
+
+  // === Bootstrap Endpoint ===
+
+  @Get('bootstrap')
+  @ApiOperation({
+    summary: 'Bootstrap identity data for agent/user pair',
+  })
+  @ApiQuery({ name: 'agentId', required: false, description: 'Agent ID' })
+  @ApiQuery({ name: 'userId', required: false, description: 'User ID' })
+  async bootstrap(
+    @Query('agentId') agentId?: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.identityService.bootstrap(agentId, userId);
+  }
 
   // === Agents list with capability & trust summaries ===
 
@@ -116,7 +133,7 @@ export class IdentityController {
         try {
           trustSummary = await this.trustProfileService.getProfile(agent.id);
         } catch {
-          trustSummary = null;
+          // trustSummary remains null from initialization
         }
 
         // Memory count and last active
@@ -125,22 +142,16 @@ export class IdentityController {
         let memoryCount = 0;
         let lastActive: Date | null = null;
         try {
-          const agentUsers = await this.prisma.user.findMany({
-            where: { agentId: agent.id },
-            select: { id: true },
+          // Memory.agentId tracks which agent stored the memory
+          memoryCount = await this.prisma.memory.count({
+            where: { agentId: agent.id, deletedAt: null },
           });
-          const userIds = agentUsers.map((u) => u.id);
-          if (userIds.length > 0) {
-            memoryCount = await this.prisma.memory.count({
-              where: { userId: { in: userIds }, deletedAt: null },
-            });
-            const lastMemory = await this.prisma.memory.findFirst({
-              where: { userId: { in: userIds }, deletedAt: null },
-              orderBy: { createdAt: 'desc' },
-              select: { createdAt: true },
-            });
-            lastActive = lastMemory?.createdAt || null;
-          }
+          const lastMemory = await this.prisma.memory.findFirst({
+            where: { agentId: agent.id, deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true },
+          });
+          lastActive = lastMemory?.createdAt || null;
         } catch {
           // Fallback to defaults
         }
@@ -215,7 +226,7 @@ export class IdentityController {
     try {
       trustSummary = await this.trustProfileService.getProfile(agent.id);
     } catch {
-      trustSummary = null;
+      // trustSummary remains null from initialization
     }
 
     return {
@@ -374,7 +385,7 @@ export class IdentityController {
   @Post('teams')
   @HttpCode(201)
   @ApiOperation({ summary: 'Create a team profile' })
-  async createTeam(@Body() dto: CreateTeamDto) {
+  async createTeam(@Body() dto: CreateIdentityTeamDto) {
     return this.teamProfileService.createTeam(dto);
   }
 

@@ -81,6 +81,9 @@ describe('CloudSyncService', () => {
         upsert: jest.fn().mockResolvedValue({}),
       },
       agent: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'cloud-agent-1', accountId: 'acc-1' }),
         create: jest.fn(),
       },
       user: {
@@ -90,6 +93,7 @@ describe('CloudSyncService', () => {
       $queryRawUnsafe: jest
         .fn()
         .mockResolvedValue([{ pg_try_advisory_lock: true }]),
+      $transaction: jest.fn((cb: (tx: any) => Promise<any>) => cb(prisma)),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -227,6 +231,10 @@ describe('CloudSyncService', () => {
     const setupAgentUserMocks = () => {
       prisma.syncAgentMap.findUnique.mockResolvedValue(null);
       prisma.agent.create.mockResolvedValue({ id: 'cloud-agent-1' });
+      prisma.agent.findUnique.mockResolvedValue({
+        id: 'cloud-agent-1',
+        accountId: 'acc-1',
+      });
       prisma.syncAgentMap.create.mockResolvedValue({});
       prisma.syncUserMap.findUnique.mockResolvedValue(null);
       prisma.user.findUnique.mockResolvedValue(null);

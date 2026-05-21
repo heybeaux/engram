@@ -127,12 +127,10 @@ export class TemporalParserService {
   ): number {
     if (hasTemporalIntent) {
       // When temporal intent detected, give time significant weight
-      return (
-        semanticScore * 0.45 + temporalScore * 0.35 + importanceScore * 0.2
-      );
+      return semanticScore * 0.3 + temporalScore * 0.5 + importanceScore * 0.2;
     } else {
-      // No temporal intent — standard weighting
-      return semanticScore * 0.65 + importanceScore * 0.35;
+      // No temporal intent — cosine-first weighting (mirrors post-reranker final blend)
+      return semanticScore * 0.85 + importanceScore * 0.15;
     }
   }
 
@@ -194,6 +192,53 @@ export class TemporalParserService {
         regex: /\b(\d+)\s+(days?)\s+ago\b/i,
         resolve: (m) => this.dayRange(now, -parseInt(m[1]), m[0]),
       },
+      // "N weeks ago"
+      {
+        regex: /\b(\d+)\s+(weeks?)\s+ago\b/i,
+        resolve: (m) => this.dayRange(now, -parseInt(m[1]) * 7, m[0]),
+      },
+      // "N months ago"
+      {
+        regex: /\b(\d+)\s+(months?)\s+ago\b/i,
+        resolve: (m) => {
+          const d = new Date(now);
+          d.setMonth(d.getMonth() - parseInt(m[1]));
+          const start = new Date(d);
+          start.setDate(1);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(d);
+          end.setMonth(end.getMonth() + 1);
+          end.setDate(0);
+          end.setHours(23, 59, 59, 999);
+          return { start, end, expression: m[0], confidence: 0.85 };
+        },
+      },
+      // "N years ago"
+      {
+        regex: /\b(\d+)\s+(years?)\s+ago\b/i,
+        resolve: (m) => {
+          const d = new Date(now);
+          d.setFullYear(d.getFullYear() - parseInt(m[1]));
+          const start = new Date(d.getFullYear(), 0, 1);
+          const end = new Date(d.getFullYear(), 11, 31, 23, 59, 59, 999);
+          return { start, end, expression: m[0], confidence: 0.85 };
+        },
+      },
+      // "years ago" (no number — treat as 1-3 years range)
+      {
+        regex: /\b(years)\s+ago\b/i,
+        resolve: (_m) => {
+          const start = new Date(now);
+          start.setFullYear(start.getFullYear() - 3);
+          start.setMonth(0, 1);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(now);
+          end.setFullYear(end.getFullYear() - 1);
+          end.setMonth(0, 1);
+          end.setHours(0, 0, 0, 0);
+          return { start, end, expression: 'years ago', confidence: 0.7 };
+        },
+      },
       // "last/past N days"
       {
         regex: /\b(?:last|past)\s+(\d+)\s+days?\b/i,
@@ -219,9 +264,9 @@ export class TemporalParserService {
         regex: /\bthis\s+month\b/i,
         resolve: (m) => this.thisMonth(now, m[0]),
       },
-      // "recently" / "lately"
+      // "recently" / "lately" / "recent"
       {
-        regex: /\b(recently|lately)\b/i,
+        regex: /\b(recently|lately|recent)\b/i,
         resolve: (m) => this.lastNDays(now, 3, m[0]),
       },
       // "earlier today" / "earlier"

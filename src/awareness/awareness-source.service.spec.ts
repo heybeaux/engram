@@ -81,4 +81,17 @@ describe('AwarenessSourceService', () => {
     expect(loaded.name).toBe('Persisted');
     expect(loaded.createdAt).toBeInstanceOf(Date);
   });
+
+  it('should not crash on init when DB connection fails (ENG-78)', async () => {
+    prisma.awarenessState.findMany.mockRejectedValue(
+      new Error('Connection refused'),
+    );
+
+    const freshService = new AwarenessSourceService(
+      prisma as unknown as PrismaService,
+    );
+    // Should not throw — try/catch in onModuleInit handles the error
+    await expect(freshService.onModuleInit()).resolves.not.toThrow();
+    expect(freshService.listAll()).toEqual([]);
+  });
 });

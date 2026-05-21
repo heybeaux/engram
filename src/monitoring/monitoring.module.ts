@@ -4,6 +4,7 @@ import { MonitoringService } from './monitoring.service';
 import { MonitoringController } from './monitoring.controller';
 import { MonitoringInterceptor } from './monitoring.interceptor';
 import { AccountModule } from '../account/account.module';
+import { AuditLogWatcherService } from './audit-log-watcher.service';
 
 @Global()
 @Module({
@@ -12,8 +13,14 @@ import { AccountModule } from '../account/account.module';
   providers: [
     MonitoringService,
     MonitoringInterceptor,
+    AuditLogWatcherService,
     { provide: 'MONITORING_SERVICE', useExisting: MonitoringService },
   ],
-  exports: [MonitoringService, MonitoringInterceptor, 'MONITORING_SERVICE'],
+  exports: [
+    MonitoringService,
+    MonitoringInterceptor,
+    AuditLogWatcherService,
+    'MONITORING_SERVICE',
+  ],
 })
 export class MonitoringModule {}

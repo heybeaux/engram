@@ -8,7 +8,7 @@ import {
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  CreateTeamDto,
+  CreateIdentityTeamDto,
   TeamProfile,
   TeamCapability,
   CollaborationPair,
@@ -100,7 +100,7 @@ export class TeamProfileService implements OnModuleInit, OnModuleDestroy {
   /**
    * Create a new team profile
    */
-  async createTeam(dto: CreateTeamDto): Promise<TeamProfile> {
+  async createTeam(dto: CreateIdentityTeamDto): Promise<TeamProfile> {
     const id = `team_${randomUUID()}`;
 
     // Aggregate capabilities from member agents

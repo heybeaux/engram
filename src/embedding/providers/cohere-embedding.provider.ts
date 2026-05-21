@@ -28,6 +28,22 @@ export class CohereEmbeddingProvider implements EmbeddingProvider {
   }
 
   async embed(texts: string[]): Promise<number[][]> {
+    // Cohere API limits to 96 texts per request
+    const MAX_BATCH = 96;
+    if (texts.length <= MAX_BATCH) {
+      return this.embedBatch(texts);
+    }
+
+    const allEmbeddings: number[][] = [];
+    for (let i = 0; i < texts.length; i += MAX_BATCH) {
+      const chunk = texts.slice(i, i + MAX_BATCH);
+      const chunkEmbeddings = await this.embedBatch(chunk);
+      allEmbeddings.push(...chunkEmbeddings);
+    }
+    return allEmbeddings;
+  }
+
+  private async embedBatch(texts: string[]): Promise<number[][]> {
     const response = await this.client.embed({
       texts,
       model: this.model,

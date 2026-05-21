@@ -15,6 +15,8 @@ import {
   PreferenceDto,
   TrustSignalsSummaryDto,
   BehavioralPatternDto,
+  ActiveProjectsResponseDto,
+  ActiveProjectDto,
 } from './dto/identity.dto';
 
 // Patterns that indicate preferences (HEY-171)
@@ -60,6 +62,17 @@ export class IdentityService {
     private capabilityProfile: CapabilityProfileService,
     private workStyle: WorkStyleService,
   ) {}
+
+  /**
+   * Bootstrap identity data for an agent/user pair
+   */
+  async bootstrap(
+    agentId?: string,
+    userId?: string,
+  ): Promise<Record<string, any>> {
+    // Future implementation will provide dynamic Engram-powered identity
+    return {};
+  }
 
   /**
    * Record a task outcome and cascade updates to capability profiles and work style

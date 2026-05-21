@@ -177,6 +177,58 @@ npm install @engram/client
   <em>Memory Browser — Semantic search, layer filtering, importance scores</em>
 </p>
 
+## Recall Benchmark
+
+Engram includes a comprehensive recall benchmark suite that tests semantic retrieval quality across 81 queries in 7 categories. Every PR runs the benchmark in CI with real embeddings (bge-base-en-v1.5) and ensemble reranking.
+
+### Latest Results (March 2026)
+
+| Metric | Pre-Dream Cycle | Post-Dream Cycle |
+|--------|:-:|:-:|
+| **Precision@5** | 95.1% ✅ | 96.9% ✅ |
+| **Recall@20** | 95.7% | 96.9% |
+| **MRR** | 0.836 | 0.874 |
+| **Isolation** | 100% ✅ | 100% ✅ |
+| **Queries Passed** | 78/81 | 79/81 |
+
+<details>
+<summary>Category Breakdown (Post-Dream Cycle)</summary>
+
+| Category | Queries | Passed | P@5 | R@20 | MRR | Isolation |
+|----------|:-------:|:------:|:---:|:----:|:---:|:---------:|
+| Adversarial | 10 | 10 | 100% | 100% | 1.00 | 100% |
+| Cross-feature | 10 | 10 | 100% | 100% | 0.88 | 100% |
+| Edge case | 16 | 16 | 100% | 100% | 0.95 | 100% |
+| Emotional | 10 | 9 | 85% | 95% | 0.73 | 100% |
+| RLS isolation | 10 | 10 | 100% | 100% | 0.88 | 100% |
+| Semantic | 14 | 13 | 93% | 100% | 0.79 | 100% |
+| Temporal | 11 | 11 | 100% | 82% | 0.87 | 100% |
+
+</details>
+
+### Benchmark Progression
+
+The recall pipeline evolved through several iterations:
+
+| Phase | P@5 | Notes |
+|-------|:---:|-------|
+| Baseline (cosine only) | ~45% | Single-model vector search, no reranking |
+| + BM25 hybrid | ~65% | Full-text search fusion for keyword recall |
+| + Sentiment polarity | ~75% | Penalizes opposite-emotion memories |
+| + Ensemble reranking | ~85% | 2 cross-encoder models via RRF |
+| + Fixture enrichment | ~90% | Realistic gold memories, noise calibration |
+| + Temporal patterns | 95.1% | Month/year/week recognition, expanded BM25 pool |
+| + Dream Cycle | **96.9%** | Post-consolidation: cleaner corpus, higher signal |
+
+### Running the Benchmark
+
+```bash
+# Requires: PostgreSQL (pgvector), embedding server, reranker servers
+pnpm benchmark                              # Pre-dream-cycle
+pnpm test:e2e -- --testPathPatterns=recall-benchmark-dream  # Post-dream-cycle
+pnpm benchmark:compare                      # Compare latest vs previous run
+```
+
 ## Contributing
 
 We'd love your help! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.

@@ -1,5 +1,6 @@
 import { Injectable, Optional, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { rlsContext } from '../prisma/rls-context';
 import {
   ExtractionService,
   ExtractionContext,
@@ -8,6 +9,8 @@ import {
 import { EmbeddingService } from './embedding.service';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { GraphExtractionService } from '../graph/services/graph-extraction.service';
+import { AttachmentPipelineService } from '../entity-profile/attachment-pipeline.service';
+import { EntityMemoryService } from './entity-memory.service';
 import { parseFlexibleDate } from '../utils/date-parser';
 import {
   RELATED_SIMILARITY_THRESHOLD,
@@ -37,6 +40,8 @@ export class MemoryPipelineService {
     private embedding: EmbeddingService,
     @Optional() private hierarchyService?: HierarchyService,
     @Optional() private graphExtraction?: GraphExtractionService,
+    @Optional() private attachmentPipeline?: AttachmentPipelineService,
+    @Optional() private entityMemory?: EntityMemoryService,
   ) {}
 
   /**
@@ -240,6 +245,19 @@ export class MemoryPipelineService {
       this.logger.debug('[Memory] No entities to store for:', memoryId);
     }
 
+    // 4b. Attach to entity profiles (fire-and-forget)
+    // Escape inherited tx — this outlives the caller's $transaction.
+    if (this.attachmentPipeline) {
+      const pipeline = this.attachmentPipeline;
+      void rlsContext.run(undefined as any, () =>
+        pipeline.onMemoryCreated(memoryId, userId).catch((err) => {
+          this.logger.warn(
+            `[Memory] Entity profile attachment failed for ${memoryId}: ${err instanceof Error ? err.message : err}`,
+          );
+        }),
+      );
+    }
+
     // 5. Generate and store embedding (Phase 2 — resilient, HEY-345)
     await this.generateAndStoreEmbedding(memoryId, raw, userId);
 
@@ -269,16 +287,16 @@ export class MemoryPipelineService {
       }
     }
 
-    // 9. Process hierarchical embeddings
+    // 9. Process hierarchical embeddings (fire-and-forget — escape inherited tx)
     if (this.hierarchyService?.isEnabled()) {
-      this.hierarchyService
-        .processMemory(memoryId, raw, userId)
-        .catch((err) => {
+      const hierarchy = this.hierarchyService;
+      void rlsContext.run(undefined as any, () =>
+        hierarchy.processMemory(memoryId, raw, userId).catch((err) => {
           this.logger.error(
-            `[Memory] Hierarchy processing failed for ${memoryId}:`,
-            err,
+            `[Memory] Hierarchy processing failed for ${memoryId}: ${err instanceof Error ? err.message : err}`,
           );
-        });
+        }),
+      );
     }
   }
 
@@ -311,9 +329,10 @@ export class MemoryPipelineService {
       this.embeddingRetryQueue.delete(memoryId);
       return true;
     } catch (embedError) {
+      const msg =
+        embedError instanceof Error ? embedError.message : String(embedError);
       this.logger.warn(
-        `[Memory] Embedding failed for ${memoryId} — queued for retry:`,
-        embedError instanceof Error ? embedError.message : embedError,
+        `[Memory] Embedding failed for ${memoryId} — queued for retry: ${msg}`,
       );
 
       // Mark as FAILED in DB
@@ -558,6 +577,19 @@ export class MemoryPipelineService {
         }
       } catch (error) {
         this.logger.error(`Failed to store entity ${entity.name}:`, error);
+      }
+    }
+
+    // ENG-50: Create IDENTITY memories for person/org entities (fire-and-forget)
+    if (this.entityMemory) {
+      for (const entity of entities) {
+        this.entityMemory
+          .ensureEntityMemory({ name: entity.name, type: entity.type, userId })
+          .catch((err) =>
+            this.logger.warn(
+              `Failed to ensure entity memory for ${entity.name}: ${err instanceof Error ? err.message : err}`,
+            ),
+          );
       }
     }
   }

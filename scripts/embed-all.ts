@@ -1,9 +1,9 @@
 import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import * as http from 'http';
 
-const prisma = new PrismaClient({
-  datasources: { db: { url: 'postgresql://postgres:postgres@localhost:54322/engram_kit' } }
-});
+const adapter = new PrismaPg({ connectionString: 'postgresql://postgres:postgres@localhost:54322/engram_kit' });
+const prisma = new PrismaClient({ adapter });
 
 const MODELS = ['bge-base', 'minilm', 'gte-base', 'nomic'];
 const DIMS: Record<string, number> = { 'bge-base': 768, 'minilm': 384, 'gte-base': 768, 'nomic': 768 };

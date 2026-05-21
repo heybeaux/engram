@@ -1,0 +1,18 @@
+{
+  "name": "engram-benchmark",
+  "version": "1.0.0",
+  "description": "Engram campaign data benchmark for WhaleHawk",
+  "scripts": {
+    "generate": "npx tsx src/data-generator.ts",
+    "benchmark": "npx tsx src/benchmark-runner.ts",
+    "cleanup": "npx tsx src/cleanup.ts"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "@types/node": "^20.11.0"
+  }
+}

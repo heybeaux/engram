@@ -206,35 +206,28 @@ export class AccountController {
       },
     });
 
-    // Get memory counts per agent
+    // Get memory counts per agent (Memory.agentId tracks the calling agent)
     const agentIds = agents.map((a) => a.id);
     const memoryCounts = await this.prisma.memory.groupBy({
-      by: ['userId'],
+      by: ['agentId'],
       where: {
-        user: { agentId: { in: agentIds } },
+        agentId: { in: agentIds },
         deletedAt: null,
       },
-      _count: true,
+      _count: { _all: true },
     });
 
-    // Map userId -> agentId
-    const users = await this.prisma.user.findMany({
-      where: { agentId: { in: agentIds } },
-      select: { id: true, agentId: true },
-    });
-    const userToAgent = new Map(users.map((u) => [u.id, u.agentId]));
-
-    // Aggregate memory counts per agent
     const agentMemoryCounts = new Map<string, number>();
     for (const mc of memoryCounts) {
-      const agentId = userToAgent.get(mc.userId);
-      if (agentId) {
-        agentMemoryCounts.set(
-          agentId,
-          (agentMemoryCounts.get(agentId) || 0) + mc._count,
-        );
+      if (mc.agentId) {
+        agentMemoryCounts.set(mc.agentId, mc._count._all);
       }
     }
+
+    // Users now belong to accounts (not individual agents)
+    const totalUsers = await this.prisma.user.count({
+      where: { accountId, deletedAt: null },
+    });
 
     return {
       agents: agents.map((a) => ({
@@ -242,7 +235,7 @@ export class AccountController {
         name: a.name,
         apiKeyHint: a.apiKeyHint || null,
         memoryCount: agentMemoryCounts.get(a.id) || 0,
-        userCount: users.filter((u) => u.agentId === a.id).length,
+        userCount: totalUsers,
         createdAt: a.createdAt,
       })),
     };

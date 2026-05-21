@@ -13,6 +13,7 @@ const mockPrisma = {
 
 const mockEmbedding = {
   generate: jest.fn(),
+  generateForRecall: jest.fn(),
 };
 
 const MOCK_EMBEDDING = Array.from({ length: 1536 }, (_, i) => i * 0.001);
@@ -31,8 +32,11 @@ describe('MemoryContradictionService', () => {
       ],
     }).compile();
 
-    service = module.get<MemoryContradictionService>(MemoryContradictionService);
+    service = module.get<MemoryContradictionService>(
+      MemoryContradictionService,
+    );
     mockEmbedding.generate.mockResolvedValue(MOCK_EMBEDDING);
+    mockEmbedding.generateForRecall.mockResolvedValue(MOCK_EMBEDDING);
   });
 
   const mockContradictionRow = {
@@ -105,9 +109,9 @@ describe('MemoryContradictionService', () => {
     it('should throw NotFoundException if memory not found', async () => {
       mockPrisma.memory.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.findContradictions('user-1', dto),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findContradictions('user-1', dto)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should throw NotFoundException with correct message', async () => {
@@ -126,17 +130,19 @@ describe('MemoryContradictionService', () => {
 
       await service.findContradictions('user-1', dto);
 
-      expect(mockEmbedding.generate).not.toHaveBeenCalled();
+      expect(mockEmbedding.generateForRecall).not.toHaveBeenCalled();
     });
 
     it('should generate embedding if stored embedding is missing', async () => {
       mockPrisma.$queryRawUnsafe
-        .mockResolvedValueOnce([])       // empty embedding lookup
-        .mockResolvedValueOnce([]);       // no contradictions
+        .mockResolvedValueOnce([]) // empty embedding lookup
+        .mockResolvedValueOnce([]); // no contradictions
 
       await service.findContradictions('user-1', dto);
 
-      expect(mockEmbedding.generate).toHaveBeenCalledWith('Coffee is good for health');
+      expect(mockEmbedding.generateForRecall).toHaveBeenCalledWith(
+        'Coffee is good for health',
+      );
     });
 
     it('should exclude source memory from results', async () => {
@@ -171,7 +177,9 @@ describe('MemoryContradictionService', () => {
 
       await service.findContradictions('user-1', { text: 'Some assertion' });
 
-      expect(mockEmbedding.generate).toHaveBeenCalledWith('Some assertion');
+      expect(mockEmbedding.generateForRecall).toHaveBeenCalledWith(
+        'Some assertion',
+      );
       expect(mockPrisma.memory.findUnique).not.toHaveBeenCalled();
     });
 
@@ -221,7 +229,11 @@ describe('MemoryContradictionService', () => {
 
     it('should convert similarity to Number', async () => {
       mockPrisma.$queryRawUnsafe.mockResolvedValue([
-        { ...mockContradictionRow, similarity: '0.95', importance_score: '0.8' },
+        {
+          ...mockContradictionRow,
+          similarity: '0.95',
+          importance_score: '0.8',
+        },
       ]);
 
       const result = await service.findContradictions('user-1', {
@@ -261,7 +273,7 @@ describe('MemoryContradictionService', () => {
       const queryArgs = mockPrisma.$queryRawUnsafe.mock.calls[0];
       const params = queryArgs.slice(1);
       expect(params).toContain(0.8); // threshold
-      expect(params).toContain(10);  // limit
+      expect(params).toContain(10); // limit
     });
 
     it('should apply custom threshold and limit', async () => {
@@ -324,7 +336,7 @@ describe('MemoryContradictionService', () => {
 
   describe('error propagation', () => {
     it('should propagate embedding errors', async () => {
-      mockEmbedding.generate.mockRejectedValue(
+      mockEmbedding.generateForRecall.mockRejectedValue(
         new Error('Embedding service timeout'),
       );
 
@@ -344,9 +356,7 @@ describe('MemoryContradictionService', () => {
     });
 
     it('should propagate findUnique errors', async () => {
-      mockPrisma.memory.findUnique.mockRejectedValue(
-        new Error('DB timeout'),
-      );
+      mockPrisma.memory.findUnique.mockRejectedValue(new Error('DB timeout'));
 
       await expect(
         service.findContradictions('user-1', { memoryId: 'mem-1' }),

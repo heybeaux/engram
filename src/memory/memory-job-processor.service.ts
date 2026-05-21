@@ -47,10 +47,10 @@ export class MemoryJobProcessorService implements OnModuleInit {
         id: true,
         externalId: true,
         displayName: true,
-        agent: { select: { accountId: true } },
+        accountId: true,
       },
     });
-    const accountId = user?.agent?.accountId;
+    const accountId = user?.accountId;
 
     const run = async () => {
       await this.pipeline.extractAndEmbed(

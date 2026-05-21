@@ -4,6 +4,7 @@ import 'dotenv/config';
 
 import { NestFactory } from '@nestjs/core';
 import { HttpAdapterHost } from '@nestjs/core';
+import * as bodyParser from 'body-parser';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -26,6 +27,10 @@ async function bootstrap() {
     rawBody: true,
     bufferLogs: true,
   });
+
+  // Increase body parser limit for cloud sync bulk pushes (default 100KB too small for batch payloads)
+  app.use(bodyParser.json({ limit: '10mb' }));
+  app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
   // Trust Railway's reverse proxy so request.ip returns the real client IP
   const expressApp = app.getHttpAdapter().getInstance();

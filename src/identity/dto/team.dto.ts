@@ -1,7 +1,7 @@
 import { IsString, IsArray, IsOptional, ArrayMinSize } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class CreateTeamDto {
+export class CreateIdentityTeamDto {
   @ApiProperty({ description: 'Team name' })
   @IsString()
   name: string;
