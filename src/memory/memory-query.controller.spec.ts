@@ -71,6 +71,160 @@ describe('MemoryQueryController', () => {
       expect(result).toEqual(expected);
       expect(memoryService.recall).toHaveBeenCalledWith(userId, dto);
     });
+
+    // ENG-134: structured response format
+    describe('response format switching (ENG-134)', () => {
+      const createdAt = new Date('2026-05-21T14:32:11.000Z');
+      const legacyResult = {
+        recallId: 'rec-1',
+        memories: [
+          {
+            id: 'mem-1',
+            userId: 'user-123',
+            raw: 'The user prefers dark mode.',
+            sessionId: 'sess-abc',
+            score: 0.87,
+            createdAt,
+            memoryType: 'PREFERENCE',
+            layer: 'IDENTITY',
+            confidence: 1.0, // intrinsic; must NOT bleed into structured.confidence
+          },
+          {
+            id: 'mem-2',
+            userId: 'user-123',
+            raw: 'No session for this one.',
+            sessionId: null,
+            score: undefined,
+            createdAt,
+            memoryType: null,
+            layer: 'PROJECT',
+            confidence: 0.5,
+          },
+        ],
+        queryTokens: 3,
+        latencyMs: 12,
+      };
+
+      it('returns the legacy shape unchanged by default', async () => {
+        memoryService.recall.mockResolvedValue(legacyResult as any);
+        const res = { set: jest.fn() } as any;
+        const result = await controller.recall(
+          userId,
+          { query: 'x' } as any,
+          { isInstanceKey: false },
+          res,
+        );
+        expect(result).toBe(legacyResult);
+        expect((result as any).format).toBeUndefined();
+        expect((result as any).memories[0].raw).toBe(
+          'The user prefers dark mode.',
+        );
+        // Legacy response carries the raw Prisma fields; no `fact` projection.
+        expect((result as any).memories[0].fact).toBeUndefined();
+      });
+
+      it('returns legacy shape when response_format=legacy is explicit', async () => {
+        memoryService.recall.mockResolvedValue(legacyResult as any);
+        const res = { set: jest.fn() } as any;
+        const result = await controller.recall(
+          userId,
+          { query: 'x' } as any,
+          { isInstanceKey: false },
+          res,
+          undefined,
+          undefined,
+          'legacy',
+        );
+        expect((result as any).format).toBeUndefined();
+        expect((result as any).memories[0].raw).toBe(
+          'The user prefers dark mode.',
+        );
+      });
+
+      it('returns structured shape when response_format=structured', async () => {
+        memoryService.recall.mockResolvedValue(legacyResult as any);
+        const res = { set: jest.fn() } as any;
+        const result: any = await controller.recall(
+          userId,
+          { query: 'x' } as any,
+          { isInstanceKey: false },
+          res,
+          undefined,
+          undefined,
+          'structured',
+        );
+        expect(result.format).toBe('json_v2');
+        expect(result.recallId).toBe('rec-1');
+        expect(result.queryTokens).toBe(3);
+        expect(result.latencyMs).toBe(12);
+        expect(result.memories).toHaveLength(2);
+        expect(result.memories[0]).toEqual({
+          id: 'mem-1',
+          fact: 'The user prefers dark mode.',
+          source_session: 'sess-abc',
+          confidence: 0.87, // retrieval score, NOT intrinsic memory.confidence
+          timestamp: '2026-05-21T14:32:11.000Z',
+          memory_type: 'PREFERENCE',
+        });
+        expect(result.memories[1]).toEqual({
+          id: 'mem-2',
+          fact: 'No session for this one.',
+          source_session: null,
+          confidence: null, // no score → null, not fabricated
+          timestamp: '2026-05-21T14:32:11.000Z',
+          memory_type: null,
+        });
+        expect(res.set).toHaveBeenCalledWith('X-Response-Format', 'json_v2');
+      });
+
+      it('also accepts response_format=json_v2 as an alias', async () => {
+        memoryService.recall.mockResolvedValue(legacyResult as any);
+        const res = { set: jest.fn() } as any;
+        const result: any = await controller.recall(
+          userId,
+          { query: 'x' } as any,
+          { isInstanceKey: false },
+          res,
+          undefined,
+          undefined,
+          'json_v2',
+        );
+        expect(result.format).toBe('json_v2');
+      });
+
+      it('switches via Accept: application/vnd.engram.v2+json header', async () => {
+        memoryService.recall.mockResolvedValue(legacyResult as any);
+        const res = { set: jest.fn() } as any;
+        const result: any = await controller.recall(
+          userId,
+          { query: 'x' } as any,
+          { isInstanceKey: false },
+          res,
+          undefined,
+          undefined,
+          undefined,
+          'application/vnd.engram.v2+json',
+        );
+        expect(result.format).toBe('json_v2');
+      });
+
+      it('lets explicit response_format=legacy override an Accept v2 header', async () => {
+        memoryService.recall.mockResolvedValue(legacyResult as any);
+        const res = { set: jest.fn() } as any;
+        const result: any = await controller.recall(
+          userId,
+          { query: 'x' } as any,
+          { isInstanceKey: false },
+          res,
+          undefined,
+          undefined,
+          'legacy',
+          'application/vnd.engram.v2+json',
+        );
+        expect(result.format).toBeUndefined();
+        expect(result.memories[0].raw).toBe('The user prefers dark mode.');
+      });
+    });
   });
 
   describe('contextualRecall', () => {

@@ -268,7 +268,7 @@
     },
     "/v1/memories/query": {
       "post": {
-        "description": "Semantic search across memories using natural language queries.",
+        "description": "Semantic search across memories using natural language queries. Default response is the legacy QueryResult envelope (memories are full Prisma rows). Pass `?response_format=structured` (or `Accept: application/vnd.engram.v2+json`) to receive the v2 StructuredQueryResult shape with typed fields (fact, source_session, confidence, timestamp, memory_type). ENG-134.",
         "operationId": "MemoryController_recall",
         "parameters": [
           {
@@ -277,6 +277,43 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "Set to `user` to restrict recall to the calling user (skip account-wide expansion).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user"
+              ]
+            }
+          },
+          {
+            "name": "response_format",
+            "required": false,
+            "in": "query",
+            "description": "Switches response shape. `legacy` (default) returns the existing QueryResult with full Prisma memory rows. `structured` / `json_v2` returns the typed StructuredQueryResult envelope with fact/source_session/confidence/timestamp/memory_type per item. ENG-134.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "legacy",
+                "structured",
+                "json_v2"
+              ],
+              "default": "legacy"
+            }
+          },
+          {
+            "name": "Accept",
+            "required": false,
+            "in": "header",
+            "description": "Content-negotiation alternative to `response_format`. Pass `application/vnd.engram.v2+json` to receive the structured response. Ignored when `response_format` is explicitly set.",
+            "schema": {
+              "type": "string",
+              "example": "application/vnd.engram.v2+json"
             }
           }
         ],
@@ -292,7 +329,43 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Recall succeeded. Body shape depends on `response_format`.",
+            "headers": {
+              "X-Query-Id": {
+                "description": "Correlation ID for retrieval signal logging.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Response-Format": {
+                "description": "Present and set to `json_v2` when the structured response shape was returned.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "json_v2"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/QueryResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StructuredQueryResult"
+                    }
+                  ]
+                }
+              },
+              "application/vnd.engram.v2+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredQueryResult"
+                }
+              }
+            }
           }
         },
         "summary": "Search memories",
@@ -9580,6 +9653,164 @@
       "FlushMemoriesDto": {
         "type": "object",
         "properties": {}
+      },
+      "StructuredMemoryItem": {
+        "type": "object",
+        "description": "ENG-134: v2 typed projection of a recalled memory.",
+        "required": [
+          "id",
+          "fact",
+          "source_session",
+          "confidence",
+          "timestamp",
+          "memory_type"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Memory ID (cuid).",
+            "example": "clx0memory123"
+          },
+          "fact": {
+            "type": "string",
+            "description": "The memory content / extracted fact. Sourced from the memory `raw` field.",
+            "example": "The user prefers dark mode."
+          },
+          "source_session": {
+            "type": "string",
+            "nullable": true,
+            "description": "Session that originally produced this memory. Null when unknown.",
+            "example": "clx0session456"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Retrieval confidence/score from the ranking pipeline (cosine similarity, RRF, or ranker score — whichever the retriever exposed). Typically 0..1 for cosine; RRF/hybrid scores may exceed 1.0. Null when the retrieval pipeline did not surface a score. Distinct from the intrinsic memory.confidence field on the row.",
+            "example": 0.87
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the memory was created (ISO 8601).",
+            "example": "2026-05-21T14:32:11.000Z"
+          },
+          "memory_type": {
+            "type": "string",
+            "nullable": true,
+            "description": "Memory type classification. Maps to the existing `memoryType` field.",
+            "enum": [
+              "FACT",
+              "PREFERENCE",
+              "CONSTRAINT",
+              "TASK",
+              "EVENT",
+              "LESSON",
+              "INSIGHT",
+              "DECISION",
+              "OUTCOME",
+              "GOAL",
+              null
+            ]
+          }
+        }
+      },
+      "StructuredQueryResult": {
+        "type": "object",
+        "description": "ENG-134: v2 recall envelope returned when `response_format=structured` or `Accept: application/vnd.engram.v2+json` is set.",
+        "required": [
+          "recallId",
+          "memories",
+          "queryTokens",
+          "latencyMs",
+          "format"
+        ],
+        "properties": {
+          "recallId": {
+            "type": "string"
+          },
+          "memories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StructuredMemoryItem"
+            }
+          },
+          "queryTokens": {
+            "type": "number"
+          },
+          "latencyMs": {
+            "type": "number"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json_v2"
+            ],
+            "description": "Response format identifier. Always `json_v2` for this shape."
+          },
+          "multiQuery": {
+            "type": "object",
+            "description": "Multi-query retrieval metadata (sub-queries, fusion strategy) when used.",
+            "additionalProperties": true
+          },
+          "explanations": {
+            "type": "object",
+            "description": "Per-memory ranking explanation, keyed by memory ID.",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "anticipatoryMeta": {
+            "type": "object",
+            "description": "Anticipatory recall metadata when anticipatory.enabled=true."
+          }
+        }
+      },
+      "QueryResult": {
+        "type": "object",
+        "description": "Legacy recall envelope (default response). Returned unless callers opt into the structured shape.",
+        "required": [
+          "recallId",
+          "memories",
+          "queryTokens",
+          "latencyMs"
+        ],
+        "properties": {
+          "recallId": {
+            "type": "string"
+          },
+          "memories": {
+            "type": "array",
+            "description": "Array of Memory rows (Prisma model) augmented with optional `score` and recall metadata.",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "queryTokens": {
+            "type": "number"
+          },
+          "latencyMs": {
+            "type": "number"
+          },
+          "multiQuery": {
+            "type": "object",
+            "description": "Multi-query retrieval metadata (sub-queries, fusion strategy) when used.",
+            "additionalProperties": true
+          },
+          "explanations": {
+            "type": "object",
+            "description": "Per-memory ranking explanation, keyed by memory ID.",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "anticipatoryMeta": {
+            "type": "object"
+          }
+        }
       }
     }
   }

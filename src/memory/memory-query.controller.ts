@@ -7,11 +7,17 @@ import {
   Req,
   Res,
   UseGuards,
+  Headers,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { MemoryService, QueryResult, ContextResult } from './memory.service';
 import { MemoryQueryService } from './memory-query.service';
 import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
+import {
+  StructuredQueryResult,
+  toStructuredQueryResult,
+  wantsStructuredResponse,
+} from './dto/structured-recall.dto';
 import {
   TraceTimelineDto,
   TraceTimelineResponse,
@@ -95,7 +101,11 @@ export class MemoryQueryController {
   @ApiOperation({
     summary: 'Search memories',
     description:
-      'Semantic search across memories using natural language queries.',
+      'Semantic search across memories using natural language queries. ' +
+      'Default response is the legacy QueryResult envelope (memories are full Prisma rows). ' +
+      'Pass `?response_format=structured` (or `Accept: application/vnd.engram.v2+json`) to ' +
+      'receive the v2 StructuredQueryResult shape with typed fields ' +
+      '(fact, source_session, confidence, timestamp, memory_type).',
   })
   @ApiTags('search')
   @RateLimit(60)
@@ -106,7 +116,9 @@ export class MemoryQueryController {
     @Res({ passthrough: true }) res: Response,
     @Query('agentId') agentId?: string,
     @Query('scope') scope?: string,
-  ): Promise<QueryResult> {
+    @Query('response_format') responseFormat?: string,
+    @Headers('accept') acceptHeader?: string,
+  ): Promise<QueryResult | StructuredQueryResult> {
     const accountUserIds =
       scope === 'user' ? null : await this.resolveAccountUserIds(req, agentId);
     const result = await this.memoryService.recall(
@@ -129,6 +141,12 @@ export class MemoryQueryController {
       } catch {
         // Signal logging must never break retrieval
       }
+    }
+
+    // ENG-134: Optionally project to the v2 structured response shape.
+    if (wantsStructuredResponse(responseFormat, acceptHeader)) {
+      res.set('X-Response-Format', 'json_v2');
+      return toStructuredQueryResult(result);
     }
 
     return result;
