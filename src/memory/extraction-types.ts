@@ -64,6 +64,7 @@ export const MEMORY_TYPE_PRIORITY: Record<MemoryType, number> = {
   DECISION: 2,
   OUTCOME: 3,
   GOAL: 2,
+  TEMPORAL_GAP: 4, // System-generated session anchor; matches EVENT priority
 };
 
 export interface EntityWithType {
