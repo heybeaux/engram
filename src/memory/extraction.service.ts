@@ -145,6 +145,11 @@ export class ExtractionService {
         lesson,
         capabilities,
         preferenceSignals,
+        factKeys: Array.isArray(result.fact_keys)
+          ? (result.fact_keys as string[]).filter(
+              (k) => typeof k === 'string' && k.trim().length > 0,
+            )
+          : [],
       };
 
       this.logger.log('[Extraction] Extraction complete:', {

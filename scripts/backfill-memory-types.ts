@@ -29,6 +29,7 @@ const TYPE_PRIORITY: Record<MemoryType, number> = {
   OUTCOME: 3,
   GOAL: 2,
   TEMPORAL_GAP: 4, // System-generated session anchors - low priority, not classified
+  FACT_KEY: 4,     // HEY-574: Derived atomic fact children - not classified by this backfill
 };
 
 // Classification prompt
@@ -166,6 +167,7 @@ async function main() {
     OUTCOME: 0,
     GOAL: 0,
     TEMPORAL_GAP: 0, // System-generated, not produced by this classifier
+    FACT_KEY: 0,     // HEY-574: Derived, not produced by this classifier
   };
 
   let processed = 0;

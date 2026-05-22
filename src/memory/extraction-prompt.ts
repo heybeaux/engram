@@ -104,5 +104,11 @@ Output these additional fields:
 If a 5W1H field is null, set its confidence to null too.
 For topics and entities, return empty arrays if none found.
 
+FACT KEY EXTRACTION (HEY-574):
+Extract 2-5 declarative atomic facts distilled from the raw text. Each must be a complete standalone sentence under 20 words capturing one atomic piece of information that could match a recall query.
+
+Output as:
+- "fact_keys": Array of 2-5 short declarative strings. Return [] if no distinct atomic facts can be distilled.
+
 Respond with valid JSON only, using lowercase keys. No explanation.`;
 };

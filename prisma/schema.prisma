@@ -168,6 +168,7 @@ model Memory {
   embeddingModel         String?          @map("embedding_model")
   embeddingStatus        EmbeddingStatus  @default(PENDING) @map("embedding_status")
   isDuplicateOf          String?          @map("is_duplicate_of")
+  parentMemoryId         String?          @map("parent_memory_id") // HEY-574: FACT_KEY child → parent link
   ingestedAt             DateTime         @default(now()) @map("ingested_at")
   retrievalCount         Int              @default(0) @map("retrieval_count")
   lastRetrievedAt        DateTime?        @map("last_retrieved_at")
@@ -311,6 +312,10 @@ model MemoryExtraction {
   whereConfidence Float? @map("where_confidence")
   whyConfidence   Float? @map("why_confidence")
   howConfidence   Float? @map("how_confidence")
+
+  // HEY-574: LLM-distilled atomic facts for key expansion (LongMemEval S2)
+  factKeys       String[] @default([]) @map("fact_keys")
+  factKeyVectors Json?    @map("fact_key_vectors")
 
   rawJson     Json?    @map("raw_json")
   extractedAt DateTime @default(now()) @map("extracted_at")
@@ -676,6 +681,7 @@ enum MemoryType {
   OUTCOME // Priority 3: Results of actions (linked to decisions)
   GOAL // Priority 2: Intended objectives (active until resolved or abandoned)
   TEMPORAL_GAP // ENG-131: Session-resume gap markers anchoring observations temporally
+  FACT_KEY // HEY-574: LLM-distilled atomic fact child rows for key expansion
 }
 
 /// Subject type - who/what is this memory about?

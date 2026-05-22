@@ -218,6 +218,7 @@ export class AnalyticsService {
             OUTCOME: 0,
             GOAL: 0,
             TEMPORAL_GAP: 0,
+            FACT_KEY: 0,
           },
           total: 0,
         });

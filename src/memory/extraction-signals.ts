@@ -185,6 +185,7 @@ export function basicExtraction(
     lesson: null,
     capabilities: extractCapabilitySignals(processedRaw),
     preferenceSignals: extractPreferenceSignals(processedRaw, memoryType),
+    factKeys: [],
   };
 }
 

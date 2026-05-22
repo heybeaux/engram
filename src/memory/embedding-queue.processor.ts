@@ -8,7 +8,8 @@ import {
   MemoryDedupService,
   INSIGHT_DEDUP_THRESHOLD,
 } from './memory-dedup.service';
-import { MemoryLayer, MemorySource } from '@prisma/client';
+import { MemoryLayer, MemorySource, MemoryType } from '@prisma/client';
+import { generateContentHash } from '../common/content-hash.util';
 
 @Processor(EMBEDDING_QUEUE, { concurrency: 2 })
 export class EmbeddingQueueProcessor extends WorkerHost {
@@ -54,6 +55,11 @@ export class EmbeddingQueueProcessor extends WorkerHost {
       // Run embed + extraction pipeline (sets embeddingStatus → COMPLETE internally)
       await this.pipeline.extractAndEmbed(memoryId, raw, userId);
 
+      // [HEY-574] Create FACT_KEY child rows from extraction if feature flag is on
+      if (process.env.ENABLE_FACT_KEY_EXPANSION === 'true') {
+        await this.createFactKeyChildren(memoryId, userId);
+      }
+
       // [HEY-462] Run dedup off the hot path now that the embedding exists
       if (runDedup) {
         await this.runDedup(
@@ -79,6 +85,98 @@ export class EmbeddingQueueProcessor extends WorkerHost {
         .catch(() => {});
       throw err;
     }
+  }
+
+  /**
+   * HEY-574: For each factKey in the parent memory's extraction, create a
+   * FACT_KEY child memory row with searchable=true and parentMemoryId set.
+   * Gated on contentHash to prevent duplicates on re-ingestion.
+   */
+  private async createFactKeyChildren(
+    parentMemoryId: string,
+    userId: string,
+  ): Promise<void> {
+    try {
+      const extraction = await this.prisma.memoryExtraction.findUnique({
+        where: { memoryId: parentMemoryId },
+        select: { factKeys: true },
+      });
+
+      if (!extraction || !extraction.factKeys.length) {
+        return;
+      }
+
+      const parent = await this.prisma.memory.findUnique({
+        where: { id: parentMemoryId },
+        select: { layer: true, sessionId: true },
+      });
+      if (!parent) return;
+
+      for (const factKey of extraction.factKeys) {
+        await this.upsertFactKeyChild(
+          factKey,
+          parentMemoryId,
+          userId,
+          parent.layer,
+          parent.sessionId,
+        );
+      }
+    } catch (err) {
+      // Fact key expansion failure must not fail the job
+      this.logger.error(
+        `[HEY-574] Fact key expansion failed for ${parentMemoryId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private async upsertFactKeyChild(
+    factKey: string,
+    parentMemoryId: string,
+    userId: string,
+    layer: MemoryLayer | string | null,
+    sessionId: string | null | undefined,
+  ): Promise<void> {
+    const contentHash = generateContentHash(factKey);
+
+    // Dedup: skip if a FACT_KEY row with this contentHash already exists for this parent
+    const existing = await this.prisma.memory.findFirst({
+      where: {
+        userId,
+        parentMemoryId,
+        memoryType: MemoryType.FACT_KEY,
+        contentHash,
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      this.logger.debug(
+        `[HEY-574] Skipping duplicate FACT_KEY contentHash=${contentHash} parent=${parentMemoryId}`,
+      );
+      return;
+    }
+
+    const child = await this.prisma.memory.create({
+      data: {
+        userId,
+        raw: factKey,
+        layer: (layer ?? 'SESSION') as MemoryLayer,
+        source: MemorySource.AGENT_OBSERVATION,
+        memoryType: MemoryType.FACT_KEY,
+        searchable: true,
+        parentMemoryId,
+        sessionId: sessionId ?? undefined,
+        contentHash,
+        embeddingStatus: 'PENDING',
+      } as any,
+    });
+
+    this.logger.debug(
+      `[HEY-574] Created FACT_KEY child ${child.id} for parent ${parentMemoryId}`,
+    );
+
+    // Embed the child row immediately (fire-and-forget; failure is non-fatal)
+    await this.pipeline.generateAndStoreEmbedding(child.id, factKey, userId);
   }
 
   /**

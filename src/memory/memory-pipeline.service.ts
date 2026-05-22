@@ -129,6 +129,7 @@ export class MemoryPipelineService {
         why: extracted.why,
         how: extracted.how,
         topics: extracted.topics,
+        factKeys: extracted.factKeys ?? [],
         rawJson:
           Object.keys(rawJsonData).length > 0
             ? (rawJsonData as any)
