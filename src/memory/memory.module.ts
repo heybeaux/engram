@@ -52,6 +52,7 @@ import { EMBEDDING_QUEUE } from './embedding.queue';
 import { RetrievalSignalsModule } from '../retrieval-signals/retrieval-signals.module';
 import { EntityMemoryService } from './entity-memory.service';
 import { ProjectStateService } from './project-state.service';
+import { ChainOfNoteService } from './chain-of-note.service';
 
 const hasRedis = !!(
   process.env.REDIS_URL ||
@@ -125,6 +126,7 @@ const bullExports = hasRedis ? [EmbeddingQueueProducer] : [];
     GraphRecallService,
     EntityMemoryService,
     ProjectStateService,
+    ChainOfNoteService,
     ...bullProviders,
   ],
   exports: [

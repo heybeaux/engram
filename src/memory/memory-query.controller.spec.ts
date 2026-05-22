@@ -4,6 +4,7 @@ import { MemoryQueryService } from './memory-query.service';
 import { ContextualRecallService } from './contextual-recall.service';
 import { TemporalGapService } from './temporal-gap.service';
 import { ProjectStateService } from './project-state.service';
+import { ChainOfNoteService } from './chain-of-note.service';
 
 describe('MemoryQueryController', () => {
   let controller: MemoryQueryController;
@@ -55,6 +56,7 @@ describe('MemoryQueryController', () => {
       prismaService,
       retrievalSignals,
       projectStateService,
+      new ChainOfNoteService(),
     );
   });
 
@@ -223,6 +225,97 @@ describe('MemoryQueryController', () => {
         );
         expect(result.format).toBeUndefined();
         expect(result.memories[0].raw).toBe('The user prefers dark mode.');
+      });
+    });
+
+    // HEY-576: Chain-of-Note integration
+    describe('chain-of-note (HEY-576)', () => {
+      const createdAt = new Date('2026-05-21T14:32:11.000Z');
+      const resultWithMemories = {
+        recallId: 'rec-con-1',
+        memories: [
+          {
+            id: 'mem-con-1',
+            raw: 'The user prefers TypeScript.',
+            sessionId: 'sess-1',
+            score: 0.9,
+            createdAt,
+            memoryType: 'PREFERENCE',
+          },
+        ],
+        queryTokens: 5,
+        latencyMs: 10,
+      };
+
+      it('includes chainOfNotePrompt in structured response when memories exist', async () => {
+        memoryService.recall.mockResolvedValue(resultWithMemories as any);
+        const res = { set: jest.fn() } as any;
+        const result: any = await controller.recall(
+          userId,
+          { query: 'What language does the user prefer?' } as any,
+          { isInstanceKey: false },
+          res,
+          undefined,
+          undefined,
+          'structured',
+        );
+        expect(result.format).toBe('json_v2');
+        expect(result.chainOfNotePrompt).toBeDefined();
+        expect(typeof result.chainOfNotePrompt).toBe('string');
+        expect(result.chainOfNotePrompt).toContain(
+          'What language does the user prefer?',
+        );
+        expect(result.chainOfNotePrompt).toContain('[MEMORY <id>]');
+        expect(result.chainOfNotePrompt).toContain('mem-con-1');
+      });
+
+      it('includes chainOfNotePrompt when chainOfNote=true in body', async () => {
+        memoryService.recall.mockResolvedValue(resultWithMemories as any);
+        const res = { set: jest.fn() } as any;
+        const result: any = await controller.recall(
+          userId,
+          { query: 'What language?', chainOfNote: true } as any,
+          { isInstanceKey: false },
+          res,
+        );
+        expect(result.format).toBe('json_v2');
+        expect(result.chainOfNotePrompt).toBeDefined();
+        expect(result.chainOfNotePrompt).toContain('What language?');
+      });
+
+      it('omits chainOfNotePrompt when no memories returned', async () => {
+        memoryService.recall.mockResolvedValue({
+          recallId: 'rec-empty',
+          memories: [],
+          queryTokens: 2,
+          latencyMs: 5,
+        } as any);
+        const res = { set: jest.fn() } as any;
+        const result: any = await controller.recall(
+          userId,
+          { query: 'anything' } as any,
+          { isInstanceKey: false },
+          res,
+          undefined,
+          undefined,
+          'structured',
+        );
+        expect(result.format).toBe('json_v2');
+        expect(result.chainOfNotePrompt).toBeUndefined();
+      });
+
+      it('does not include chainOfNotePrompt on legacy (non-structured) responses', async () => {
+        memoryService.recall.mockResolvedValue(resultWithMemories as any);
+        const res = { set: jest.fn() } as any;
+        const result: any = await controller.recall(
+          userId,
+          { query: 'q' } as any,
+          { isInstanceKey: false },
+          res,
+        );
+        // Legacy shape — no format or chainOfNotePrompt
+        expect(result.format).toBeUndefined();
+        expect(result.chainOfNotePrompt).toBeUndefined();
       });
     });
   });

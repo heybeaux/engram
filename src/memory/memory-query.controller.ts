@@ -42,6 +42,7 @@ import {
 } from './dto/gap-detection-query.dto';
 import { ContextualRecallService } from './contextual-recall.service';
 import { TemporalGapService } from './temporal-gap.service';
+import { ChainOfNoteService } from './chain-of-note.service';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { UserId } from '../common/decorators/user-id.decorator';
@@ -63,6 +64,7 @@ export class MemoryQueryController {
     private readonly prisma: PrismaService,
     private readonly retrievalSignals: RetrievalSignalsService,
     private readonly projectStateService: ProjectStateService,
+    private readonly chainOfNoteService: ChainOfNoteService,
   ) {}
 
   /**
@@ -144,9 +146,25 @@ export class MemoryQueryController {
     }
 
     // ENG-134: Optionally project to the v2 structured response shape.
-    if (wantsStructuredResponse(responseFormat, acceptHeader)) {
+    const wantsStructured = wantsStructuredResponse(
+      responseFormat,
+      acceptHeader,
+    );
+    const wantsCoN = dto.chainOfNote === true;
+
+    if (wantsStructured || wantsCoN) {
       res.set('X-Response-Format', 'json_v2');
-      return toStructuredQueryResult(result);
+      const structured = toStructuredQueryResult(result);
+
+      // HEY-576: Attach CoN prompt when structured format active and memories returned
+      if (structured.memories.length > 0 && (wantsStructured || wantsCoN)) {
+        structured.chainOfNotePrompt = this.chainOfNoteService.buildPrompt(
+          structured.memories,
+          dto.query,
+        );
+      }
+
+      return structured;
     }
 
     return result;

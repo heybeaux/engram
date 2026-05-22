@@ -1,0 +1,22 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`CHAIN_OF_NOTE_TEMPLATE snapshot — prompt shape is stable 1`] = `
+"You are reading memory search results to answer a question.
+
+For each memory below, write one sentence: "[MEMORY <id>]: <relevance note — relevant / not relevant / partially relevant because …>"
+
+Then answer the question based only on relevant memories. If no memory is relevant, say so.
+
+Question: What language does Beaux prefer?
+
+Memories:
+[
+  {
+    "id": "snap-1",
+    "fact": "Beaux prefers TypeScript over JavaScript.",
+    "confidence": 0.9,
+    "timestamp": "2026-01-01T00:00:00.000Z",
+    "memory_type": null
+  }
+]"
+`;

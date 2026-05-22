@@ -1,4 +1,5 @@
 import { MemoryQueryContextService } from './memory-query-context.service';
+import { ChainOfNoteService } from './chain-of-note.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MemoryLayer, SubjectType } from '@prisma/client';
 
@@ -166,6 +167,97 @@ describe('MemoryQueryContextService', () => {
 
       const result = await service.loadContext('user-123', { maxTokens: 100 });
       expect(result.tokenCount).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('HEY-576: chainOfNote flag', () => {
+    const identityMemory = {
+      id: 'im-1',
+      raw: 'Beaux prefers TypeScript.',
+      layer: MemoryLayer.IDENTITY,
+      safetyCritical: false,
+      priority: 3,
+      sessionId: null,
+      memoryType: 'FACT',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+
+    it('returns flat context by default (chainOfNote absent)', async () => {
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValueOnce([identityMemory])
+        .mockResolvedValue([]);
+
+      const result = await service.loadContext('user-123', {});
+      expect(result.context).toContain('## User Identity');
+      expect(result.context).not.toContain('Chain-of-Note');
+      expect(result.context).not.toContain('[MEMORY');
+    });
+
+    it('returns flat context when chainOfNote=false', async () => {
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValueOnce([identityMemory])
+        .mockResolvedValue([]);
+
+      const result = await service.loadContext('user-123', {
+        chainOfNote: false,
+      });
+      expect(result.context).toContain('## User Identity');
+    });
+
+    it('returns CoN prompt when chainOfNote=true and memories exist', async () => {
+      const chainOfNoteService = new ChainOfNoteService();
+      const serviceWithCoN = new MemoryQueryContextService(
+        prisma,
+        chainOfNoteService,
+      );
+
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValueOnce([identityMemory])
+        .mockResolvedValue([]);
+
+      const result = await serviceWithCoN.loadContext('user-123', {
+        chainOfNote: true,
+        query: 'What does Beaux prefer?',
+      });
+
+      expect(result.context).toContain('What does Beaux prefer?');
+      expect(result.context).toContain('[MEMORY <id>]');
+      expect(result.context).not.toContain('## User Identity');
+    });
+
+    it('returns flat context when chainOfNote=true but no memories', async () => {
+      const chainOfNoteService = new ChainOfNoteService();
+      const serviceWithCoN = new MemoryQueryContextService(
+        prisma,
+        chainOfNoteService,
+      );
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      const result = await serviceWithCoN.loadContext('user-123', {
+        chainOfNote: true,
+        query: 'anything',
+      });
+
+      expect(result.context).toBe('');
+    });
+
+    it('gracefully ignores chainOfNote=true when service not injected', async () => {
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValueOnce([identityMemory])
+        .mockResolvedValue([]);
+
+      const result = await service.loadContext('user-123', {
+        chainOfNote: true,
+        query: 'q',
+      });
+
+      // Falls back to flat context because chainOfNoteService is undefined
+      expect(result.context).toContain('## User Identity');
     });
   });
 });

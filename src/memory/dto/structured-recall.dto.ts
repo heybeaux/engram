@@ -106,6 +106,14 @@ export class StructuredQueryResult {
     type: Object,
   })
   anticipatoryMeta?: AnticipatoryMeta;
+
+  @ApiPropertyOptional({
+    description:
+      'Chain-of-Note system prompt for the reading model. ' +
+      'Populated when the caller requests structured format and at least one memory was recalled. ' +
+      'Embed this as the system prompt so the reading model annotates each memory before answering.',
+  })
+  chainOfNotePrompt?: string;
 }
 
 /**
@@ -119,8 +127,7 @@ export type ResponseFormat = 'legacy' | 'structured' | 'json_v2';
  * Vendored media-type alternative to the query param for content-negotiation
  * style callers. Either trigger is accepted; the query param wins on conflict.
  */
-export const STRUCTURED_ACCEPT_MEDIA_TYPE =
-  'application/vnd.engram.v2+json';
+export const STRUCTURED_ACCEPT_MEDIA_TYPE = 'application/vnd.engram.v2+json';
 
 /**
  * Decide whether the request asks for the structured response shape.
@@ -136,7 +143,10 @@ export function wantsStructuredResponse(
     if (normalized === 'structured' || normalized === 'json_v2') return true;
     if (normalized === 'legacy') return false;
   }
-  if (acceptHeader && acceptHeader.toLowerCase().includes(STRUCTURED_ACCEPT_MEDIA_TYPE)) {
+  if (
+    acceptHeader &&
+    acceptHeader.toLowerCase().includes(STRUCTURED_ACCEPT_MEDIA_TYPE)
+  ) {
     return true;
   }
   return false;

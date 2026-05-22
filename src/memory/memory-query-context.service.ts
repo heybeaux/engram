@@ -1,14 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoadContextDto } from './dto/query-memory.dto';
 import { Memory, MemoryLayer, SubjectType } from '@prisma/client';
 import { ContextResult } from './memory.types';
+import { ChainOfNoteService } from './chain-of-note.service';
+import { toStructuredItem } from './dto/structured-recall.dto';
 
 @Injectable()
 export class MemoryQueryContextService {
   private readonly logger = new Logger(MemoryQueryContextService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private readonly chainOfNote?: ChainOfNoteService,
+  ) {}
 
   /**
    * Load context for session start
@@ -188,8 +193,18 @@ export class MemoryQueryContextService {
       });
     }
 
+    // HEY-576: When chainOfNote=true, replace the flat context with a CoN prompt
+    let contextText = context.text;
+    if (dto.chainOfNote && this.chainOfNote && memories.length > 0) {
+      const structuredItems = memories.map(toStructuredItem);
+      contextText = this.chainOfNote.buildPrompt(
+        structuredItems,
+        dto.query ?? '',
+      );
+    }
+
     return {
-      context: context.text,
+      context: contextText,
       tokenCount: context.tokens,
       memoriesIncluded: memories.length,
       layers,

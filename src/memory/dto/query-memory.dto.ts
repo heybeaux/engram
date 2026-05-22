@@ -213,6 +213,18 @@ export class QueryMemoryDto {
   @Min(1.0)
   @Max(5.0)
   agentBoost?: number;
+
+  // HEY-576: Chain-of-Note reading prompt
+  @ApiPropertyOptional({
+    description:
+      'When true, the structured response includes a Chain-of-Note system prompt ' +
+      'that instructs the reading model to annotate each memory before answering. ' +
+      'Requires structured=true (or response_format=structured) to take effect.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  chainOfNote?: boolean;
 }
 
 export class LoadContextDto {
@@ -231,4 +243,24 @@ export class LoadContextDto {
   @IsOptional()
   @IsNumber()
   maxTokens?: number = 4000;
+
+  // HEY-576: Chain-of-Note flag for context endpoint
+  @ApiPropertyOptional({
+    description:
+      'When true, the returned context string is replaced by a Chain-of-Note prompt ' +
+      'template populated with the loaded memories. Use as the system prompt for the reading model.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  chainOfNote?: boolean;
+
+  // HEY-576: natural-language question used by CoN template when chainOfNote=true
+  @ApiPropertyOptional({
+    description:
+      'Question for the Chain-of-Note prompt (used with chainOfNote=true).',
+  })
+  @IsOptional()
+  @IsString()
+  query?: string;
 }
