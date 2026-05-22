@@ -434,6 +434,7 @@ describe('ExtractionService', () => {
           lesson: null,
           capabilities: [],
           preferenceSignals: [],
+          factKeys: [],
         };
         expect(service.classifyLayer('Working on something', extracted)).toBe(
           MemoryLayer.PROJECT,
