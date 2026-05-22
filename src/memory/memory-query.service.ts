@@ -146,8 +146,7 @@ export class MemoryQueryService {
     if (hasTemporalIntent) {
       // TEMPORAL PATH — HEY-575: Adaptive window expansion
       // ENG-48 after/before merging is applied on the first expansion pass below
-      const adaptiveEnabled =
-        process.env.TEMPORAL_QUERY_ADAPTIVE !== 'false';
+      const adaptiveEnabled = process.env.TEMPORAL_QUERY_ADAPTIVE !== 'false';
       const minResults = parseInt(
         process.env.TEMPORAL_QUERY_MIN_RESULTS ?? '5',
         10,
@@ -162,7 +161,7 @@ export class MemoryQueryService {
       );
 
       let activeFilter = parsed.temporalFilter!;
-      let temporalMemories: MemoryWithExtraction[] = [];
+      let temporalMemories: MemoryWithExtraction[];
       let expandPass = 0;
       const expandDeadline = Date.now() + timeoutMs;
 
@@ -209,18 +208,14 @@ export class MemoryQueryService {
 
         expandPass++;
 
-        if (
-          !adaptiveEnabled ||
-          temporalMemories.length >= minResults ||
-          expandPass > maxExpand ||
-          Date.now() >= expandDeadline
-        ) {
-          break;
-        }
-
         // Widen the window by doubling the span each pass
         activeFilter = this.temporalParser.expandWindow(activeFilter, 2.0);
-      } while (true);
+      } while (
+        adaptiveEnabled &&
+        temporalMemories.length < minResults &&
+        expandPass <= maxExpand &&
+        Date.now() < expandDeadline
+      );
 
       this.logger.log(
         '[Recall] Temporal path: found',
