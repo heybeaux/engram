@@ -144,38 +144,83 @@ export class MemoryQueryService {
     let scoredMemories: MemoryWithScore[];
 
     if (hasTemporalIntent) {
-      // TEMPORAL PATH
-      // ENG-48: Merge explicit after/before with temporal parser range
-      const temporalCreatedAt: Record<string, any> = {
-        gte: parsed.temporalFilter!.start,
-        lte: parsed.temporalFilter!.end,
-      };
-      if (dto.after) {
-        const afterDate = new Date(dto.after);
-        if (afterDate > temporalCreatedAt.gte)
-          temporalCreatedAt.gte = afterDate;
-      }
-      if (dto.before) {
-        const beforeDate = new Date(dto.before);
-        if (beforeDate < temporalCreatedAt.lte)
-          temporalCreatedAt.lte = beforeDate;
-      }
+      // TEMPORAL PATH — HEY-575: Adaptive window expansion
+      // ENG-48 after/before merging is applied on the first expansion pass below
+      const adaptiveEnabled =
+        process.env.TEMPORAL_QUERY_ADAPTIVE !== 'false';
+      const minResults = parseInt(
+        process.env.TEMPORAL_QUERY_MIN_RESULTS ?? '5',
+        10,
+      );
+      const maxExpand = parseInt(
+        process.env.TEMPORAL_QUERY_MAX_EXPAND ?? '3',
+        10,
+      );
+      const timeoutMs = parseInt(
+        process.env.TEMPORAL_QUERY_TIMEOUT_MS ?? '200',
+        10,
+      );
 
-      const temporalMemories = await this.prisma.memory.findMany({
-        where: {
-          userId: userIdFilter,
-          deletedAt: null,
-          supersededById: null,
-          searchable: { not: false },
-          createdAt: temporalCreatedAt,
-          ...subjectTypeFilter,
-          ...visibilityFilter,
-          ...metadataFilter,
-        },
-        include: { extraction: true },
-        orderBy: { createdAt: 'desc' },
-        take: 200,
-      });
+      let activeFilter = parsed.temporalFilter!;
+      let temporalMemories: MemoryWithExtraction[] = [];
+      let expandPass = 0;
+      const expandDeadline = Date.now() + timeoutMs;
+
+      do {
+        const activeCreatedAt: Record<string, any> = {
+          gte: activeFilter.start,
+          lte: activeFilter.end,
+        };
+        if (expandPass === 0) {
+          // Only apply explicit after/before on the first pass
+          if (dto.after) {
+            const afterDate = new Date(dto.after);
+            if (afterDate > activeCreatedAt.gte)
+              activeCreatedAt.gte = afterDate;
+          }
+          if (dto.before) {
+            const beforeDate = new Date(dto.before);
+            if (beforeDate < activeCreatedAt.lte)
+              activeCreatedAt.lte = beforeDate;
+          }
+        }
+
+        temporalMemories = await this.prisma.memory.findMany({
+          where: {
+            userId: userIdFilter,
+            deletedAt: null,
+            supersededById: null,
+            searchable: { not: false },
+            createdAt: activeCreatedAt,
+            ...subjectTypeFilter,
+            ...visibilityFilter,
+            ...metadataFilter,
+          },
+          include: { extraction: true },
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+        });
+
+        if (expandPass > 0) {
+          this.logger.log(
+            `[Recall] Temporal expansion pass ${expandPass}: found ${temporalMemories.length} memories (window x${Math.pow(2, expandPass)})`,
+          );
+        }
+
+        expandPass++;
+
+        if (
+          !adaptiveEnabled ||
+          temporalMemories.length >= minResults ||
+          expandPass > maxExpand ||
+          Date.now() >= expandDeadline
+        ) {
+          break;
+        }
+
+        // Widen the window by doubling the span each pass
+        activeFilter = this.temporalParser.expandWindow(activeFilter, 2.0);
+      } while (true);
 
       this.logger.log(
         '[Recall] Temporal path: found',

@@ -249,6 +249,86 @@ describe('TemporalParserService', () => {
     });
   });
 
+  // HEY-575: Adaptive window expansion
+  describe('expandWindow', () => {
+    it('should double the span when multiplier=2', () => {
+      const filter = {
+        start: new Date('2026-02-04T00:00:00.000Z'),
+        end: new Date('2026-02-05T00:00:00.000Z'), // 1 day span
+        expression: 'yesterday',
+        confidence: 0.9,
+      };
+
+      const expanded = service.expandWindow(filter, 2.0);
+
+      const originalSpan = filter.end.getTime() - filter.start.getTime();
+      const expandedSpan = expanded.end.getTime() - expanded.start.getTime();
+      expect(expandedSpan).toBeCloseTo(originalSpan * 2, -3);
+    });
+
+    it('should preserve the midpoint when expanding', () => {
+      const filter = {
+        start: new Date('2026-02-04T00:00:00.000Z'),
+        end: new Date('2026-02-06T00:00:00.000Z'), // 2 day span, mid = Feb 5
+        expression: 'last 2 days',
+        confidence: 0.85,
+      };
+      const mid = (filter.start.getTime() + filter.end.getTime()) / 2;
+
+      const expanded = service.expandWindow(filter, 3.0);
+
+      const expandedMid = (expanded.start.getTime() + expanded.end.getTime()) / 2;
+      expect(expandedMid).toBeCloseTo(mid, -3);
+    });
+
+    it('should preserve expression and confidence', () => {
+      const filter = {
+        start: new Date('2026-02-04T00:00:00.000Z'),
+        end: new Date('2026-02-05T00:00:00.000Z'),
+        expression: 'yesterday',
+        confidence: 0.9,
+      };
+
+      const expanded = service.expandWindow(filter, 2.0);
+
+      expect(expanded.expression).toBe('yesterday');
+      expect(expanded.confidence).toBe(0.9);
+    });
+
+    it('should expand start earlier than original start', () => {
+      const filter = {
+        start: new Date('2026-02-04T00:00:00.000Z'),
+        end: new Date('2026-02-05T00:00:00.000Z'),
+        expression: 'yesterday',
+        confidence: 0.9,
+      };
+
+      const expanded = service.expandWindow(filter, 2.0);
+
+      expect(expanded.start.getTime()).toBeLessThan(filter.start.getTime());
+      expect(expanded.end.getTime()).toBeGreaterThan(filter.end.getTime());
+    });
+
+    it('should halt at MAX_EXPAND passes — 3 expansions produce 8x window', () => {
+      const filter = {
+        start: new Date('2026-02-04T00:00:00.000Z'),
+        end: new Date('2026-02-05T00:00:00.000Z'), // 1 day
+        expression: 'yesterday',
+        confidence: 0.9,
+      };
+      const originalSpan = filter.end.getTime() - filter.start.getTime();
+
+      let current = filter;
+      for (let i = 0; i < 3; i++) {
+        current = service.expandWindow(current, 2.0);
+      }
+
+      const finalSpan = current.end.getTime() - current.start.getTime();
+      // After 3 doublings: 2^3 = 8x original span
+      expect(finalSpan).toBeCloseTo(originalSpan * 8, -3);
+    });
+  });
+
   describe('month/year temporal patterns', () => {
     it('should detect "6 months ago"', () => {
       const result = service.parse('standup notes from 6 months ago', NOW);

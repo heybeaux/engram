@@ -8,6 +8,7 @@ import {
 } from './dto/contextual-recall.dto';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
+import { TemporalParserService } from './temporal/temporal-parser.service';
 
 interface SessionState {
   recentEmbeddings: number[][]; // last N message embeddings
@@ -38,6 +39,7 @@ export class ContextualRecallService {
     @Optional() private readonly memoryPoolService?: MemoryPoolService,
     @Optional()
     private readonly memoryAccessLogService?: MemoryAccessLogService,
+    @Optional() private readonly temporalParser?: TemporalParserService,
   ) {}
 
   async recall(
@@ -83,6 +85,25 @@ export class ContextualRecallService {
       }
     }
 
+    // HEY-575: Parse temporal intent and build a createdAt filter
+    let temporalCreatedAt: { gte?: Date; lte?: Date } | undefined;
+    let semanticText = dto.text;
+    if (this.temporalParser) {
+      const parsed = this.temporalParser.parse(dto.text, new Date());
+      if (parsed.temporalFilter) {
+        temporalCreatedAt = {
+          gte: parsed.temporalFilter.start,
+          lte: parsed.temporalFilter.end,
+        };
+        semanticText = parsed.semanticQuery;
+        this.logger.log('[ContextualRecall] Temporal intent detected:', {
+          expression: parsed.temporalFilter.expression,
+          start: parsed.temporalFilter.start.toISOString(),
+          end: parsed.temporalFilter.end.toISOString(),
+        });
+      }
+    }
+
     // 4. Semantic search
     const limit = dto.maxResults ?? 5;
     const minScore = dto.minScore ?? 0.35;
@@ -91,9 +112,15 @@ export class ContextualRecallService {
       ...session.recalledIds,
     ]);
 
+    // Re-embed with temporal-stripped semantic query if applicable
+    const searchEmbedding =
+      semanticText !== dto.text
+        ? await this.embedding.generate(semanticText)
+        : queryEmbedding;
+
     const vectorResults = await this.embedding.search(
       userId ?? 'default',
-      queryEmbedding,
+      searchEmbedding,
       limit + excludeSet.size, // over-fetch to account for filtering
       undefined,
       undefined,
@@ -148,7 +175,7 @@ export class ContextualRecallService {
       };
     }
 
-    // 6. Fetch full memory records
+    // 6. Fetch full memory records (apply temporal filter if present)
     const scoreMap = new Map(filteredIds.map((r) => [r.id, r.score]));
     const memories = await this.prisma.memory.findMany({
       where: {
@@ -156,6 +183,7 @@ export class ContextualRecallService {
         deletedAt: null,
         supersededById: null,
         searchable: { not: false },
+        ...(temporalCreatedAt ? { createdAt: temporalCreatedAt } : {}),
       },
       include: {
         extraction: true,

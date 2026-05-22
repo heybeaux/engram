@@ -111,6 +111,26 @@ export class TemporalParserService {
   }
 
   /**
+   * Expand a temporal filter window symmetrically around its midpoint.
+   *
+   * Used for adaptive window expansion: when an initial temporal query returns
+   * too few results, the window is widened (multiplier > 1) and retried.
+   *
+   * @param filter - The original temporal filter
+   * @param multiplier - How much to expand the half-span (2.0 = double the window)
+   * @returns New TemporalFilter with expanded start/end, same expression/confidence
+   */
+  expandWindow(filter: TemporalFilter, multiplier: number): TemporalFilter {
+    const mid = (filter.start.getTime() + filter.end.getTime()) / 2;
+    const halfSpan = (filter.end.getTime() - filter.start.getTime()) / 2;
+    return {
+      ...filter,
+      start: new Date(mid - halfSpan * multiplier),
+      end: new Date(mid + halfSpan * multiplier),
+    };
+  }
+
+  /**
    * Blend semantic similarity with temporal relevance and importance.
    *
    * @param semanticScore - Vector similarity score (0-1)

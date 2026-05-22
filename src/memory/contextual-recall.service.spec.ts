@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
+import { TemporalParserService } from './temporal/temporal-parser.service';
 
 describe('ContextualRecallService', () => {
   let service: ContextualRecallService;
@@ -10,6 +11,7 @@ describe('ContextualRecallService', () => {
   let embedding: jest.Mocked<EmbeddingService>;
   let memoryPoolService: jest.Mocked<MemoryPoolService>;
   let memoryAccessLogService: jest.Mocked<MemoryAccessLogService>;
+  let temporalParser: TemporalParserService;
 
   const userId = 'user-123';
 
@@ -34,11 +36,14 @@ describe('ContextualRecallService', () => {
       logRecalled: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    temporalParser = new TemporalParserService();
+
     service = new ContextualRecallService(
       prisma,
       embedding,
       memoryPoolService,
       memoryAccessLogService,
+      temporalParser,
     );
   });
 
@@ -315,6 +320,111 @@ describe('ContextualRecallService', () => {
       expect(ids).toContain('m1');
       expect(ids).toContain('m2');
       expect(ids).not.toContain('m3');
+    });
+  });
+
+  // HEY-575: Temporal filtering in ContextualRecallService
+  describe('temporal filtering (HEY-575)', () => {
+    it('should pass createdAt filter to findMany when temporal intent detected', async () => {
+      embedding.generate.mockResolvedValue([1, 0, 0]);
+      embedding.search.mockResolvedValue([{ id: 'm1', score: 0.8 }] as any);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        {
+          id: 'm1',
+          raw: 'yesterday memory',
+          layer: 'EPISODIC',
+          extraction: { topics: [] },
+        },
+      ]);
+
+      await service.recall(userId, {
+        text: 'What did we talk about yesterday?',
+        sessionKey: 'sess-temporal-1',
+      } as any);
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            createdAt: expect.objectContaining({
+              gte: expect.any(Date),
+              lte: expect.any(Date),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should not pass createdAt filter for non-temporal queries', async () => {
+      embedding.generate.mockResolvedValue([1, 0, 0]);
+      embedding.search.mockResolvedValue([{ id: 'm1', score: 0.8 }] as any);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        {
+          id: 'm1',
+          raw: 'some memory',
+          layer: 'EPISODIC',
+          extraction: { topics: [] },
+        },
+      ]);
+
+      await service.recall(userId, {
+        text: 'What are my coffee preferences?',
+        sessionKey: 'sess-temporal-2',
+      } as any);
+
+      const call = (prisma.memory.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where.createdAt).toBeUndefined();
+    });
+
+    it('should re-embed with temporal-stripped semantic query', async () => {
+      const generateSpy = jest
+        .spyOn(embedding, 'generate')
+        .mockResolvedValue([0.5, 0.5, 0.5]);
+      embedding.search.mockResolvedValue([]);
+
+      await service.recall(userId, {
+        text: 'What happened yesterday during standup?',
+        sessionKey: 'sess-temporal-3',
+      } as any);
+
+      // Should have been called twice: once for topic-shift detection (full text),
+      // once for the semantic search (stripped text)
+      const calls = generateSpy.mock.calls.map((c) => c[0]);
+      // The second generate call should NOT include "yesterday"
+      if (calls.length >= 2) {
+        expect(calls[1]).not.toContain('yesterday');
+      }
+    });
+
+    it('should work without temporalParser (no optional injection)', async () => {
+      // Create service without temporalParser
+      const serviceNoParser = new ContextualRecallService(
+        prisma,
+        embedding,
+        undefined,
+        undefined,
+        undefined,
+      );
+
+      embedding.generate.mockResolvedValue([1, 0, 0]);
+      embedding.search.mockResolvedValue([{ id: 'm1', score: 0.8 }] as any);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        {
+          id: 'm1',
+          raw: 'some memory',
+          layer: 'EPISODIC',
+          extraction: { topics: [] },
+        },
+      ]);
+
+      const result = await serviceNoParser.recall(userId, {
+        text: 'What happened yesterday?',
+        sessionKey: 'sess-temporal-4',
+      } as any);
+
+      // Should still work, just without temporal filtering
+      expect(result.topicShift).toBe(true);
+      const call = (prisma.memory.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where.createdAt).toBeUndefined();
     });
   });
 });
