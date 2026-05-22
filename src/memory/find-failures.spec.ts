@@ -198,6 +198,7 @@ describe('findFailures (ENG-116)', () => {
         prismaService,
         retrievalSignals,
         {} as any, // projectStateService
+        {} as any, // chainOfNoteService
       );
     });
 
