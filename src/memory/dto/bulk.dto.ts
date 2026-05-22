@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsArray,
   IsNumber,
+  IsInt,
   ValidateNested,
   ArrayMaxSize,
   ArrayMinSize,
@@ -48,6 +49,15 @@ export class BulkCreateMemoryItemDto {
   @ApiPropertyOptional({ description: 'Optional metadata' })
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @ApiPropertyOptional({
+    description:
+      '0-based position within a session (set automatically by round-level ingest)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  sessionPosition?: number;
 }
 
 export class BulkCreateMemoryDto {
@@ -97,6 +107,11 @@ export class BulkTextImportDto {
   @IsOptional()
   @IsEnum(MemoryLayer)
   layer?: string;
+
+  @ApiPropertyOptional({ enum: ['ROUND', 'PARAGRAPH', 'CHUNK'] })
+  @IsOptional()
+  @IsEnum(['ROUND', 'PARAGRAPH', 'CHUNK'])
+  granularity?: 'ROUND' | 'PARAGRAPH' | 'CHUNK';
 
   @ApiPropertyOptional({ description: 'Optional project/session context' })
   @IsOptional()

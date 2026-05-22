@@ -365,6 +365,7 @@ export class MemoryWriteService {
         sessionId: dto.context?.sessionId ?? null,
         agentId: dto.agentId ?? null,
         metadata: item.metadata ?? undefined,
+        sessionPosition: item.sessionPosition ?? null,
         createdAt: now,
         updatedAt: now,
       };
@@ -401,20 +402,38 @@ export class MemoryWriteService {
   }
 
   /**
-   * Accept raw text, auto-chunk at ~chunkSize chars on paragraph boundaries,
-   * then bulk-insert all chunks.
+   * Accept raw text, chunk it (by round, paragraph, or character count),
+   * then bulk-insert all chunks as individual memory records.
+   *
+   * granularity:
+   *   'ROUND'     — one record per conversation exchange (user+assistant turn pair)
+   *   'PARAGRAPH' — split on blank lines (legacy paragraph boundary mode)
+   *   'CHUNK'     — split at ~chunkSize chars on paragraph/sentence boundaries (default, back-compat)
+   *
+   * When ENABLE_ROUND_LEVEL_INGEST=true, defaults to 'ROUND' instead of 'CHUNK'.
    */
   async bulkTextImport(
     userId: string,
     dto: BulkTextImportDto,
   ): Promise<BulkTextResult> {
-    const chunkSize = dto.chunkSize ?? 3500;
-    const chunks = this.chunkText(dto.text, chunkSize);
+    const envDefault =
+      process.env.ENABLE_ROUND_LEVEL_INGEST === 'true' ? 'ROUND' : 'CHUNK';
+    const granularity = dto.granularity ?? envDefault;
+    let chunks: string[];
 
+    if (granularity === 'ROUND') {
+      chunks = this.chunkByRound(dto.text);
+    } else {
+      const chunkSize = dto.chunkSize ?? 3500;
+      chunks = this.chunkText(dto.text, chunkSize);
+    }
+
+    const isRound = granularity === 'ROUND';
     const bulkDto: BulkCreateMemoryDto = {
-      memories: chunks.map((chunk) => ({
+      memories: chunks.map((chunk, index) => ({
         raw: chunk,
         layer: dto.layer,
+        ...(isRound ? { sessionPosition: index } : {}),
       })),
       context: dto.context,
     };
@@ -478,6 +497,78 @@ export class MemoryWriteService {
     }
 
     return chunks;
+  }
+
+  /**
+   * Split a conversation transcript into one chunk per exchange (round).
+   *
+   * A "round" is a user turn + its following assistant turn, kept together.
+   * Splits on turn-prefix headers at line start (case-insensitive):
+   *   Human: / User: / Assistant: / Agent:
+   * and on Markdown/OpenClaw-style blank-line + "---" separators.
+   *
+   * Empty or whitespace-only segments are discarded. Adjacent lines from the
+   * same speaker are kept together until the speaker changes.
+   */
+  chunkByRound(text: string): string[] {
+    // Normalise line endings
+    const normalised = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // Split on "---" separators (blank line + dashes, used by OpenClaw/Mastra)
+    // OR on turn-prefix headers at the start of a line.
+    // We split *before* the delimiter so each segment starts with the speaker header.
+    const segments = normalised.split(
+      /(?=^(?:human|user|assistant|agent)\s*:)/im,
+    );
+
+    // Further split any segment that contains a "---" separator boundary
+    const lines: string[] = [];
+    for (const seg of segments) {
+      const parts = seg.split(/\n---+\n/);
+      lines.push(...parts);
+    }
+
+    // Group into exchange pairs: collect consecutive user/human turns with the
+    // immediately following assistant/agent reply.
+    const rounds: string[] = [];
+    let currentRound = '';
+    let lastRole: 'user' | 'assistant' | null = null;
+
+    for (const segment of lines) {
+      const trimmed = segment.trim();
+      if (!trimmed) continue;
+
+      const roleMatch = trimmed.match(/^(human|user|assistant|agent)\s*:/i);
+      const role: 'user' | 'assistant' | null = roleMatch
+        ? /^(human|user)$/i.test(roleMatch[1])
+          ? 'user'
+          : 'assistant'
+        : null;
+
+      if (role === 'user') {
+        // New user turn starts a new round — flush any previous round first
+        if (currentRound) {
+          rounds.push(currentRound.trim());
+        }
+        currentRound = trimmed;
+        lastRole = 'user';
+      } else if (role === 'assistant') {
+        // Append assistant reply to the current round
+        currentRound = currentRound ? currentRound + '\n\n' + trimmed : trimmed;
+        lastRole = 'assistant';
+      } else {
+        // No recognised prefix — append to current round (continuation)
+        currentRound = currentRound ? currentRound + '\n\n' + trimmed : trimmed;
+        if (lastRole === null) lastRole = 'user';
+      }
+    }
+
+    if (currentRound.trim()) {
+      rounds.push(currentRound.trim());
+    }
+
+    // Fallback: if no rounds were detected, treat the whole text as one chunk
+    return rounds.length > 0 ? rounds : [text.trim()];
   }
 
   /**

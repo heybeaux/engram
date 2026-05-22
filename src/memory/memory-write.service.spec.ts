@@ -312,6 +312,131 @@ describe('MemoryWriteService', () => {
     });
   });
 
+  describe('chunkByRound', () => {
+    it('should produce one chunk per exchange for a standard transcript', () => {
+      const transcript = [
+        'User: What is the capital of France?',
+        'Assistant: Paris is the capital of France.',
+        'User: And what about Germany?',
+        'Assistant: Berlin is the capital of Germany.',
+      ].join('\n');
+      const result = service.chunkByRound(transcript);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toContain('User: What is the capital of France?');
+      expect(result[0]).toContain('Assistant: Paris');
+      expect(result[1]).toContain('User: And what about Germany?');
+      expect(result[1]).toContain('Assistant: Berlin');
+    });
+
+    it('should handle Human: prefix (LongMemEval format)', () => {
+      const transcript = [
+        'Human: Hello there.',
+        'Assistant: Hi! How can I help?',
+        'Human: Tell me a joke.',
+        'Assistant: Why did the chicken cross the road?',
+      ].join('\n');
+      const result = service.chunkByRound(transcript);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toContain('Human: Hello there.');
+      expect(result[1]).toContain('Human: Tell me a joke.');
+    });
+
+    it('should handle Agent: prefix', () => {
+      const transcript = [
+        'User: Start task.',
+        'Agent: Task started.',
+        'User: Check status.',
+        'Agent: Still running.',
+      ].join('\n');
+      const result = service.chunkByRound(transcript);
+      expect(result).toHaveLength(2);
+    });
+
+    it('should handle Markdown --- separator (OpenClaw/Mastra format)', () => {
+      const transcript = [
+        'User: First question?',
+        'Assistant: First answer.',
+        '',
+        '---',
+        '',
+        'User: Second question?',
+        'Assistant: Second answer.',
+      ].join('\n');
+      const result = service.chunkByRound(transcript);
+      expect(result).toHaveLength(2);
+    });
+
+    it('should produce 10 rounds for a 10-turn transcript', () => {
+      const turns: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        turns.push(`User: Question ${i + 1}?`);
+        turns.push(`Assistant: Answer ${i + 1}.`);
+      }
+      const transcript = turns.join('\n');
+      const result = service.chunkByRound(transcript);
+      expect(result).toHaveLength(10);
+    });
+
+    it('should set correct session positions via bulkTextImport', async () => {
+      const turns: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        turns.push(`User: Q${i + 1}?`);
+        turns.push(`Assistant: A${i + 1}.`);
+      }
+      const transcript = turns.join('\n');
+
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.createMany.mockResolvedValue({ count: 5 });
+      mockPrisma.memoryPool = undefined;
+      mockPrisma.account = { findUnique: jest.fn().mockResolvedValue(null) };
+
+      await service.bulkTextImport('user-456', {
+        text: transcript,
+        granularity: 'ROUND',
+        context: { sessionId: 'sess-1' },
+      });
+
+      const createManyCall = mockPrisma.memory.createMany.mock.calls[0][0];
+      const data = createManyCall.data;
+      expect(data).toHaveLength(5);
+      data.forEach((row: any, i: number) => {
+        expect(row.sessionPosition).toBe(i);
+      });
+    });
+
+    it('should default to CHUNK granularity (back-compat — no sessionPosition)', async () => {
+      const text = 'Short text for testing.';
+
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.account = { findUnique: jest.fn().mockResolvedValue(null) };
+
+      await service.bulkTextImport('user-456', { text });
+
+      const createManyCall = mockPrisma.memory.createMany.mock.calls[0][0];
+      const data = createManyCall.data;
+      expect(data[0].sessionPosition).toBeNull();
+    });
+
+    it('should fall back to single chunk when no turn delimiters found', () => {
+      const text = 'Just a plain paragraph with no conversation markers.';
+      const result = service.chunkByRound(text);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(text.trim());
+    });
+
+    it('should handle case-insensitive turn prefixes', () => {
+      const transcript = [
+        'USER: First question?',
+        'ASSISTANT: First answer.',
+        'user: Second question?',
+        'assistant: Second answer.',
+      ].join('\n');
+      const result = service.chunkByRound(transcript);
+      expect(result).toHaveLength(2);
+    });
+  });
+
   describe('resolveSessionId', () => {
     it('should return undefined when no sessionId provided', async () => {
       const result = await service.resolveSessionId('user-456');
