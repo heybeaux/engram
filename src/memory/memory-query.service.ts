@@ -161,14 +161,24 @@ export class MemoryQueryService {
       );
 
       let activeFilter = parsed.temporalFilter!;
+      // Cap expansion end at the original filter's end to prevent the window
+      // from creeping into the present for past-anchored queries (e.g. "years ago").
+      const originalFilterEnd = parsed.temporalFilter!.end;
       let temporalMemories: MemoryWithExtraction[];
       let expandPass = 0;
       const expandDeadline = Date.now() + timeoutMs;
 
       do {
+        // Clamp end to originalFilterEnd so expansion never pulls in memories
+        // newer than the parsed temporal intent allows.
+        const clampedEnd =
+          activeFilter.end > originalFilterEnd
+            ? originalFilterEnd
+            : activeFilter.end;
+
         const activeCreatedAt: Record<string, any> = {
           gte: activeFilter.start,
-          lte: activeFilter.end,
+          lte: clampedEnd,
         };
         if (expandPass === 0) {
           // Only apply explicit after/before on the first pass

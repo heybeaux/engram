@@ -880,4 +880,110 @@ describe('MemoryQueryService', () => {
       expect(multiQueryService.search).not.toHaveBeenCalled();
     });
   });
+
+  // HEY-575 regression: adaptive expansion must not widen end past original filter boundary
+  describe('temporal adaptive expansion — end boundary (HEY-575)', () => {
+    const twoYearsAgo = new Date('2024-01-01T00:00:00.000Z');
+    const oneYearAgo = new Date('2025-01-01T00:00:00.000Z');
+
+    beforeEach(() => {
+      // "years ago" filter: start=2yrs, end=1yr. expandWindow doubles symmetrically,
+      // pushing end past now after just one pass.
+      temporalParser.parse.mockReturnValue({
+        semanticQuery: 'standup notes',
+        temporalFilter: {
+          expression: 'years ago',
+          start: twoYearsAgo,
+          end: oneYearAgo,
+          confidence: 0.7,
+        },
+      } as any);
+
+      embedding.search.mockResolvedValue([]);
+    });
+
+    it('should never query memories newer than the original filter end during expansion', async () => {
+      // First call returns 0 memories → triggers adaptive expansion.
+      // Second call returns enough memories → stops.
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValueOnce([]) // pass 0: no results, triggers expansion
+        .mockResolvedValue([
+          {
+            id: 'old-mem-1',
+            raw: 'standup 2 years ago',
+            effectiveScore: 0.4,
+            createdAt: new Date('2024-06-01'),
+            extraction: {},
+          },
+          {
+            id: 'old-mem-2',
+            raw: 'standup 2 years ago',
+            effectiveScore: 0.4,
+            createdAt: new Date('2024-06-02'),
+            extraction: {},
+          },
+          {
+            id: 'old-mem-3',
+            raw: 'standup 2 years ago',
+            effectiveScore: 0.4,
+            createdAt: new Date('2024-06-03'),
+            extraction: {},
+          },
+          {
+            id: 'old-mem-4',
+            raw: 'standup 2 years ago',
+            effectiveScore: 0.4,
+            createdAt: new Date('2024-06-04'),
+            extraction: {},
+          },
+          {
+            id: 'old-mem-5',
+            raw: 'standup 2 years ago',
+            effectiveScore: 0.4,
+            createdAt: new Date('2024-06-05'),
+            extraction: {},
+          },
+        ]);
+
+      await service.recall(userId, { query: 'standup notes from years ago' } as any);
+
+      const allCalls = (prisma.memory.findMany as jest.Mock).mock.calls;
+      // Every findMany call must have lte <= originalFilterEnd (oneYearAgo)
+      for (const [args] of allCalls) {
+        if (args?.where?.createdAt?.lte) {
+          expect(args.where.createdAt.lte.getTime()).toBeLessThanOrEqual(
+            oneYearAgo.getTime(),
+          );
+        }
+      }
+    });
+
+    it('should not return today-anchored memories when query is "years ago"', async () => {
+      const todayMemory = {
+        id: 'today-mem-1',
+        raw: 'standup today',
+        effectiveScore: 0.8,
+        createdAt: new Date(), // now
+        extraction: {},
+      };
+
+      // Simulate expansion eventually returning a today-anchored memory if
+      // the end clamp is missing — the fix should prevent this being queried.
+      prisma.memory.findMany = jest.fn().mockResolvedValue([todayMemory]);
+
+      await service.recall(userId, { query: 'standup notes from years ago' } as any);
+
+      const allCalls = (prisma.memory.findMany as jest.Mock).mock.calls;
+      // The lte on every call must never be past the original end boundary
+      for (const [args] of allCalls) {
+        if (args?.where?.createdAt?.lte) {
+          expect(args.where.createdAt.lte.getTime()).toBeLessThanOrEqual(
+            oneYearAgo.getTime(),
+          );
+        }
+      }
+    });
+  });
 });
+
