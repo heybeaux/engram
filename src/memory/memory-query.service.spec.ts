@@ -46,6 +46,15 @@ describe('MemoryQueryService', () => {
       }),
       calculateTemporalRelevance: jest.fn().mockReturnValue(0.8),
       blendScores: jest.fn().mockReturnValue(0.7),
+      expandWindow: jest.fn().mockImplementation((filter, multiplier) => {
+        const mid = (filter.start.getTime() + filter.end.getTime()) / 2;
+        const halfSpan = (filter.end.getTime() - filter.start.getTime()) / 2;
+        return {
+          ...filter,
+          start: new Date(mid - halfSpan * multiplier),
+          end: new Date(mid + halfSpan * multiplier),
+        };
+      }),
     } as any;
 
     multiQueryService = {
