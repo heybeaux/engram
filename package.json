@@ -40,7 +40,9 @@
     "autoresearch-recall": "npx ts-node scripts/autoresearch-recall.ts",
     "autoresearch-generation": "npx ts-node scripts/autoresearch-insight-generation.ts",
     "autoresearch-boost": "npx ts-node scripts/autoresearch-insight-boost.ts",
-    "autoresearch-surfacing": "npx ts-node scripts/autoresearch-insight-surfacing.ts"
+    "autoresearch-surfacing": "npx ts-node scripts/autoresearch-insight-surfacing.ts",
+    "longmemeval": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' eval/longmemeval/src/runner.ts",
+    "longmemeval:test": "jest --config eval/longmemeval/jest.config.json --forceExit"
   },
   "dependencies": {
     "@elastic/elasticsearch": "8",

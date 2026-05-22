@@ -1,0 +1,256 @@
+{
+  "_comment": "Hand-curated 20-question smoke fixture for LongMemEval Phase 1 CI runs. Stratified across 5 categories: 5 single-session-user, 4 multi-session-user, 4 temporal-reasoning-ability, 3 knowledge-update, 4 single-session-assistant. Questions are synthetic but representative of the LongMemEval paper's task distribution. Replace with real dataset questions when HUGGINGFACE_TOKEN is available.",
+  "questions": [
+    {
+      "question_id": "smoke_ssu_001",
+      "category": "single-session-user",
+      "question": "What programming language did the user say they prefer for backend development?",
+      "answer": "Python",
+      "session_history": [
+        { "role": "user", "content": "Hi, I need some help setting up a new project." },
+        { "role": "assistant", "content": "Sure, I'd be happy to help! What kind of project are you working on?" },
+        { "role": "user", "content": "It's a REST API for a task management app. I prefer Python for backend development — it's what I know best." },
+        { "role": "assistant", "content": "Great choice! Python has excellent libraries for building REST APIs. Are you thinking FastAPI, Django, or Flask?" },
+        { "role": "user", "content": "Probably FastAPI since I've heard it's fast and has automatic docs." },
+        { "role": "assistant", "content": "FastAPI is a solid choice. It's built on Starlette and Pydantic, supports async natively, and generates OpenAPI docs automatically." }
+      ]
+    },
+    {
+      "question_id": "smoke_ssu_002",
+      "category": "single-session-user",
+      "question": "What is the name of the user's cat?",
+      "answer": "Mochi",
+      "session_history": [
+        { "role": "user", "content": "Can you help me write a poem for my cat's birthday?" },
+        { "role": "assistant", "content": "Of course! What's your cat's name?" },
+        { "role": "user", "content": "Her name is Mochi. She's a 3-year-old calico." },
+        { "role": "assistant", "content": "What a sweet name! Here's a birthday poem for Mochi:\n\nSoft-pawed Mochi, three years old,\nCalico colors, bright and bold..." },
+        { "role": "user", "content": "That's perfect, thank you! She'll love it." }
+      ]
+    },
+    {
+      "question_id": "smoke_ssu_003",
+      "category": "single-session-user",
+      "question": "What city does the user live in?",
+      "answer": "Austin",
+      "session_history": [
+        { "role": "user", "content": "What are some good coffee shops near me? I'm in Austin, Texas." },
+        { "role": "assistant", "content": "Austin has a vibrant coffee scene! Some popular spots include Houndstooth Coffee, Flat Track Coffee, and Medici." },
+        { "role": "user", "content": "I've been to Houndstooth — it's great. Any newer spots?" },
+        { "role": "assistant", "content": "Sure! Merit Coffee and Dominican Joe are also well-regarded in Austin." }
+      ]
+    },
+    {
+      "question_id": "smoke_ssu_004",
+      "category": "single-session-user",
+      "question": "What marathon time is the user training for?",
+      "answer": "under 4 hours",
+      "session_history": [
+        { "role": "user", "content": "I'm training for a marathon and need help with a training plan." },
+        { "role": "assistant", "content": "Happy to help! What's your goal finish time and current weekly mileage?" },
+        { "role": "user", "content": "I want to finish under 4 hours. I'm currently running about 25 miles a week." },
+        { "role": "assistant", "content": "Great goal! For a sub-4-hour marathon, you'll want to build to about 40-50 miles per week over 16-20 weeks." }
+      ]
+    },
+    {
+      "question_id": "smoke_ssu_005",
+      "category": "single-session-user",
+      "question": "What is the user's job title?",
+      "answer": "senior product manager",
+      "session_history": [
+        { "role": "user", "content": "I need help writing a performance review self-evaluation." },
+        { "role": "assistant", "content": "I can help with that. What's your role and what are some highlights from this year?" },
+        { "role": "user", "content": "I'm a senior product manager. This year I launched two major features, improved NPS by 12 points, and onboarded a new engineering team." },
+        { "role": "assistant", "content": "Those are strong achievements. Here's a draft self-evaluation opening:\n\n'As a Senior Product Manager, I drove significant customer value this year...'" }
+      ]
+    },
+    {
+      "question_id": "smoke_msu_001",
+      "category": "multi-session-user",
+      "question": "What is the user's daughter's name?",
+      "answer": "Lily",
+      "session_history": [
+        { "role": "user", "content": "I need help picking a birthday present for my daughter." },
+        { "role": "assistant", "content": "How old is she and what are her interests?" },
+        { "role": "user", "content": "She's turning 7. Her name is Lily and she loves dinosaurs and drawing." },
+        { "role": "assistant", "content": "A dinosaur art set or a dinosaur activity book could be perfect for Lily!" },
+        { "role": "user", "content": "Perfect. Can you help me write a birthday card too?" },
+        { "role": "assistant", "content": "Of course! Here's one: 'Happy Birthday, Lily! Seven is a magical number — just like you!'" }
+      ]
+    },
+    {
+      "question_id": "smoke_msu_002",
+      "category": "multi-session-user",
+      "question": "What allergy did the user mention?",
+      "answer": "gluten",
+      "session_history": [
+        { "role": "user", "content": "Can you suggest some recipes for dinner tonight?" },
+        { "role": "assistant", "content": "Sure! Any dietary restrictions I should know about?" },
+        { "role": "user", "content": "Yes, I have a gluten intolerance, so everything needs to be gluten-free." },
+        { "role": "assistant", "content": "Got it. Here are some gluten-free dinner ideas: grilled salmon with roasted vegetables, chicken stir-fry with rice noodles, or a bean and vegetable curry." },
+        { "role": "user", "content": "The salmon sounds great. What sides would go well with it?" },
+        { "role": "assistant", "content": "Roasted asparagus, quinoa, or a simple salad are all gluten-free and pair well with salmon." }
+      ]
+    },
+    {
+      "question_id": "smoke_msu_003",
+      "category": "multi-session-user",
+      "question": "What company is the user applying to?",
+      "answer": "Stripe",
+      "session_history": [
+        { "role": "user", "content": "I'm applying for a job and need help preparing for interviews." },
+        { "role": "assistant", "content": "I'd love to help! Which company and role are you interviewing for?" },
+        { "role": "user", "content": "I'm applying to Stripe for a staff software engineer position." },
+        { "role": "assistant", "content": "Stripe has a rigorous technical interview process. For a staff engineer role, expect system design, coding, and leadership discussions." },
+        { "role": "user", "content": "Any tips for the system design round specifically?" },
+        { "role": "assistant", "content": "For Stripe's system design round, focus on distributed systems, idempotency (critical for payments), and scalability at high transaction volumes." }
+      ]
+    },
+    {
+      "question_id": "smoke_msu_004",
+      "category": "multi-session-user",
+      "question": "What instrument does the user play?",
+      "answer": "guitar",
+      "session_history": [
+        { "role": "user", "content": "I've been playing guitar for about 5 years and want to level up my skills." },
+        { "role": "assistant", "content": "That's great! What genre do you primarily play, and what do you feel is holding you back?" },
+        { "role": "user", "content": "I mostly play acoustic fingerstyle. I struggle with thumb independence." },
+        { "role": "assistant", "content": "Thumb independence is a classic challenge for fingerstyle players. Try practicing patterns like P-IMI where the thumb maintains a constant bass pattern while fingers play melodies." }
+      ]
+    },
+    {
+      "question_id": "smoke_tra_001",
+      "category": "temporal-reasoning-ability",
+      "question": "What did the user say about their project deadline in the earlier conversation?",
+      "answer": "June 15th",
+      "session_history": [
+        { "role": "user", "content": "Quick question — we talked about my project timeline a few weeks ago. Our deadline is June 15th, right?" },
+        { "role": "assistant", "content": "Yes, based on what you shared, your project deadline is June 15th." },
+        { "role": "user", "content": "Okay good. We're a bit behind but I think we can still make it." },
+        { "role": "assistant", "content": "What's the current status? Is there anything specific blocking progress?" },
+        { "role": "user", "content": "The API integration is taking longer than expected. We originally planned 2 weeks but it's looking more like 3." },
+        { "role": "assistant", "content": "To hit June 15th, you might need to parallelize the integration work with the frontend development. Have you considered bringing in extra help?" }
+      ]
+    },
+    {
+      "question_id": "smoke_tra_002",
+      "category": "temporal-reasoning-ability",
+      "question": "When did the user say they started learning Spanish?",
+      "answer": "three years ago",
+      "session_history": [
+        { "role": "user", "content": "I've been learning Spanish for about three years now and I'm at an intermediate level." },
+        { "role": "assistant", "content": "Three years is solid progress! What's your current biggest challenge with Spanish?" },
+        { "role": "user", "content": "Understanding native speakers when they talk fast. My reading is fine but listening is hard." },
+        { "role": "assistant", "content": "That's a very common intermediate plateau. Try watching Spanish TV shows with Spanish subtitles — not English. Shows like 'La Casa de Papel' or news programs work well." }
+      ]
+    },
+    {
+      "question_id": "smoke_tra_003",
+      "category": "temporal-reasoning-ability",
+      "question": "When did the user's gym membership expire?",
+      "answer": "last month",
+      "session_history": [
+        { "role": "user", "content": "I need to get back into working out. My gym membership expired last month and I haven't renewed it yet." },
+        { "role": "assistant", "content": "Getting back into a routine is great! Are you thinking about rejoining the gym or trying something different?" },
+        { "role": "user", "content": "Maybe I'll try home workouts first to see if I can stay consistent before paying for a gym again." },
+        { "role": "assistant", "content": "That's a practical approach. Bodyweight training can be very effective — apps like Nike Training Club offer free structured workouts." }
+      ]
+    },
+    {
+      "question_id": "smoke_tra_004",
+      "category": "temporal-reasoning-ability",
+      "question": "How long ago did the user mention moving to their new apartment?",
+      "answer": "two weeks ago",
+      "session_history": [
+        { "role": "user", "content": "I moved into my new apartment two weeks ago and I'm still getting settled." },
+        { "role": "assistant", "content": "Congrats on the new place! Is there anything you need help with to get organized?" },
+        { "role": "user", "content": "I need some help figuring out how to arrange the furniture in a small living room." },
+        { "role": "assistant", "content": "For small living rooms, the key is keeping traffic flow clear and using multi-functional furniture. A sofa with storage is great, and placing it against the wall maximizes floor space." }
+      ]
+    },
+    {
+      "question_id": "smoke_ku_001",
+      "category": "knowledge-update",
+      "question": "What is the user's updated email address?",
+      "answer": "alex.new@company.com",
+      "session_history": [
+        { "role": "user", "content": "Hey, just wanted to let you know I changed my work email. The old one was alex@oldcompany.com." },
+        { "role": "assistant", "content": "Thanks for letting me know! What's the new address?" },
+        { "role": "user", "content": "It's alex.new@company.com. Please use that going forward." },
+        { "role": "assistant", "content": "Got it, I'll use alex.new@company.com from now on." }
+      ]
+    },
+    {
+      "question_id": "smoke_ku_002",
+      "category": "knowledge-update",
+      "question": "What is the user's new job title after the promotion?",
+      "answer": "engineering manager",
+      "session_history": [
+        { "role": "user", "content": "I got promoted! I'm now an engineering manager instead of a senior engineer." },
+        { "role": "assistant", "content": "Congratulations! That's a big step. How are you feeling about the transition from IC to manager?" },
+        { "role": "user", "content": "Excited but nervous. Managing people is very different from writing code." },
+        { "role": "assistant", "content": "That's a natural feeling. Focus on 1:1s, removing blockers for your team, and resisting the urge to dive into every technical problem yourself." }
+      ]
+    },
+    {
+      "question_id": "smoke_ku_003",
+      "category": "knowledge-update",
+      "question": "What operating system is the user now using after switching?",
+      "answer": "Linux",
+      "session_history": [
+        { "role": "user", "content": "I finally made the switch — I've been on Windows my whole career but I just moved to Linux full-time." },
+        { "role": "assistant", "content": "Welcome to Linux! Which distribution did you go with?" },
+        { "role": "user", "content": "Ubuntu 24.04 LTS. Still learning the terminal shortcuts." },
+        { "role": "assistant", "content": "Ubuntu LTS is a great stable choice for getting started. For terminal shortcuts, learning tmux early will save you a lot of time." }
+      ]
+    },
+    {
+      "question_id": "smoke_ssa_001",
+      "category": "single-session-assistant",
+      "question": "What recommendation did the assistant make for managing the user's code reviews?",
+      "answer": "use a checklist",
+      "session_history": [
+        { "role": "user", "content": "My code reviews are taking too long and I keep missing things. Any advice?" },
+        { "role": "assistant", "content": "A few things help: First, use a checklist — decide ahead of time what you always check (security, tests, naming, error handling) and work through it systematically rather than freeform scanning." },
+        { "role": "user", "content": "That's actually a great idea. What should be on the checklist?" },
+        { "role": "assistant", "content": "Standard items: correctness and edge cases, test coverage, error handling, naming clarity, security (especially for user inputs), and performance for hot paths." }
+      ]
+    },
+    {
+      "question_id": "smoke_ssa_002",
+      "category": "single-session-assistant",
+      "question": "What book did the assistant recommend for learning system design?",
+      "answer": "Designing Data-Intensive Applications",
+      "session_history": [
+        { "role": "user", "content": "Can you recommend a good book for learning system design for software engineers?" },
+        { "role": "assistant", "content": "The most widely recommended book is 'Designing Data-Intensive Applications' by Martin Kleppmann. It covers distributed systems, databases, and scalability in depth with practical examples." },
+        { "role": "user", "content": "Is it beginner-friendly or do you need a lot of prior knowledge?" },
+        { "role": "assistant", "content": "It assumes some programming experience but explains concepts clearly. Most engineers with 1-2 years of experience can follow it." }
+      ]
+    },
+    {
+      "question_id": "smoke_ssa_003",
+      "category": "single-session-assistant",
+      "question": "What did the assistant say the safe internal temperature for chicken should be?",
+      "answer": "165°F",
+      "session_history": [
+        { "role": "user", "content": "What temperature should chicken be cooked to?" },
+        { "role": "assistant", "content": "Chicken should reach an internal temperature of 165°F (74°C) to be safe to eat. Use a meat thermometer in the thickest part of the meat, avoiding the bone." },
+        { "role": "user", "content": "What about chicken thighs? They seem to stay pink even when cooked through." },
+        { "role": "assistant", "content": "Chicken thighs can stay pink even at 165°F due to myoglobin. If the thermometer reads 165°F, it's safe regardless of color." }
+      ]
+    },
+    {
+      "question_id": "smoke_ssa_004",
+      "category": "single-session-assistant",
+      "question": "What did the assistant recommend as the first step when debugging a slow database query?",
+      "answer": "check the query execution plan",
+      "session_history": [
+        { "role": "user", "content": "My PostgreSQL query is running really slow. Where do I start debugging?" },
+        { "role": "assistant", "content": "The first step is to check the query execution plan using EXPLAIN ANALYZE. This shows you exactly how PostgreSQL is executing the query — whether it's doing a full table scan, using indexes, doing hash joins, etc." },
+        { "role": "user", "content": "I ran EXPLAIN ANALYZE and it shows a Seq Scan on a large table." },
+        { "role": "assistant", "content": "A sequential scan on a large table is usually the culprit. Add an index on the columns in your WHERE clause. Run CREATE INDEX CONCURRENTLY to avoid locking the table." }
+      ]
+    }
+  ]
+}
