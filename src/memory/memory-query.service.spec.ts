@@ -882,6 +882,100 @@ describe('MemoryQueryService', () => {
   });
 
   // HEY-575 regression: adaptive expansion must not widen end past original filter boundary
+  // ── HEY-578: sessionId filter ─────────────────────────────────────────────
+
+  describe('buildSessionIdFilter (HEY-578)', () => {
+    it('returns empty object when sessionId is not provided', () => {
+      expect(service.buildSessionIdFilter({} as any)).toEqual({});
+    });
+
+    it('returns sessionId clause when provided', () => {
+      expect(
+        service.buildSessionIdFilter({ sessionId: 'sess-xyz' } as any),
+      ).toEqual({ sessionId: 'sess-xyz' });
+    });
+  });
+
+  describe('recall — sessionId filter (HEY-578)', () => {
+    it('positive filter: passes sessionId into Prisma where clause', async () => {
+      embedding.search.mockResolvedValue([{ id: 'm1', score: 0.9 }] as any);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.recall(userId, {
+        query: 'test',
+        sessionId: 'session-X',
+      } as any);
+
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ sessionId: 'session-X' }),
+        }),
+      );
+    });
+
+    it('session isolation: sessionId=X Prisma where clause excludes sessionId=Y at DB level', async () => {
+      // We verify the WHERE clause is correctly composed — Prisma enforces isolation at the DB.
+      // A contract test: confirm sessionId is in the where clause so the DB rejects other sessions.
+      embedding.search.mockResolvedValue([
+        { id: 'mem-x', score: 0.9 },
+        { id: 'mem-y', score: 0.85 },
+      ] as any);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.recall(userId, {
+        query: 'test',
+        sessionId: 'session-X',
+      } as any);
+
+      // Every candidate-fetching findMany call must carry sessionId=session-X
+      const candidateCalls = (
+        prisma.memory.findMany as jest.Mock
+      ).mock.calls.filter(
+        (c: any[]) =>
+          c[0]?.where?.id !== undefined || c[0]?.where?.sessionId !== undefined,
+      );
+      expect(candidateCalls.length).toBeGreaterThan(0);
+      const firstCandidateCall = (prisma.memory.findMany as jest.Mock).mock
+        .calls[0];
+      expect(firstCandidateCall[0].where).toMatchObject({
+        sessionId: 'session-X',
+      });
+    });
+
+    it('cross-tenant isolation: sessionId filter composes with userId in embedding.search (tenant scoping preserved)', async () => {
+      // In the standard path, userId is passed to embedding.search (tenant isolation).
+      // sessionId filter is applied additively in the Prisma where clause (session isolation).
+      // Both must be present for correct cross-tenant + cross-session isolation.
+      embedding.search.mockResolvedValue([]);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.recall('tenant-A', {
+        query: 'test',
+        sessionId: 'session-X',
+      } as any);
+
+      // userId reaches embedding.search (tenant isolation)
+      const searchCall = (embedding.search as jest.Mock).mock.calls[0];
+      expect(searchCall[0]).toBe('tenant-A');
+
+      // sessionId reaches prisma.memory.findMany (session filter)
+      const call = (prisma.memory.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where).toMatchObject({ sessionId: 'session-X' });
+    });
+
+    it('no regression: omitting sessionId leaves no sessionId key in where clause', async () => {
+      embedding.search.mockResolvedValue([]);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.recall(userId, { query: 'test' } as any);
+
+      const call = (prisma.memory.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where).not.toHaveProperty('sessionId');
+    });
+  });
+
+  // ── HEY-575 regression ───────────────────────────────────────────────────
+
   describe('temporal adaptive expansion — end boundary (HEY-575)', () => {
     const twoYearsAgo = new Date('2024-01-01T00:00:00.000Z');
     const oneYearAgo = new Date('2025-01-01T00:00:00.000Z');
@@ -946,7 +1040,9 @@ describe('MemoryQueryService', () => {
           },
         ]);
 
-      await service.recall(userId, { query: 'standup notes from years ago' } as any);
+      await service.recall(userId, {
+        query: 'standup notes from years ago',
+      } as any);
 
       const allCalls = (prisma.memory.findMany as jest.Mock).mock.calls;
       // Every findMany call must have lte <= originalFilterEnd (oneYearAgo)
@@ -972,7 +1068,9 @@ describe('MemoryQueryService', () => {
       // the end clamp is missing — the fix should prevent this being queried.
       prisma.memory.findMany = jest.fn().mockResolvedValue([todayMemory]);
 
-      await service.recall(userId, { query: 'standup notes from years ago' } as any);
+      await service.recall(userId, {
+        query: 'standup notes from years ago',
+      } as any);
 
       const allCalls = (prisma.memory.findMany as jest.Mock).mock.calls;
       // The lte on every call must never be past the original end boundary
@@ -986,4 +1084,3 @@ describe('MemoryQueryService', () => {
     });
   });
 });
-

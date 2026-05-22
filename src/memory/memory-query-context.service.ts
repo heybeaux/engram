@@ -92,6 +92,7 @@ export class MemoryQueryContextService {
         searchable: { not: false },
         userHidden: false,
         createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        ...(dto.sessionId ? { sessionId: dto.sessionId } : {}),
       },
       orderBy: [
         { effectiveScore: 'desc' },

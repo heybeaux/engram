@@ -128,6 +128,7 @@ export class MemoryQueryService {
     const subjectTypeFilter = this.buildSubjectTypeFilter(dto);
     const visibilityFilter = this.buildVisibilityFilter(dto);
     const metadataFilter = this.buildMetadataFilter(dto);
+    const sessionIdFilter = this.buildSessionIdFilter(dto);
     const limit = dto.limit ?? 10;
 
     // ENG-42: Extract filter params for vector search
@@ -204,6 +205,7 @@ export class MemoryQueryService {
             ...subjectTypeFilter,
             ...visibilityFilter,
             ...metadataFilter,
+            ...sessionIdFilter,
           },
           include: { extraction: true },
           orderBy: { createdAt: 'desc' },
@@ -414,6 +416,7 @@ export class MemoryQueryService {
           ...visibilityFilter,
           ...metadataFilter,
           ...temporalRangeFilter,
+          ...sessionIdFilter,
         },
         include: { extraction: true },
       });
@@ -632,6 +635,7 @@ export class MemoryQueryService {
     const subjectTypeFilter = this.buildSubjectTypeFilter(dto);
     const visibilityFilterMQ = this.buildVisibilityFilter(dto);
     const metadataFilterMQ = this.buildMetadataFilter(dto);
+    const sessionIdFilterMQ = this.buildSessionIdFilter(dto);
 
     const memories = await this.prisma.memory.findMany({
       where: {
@@ -642,6 +646,7 @@ export class MemoryQueryService {
         ...subjectTypeFilter,
         ...visibilityFilterMQ,
         ...metadataFilterMQ,
+        ...sessionIdFilterMQ,
       },
       include: { extraction: true },
     });
@@ -782,6 +787,14 @@ export class MemoryQueryService {
       budget,
       constraintReserve,
     );
+  }
+
+  /**
+   * HEY-578: Build Prisma WHERE clause for sessionId filter.
+   */
+  buildSessionIdFilter(dto: QueryMemoryDto): Record<string, any> {
+    if (!dto.sessionId) return {};
+    return { sessionId: dto.sessionId };
   }
 
   /**

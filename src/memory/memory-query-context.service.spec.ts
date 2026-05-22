@@ -260,4 +260,30 @@ describe('MemoryQueryContextService', () => {
       expect(result.context).toContain('## User Identity');
     });
   });
+
+  describe('HEY-578: sessionId filter on sessionPromise', () => {
+    it('passes sessionId into the SESSION layer where clause when provided', async () => {
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.loadContext('user-123', { sessionId: 'sess-abc' });
+
+      const sessionCall = (prisma.memory.findMany as jest.Mock).mock.calls.find(
+        (c: any[]) => c[0]?.where?.layer === MemoryLayer.SESSION,
+      );
+      expect(sessionCall).toBeDefined();
+      expect(sessionCall![0].where).toMatchObject({ sessionId: 'sess-abc' });
+    });
+
+    it('does not add sessionId to SESSION where clause when omitted', async () => {
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+
+      await service.loadContext('user-123', {});
+
+      const sessionCall = (prisma.memory.findMany as jest.Mock).mock.calls.find(
+        (c: any[]) => c[0]?.where?.layer === MemoryLayer.SESSION,
+      );
+      expect(sessionCall).toBeDefined();
+      expect(sessionCall![0].where).not.toHaveProperty('sessionId');
+    });
+  });
 });

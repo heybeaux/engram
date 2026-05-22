@@ -225,6 +225,21 @@ export class QueryMemoryDto {
   @IsOptional()
   @IsBoolean()
   chainOfNote?: boolean;
+
+  // HEY-578: Session-scoped recall filter (LongMemEval H1 prereq)
+  // When set, restricts recalled memories to those ingested under this sessionId.
+  // The column was added by S1 (HEY-573) and is indexed; no schema change needed.
+  @ApiPropertyOptional({
+    description:
+      'Filter recalled memories by session ID. ' +
+      'When set, only memories whose sessionId matches this value are returned. ' +
+      'Must not exceed 256 characters.',
+    example: 'session_abc123',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  sessionId?: string;
 }
 
 export class LoadContextDto {
