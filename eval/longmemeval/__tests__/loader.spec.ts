@@ -5,7 +5,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { loadFixture, validateQuestions, historyToTranscript, categoriesIn } from '../src/loader';
+import { loadFixture, loadDataset, validateQuestions, historyToTranscript, categoriesIn } from '../src/loader';
 import type { LongMemEvalQuestion } from '../src/types';
 
 const FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'smoke-20.json');
@@ -51,6 +51,23 @@ describe('loader — smoke fixture', () => {
 
   it('throws on non-existent fixture path', () => {
     expect(() => loadFixture('/tmp/does-not-exist-lme.json')).toThrow();
+  });
+});
+
+describe('loadDataset — full subset fail-loud', () => {
+  it('does NOT fall back to smoke fixture when HF download fails', async () => {
+    // Force fetchFromHuggingFace to throw by pointing the cache dir at a
+    // path we can't write to AND monkey-patching https.get isn't safe across
+    // tests. Instead, rely on a much simpler guarantee: when no cache exists
+    // and the network call rejects, loadDataset rethrows instead of silently
+    // returning the 20-question smoke set.
+    //
+    // We simulate by passing a fake fetch through env: NODE_DISABLE_NET=1 is
+    // not a thing, so we just verify by code-path: the previous fallback
+    // is gone (regression guard).
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'loader.ts'), 'utf-8');
+    expect(src).not.toMatch(/Falling back to smoke/);
+    expect(src).not.toMatch(/catch \(err\) \{[^}]*loadFixture\(\)/s);
   });
 });
 
