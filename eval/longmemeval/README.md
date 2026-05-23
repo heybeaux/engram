@@ -29,7 +29,29 @@ pnpm longmemeval --subset full
 | `--subset smoke\|full` | `smoke` | Dataset source. `smoke` uses the local 20-question fixture; `full` downloads from HuggingFace |
 | `--limit N` | all | Evaluate only the first N questions |
 | `--category CATEGORY` | all | Filter to one category: `single-session-user`, `multi-session-user`, `temporal-reasoning-ability`, `knowledge-update`, `single-session-assistant` |
-| `--output PATH` | `eval/longmemeval/summary.json` | Output file path |
+| `--output PATH` | `eval/longmemeval/summary.json` | Output file path for final aggregate |
+| `--results-dir DIR` | `eval/longmemeval/results/` | Directory for streamed per-question JSONL files (used when `--resume` is absent) |
+| `--resume PATH` | — | Resume an in-progress run from a JSONL file; skips already-completed `question_id`s and continues appending |
+
+## Resume & Checkpoint
+
+Every run streams one JSON line per completed question to a JSONL file, so a 500-question run can survive crashes, kills, or transient API outages.
+
+```bash
+# Fresh run — the JSONL path is printed on the FIRST line of stdout
+pnpm longmemeval --subset full
+# Results JSONL: eval/longmemeval/results/full-2026-05-22T19-03-12-345Z.jsonl
+
+# Process killed at question 247? Resume from where it left off:
+pnpm longmemeval --subset full --resume eval/longmemeval/results/full-2026-05-22T19-03-12-345Z.jsonl
+```
+
+Behavior:
+
+- Each completed question appends one JSON line (sync `fs.appendFileSync` — durability over throughput).
+- `SIGINT` / `SIGTERM` set a `shouldStop` flag and let the in-flight question finish before exiting — the judge call alone is the longest piece of work, no reason to throw it away.
+- A second Ctrl-C forces immediate exit.
+- The final `summary.json` is rebuilt from the JSONL after the loop completes, so it always reflects on-disk truth (not in-memory state).
 
 ## Environment Variables
 

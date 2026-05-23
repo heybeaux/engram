@@ -4,6 +4,7 @@
  *
  * Usage:
  *   pnpm longmemeval [--limit N] [--category CATEGORY] [--subset smoke|full]
+ *                    [--resume PATH] [--results-dir DIR] [--output PATH]
  *
  * Env vars:
  *   ENGRAM_API_BASE          — default: http://localhost:3000
@@ -12,7 +13,9 @@
  *   LONGMEMEVAL_READ_MODEL   — default: claude-opus-4-7
  *   HUGGINGFACE_TOKEN        — required only for --subset=full
  *
- * Output: eval/longmemeval/summary.json
+ * Output:
+ *   eval/longmemeval/results/<subset>-<ts>.jsonl  (streamed, one line per question)
+ *   eval/longmemeval/summary.json                  (final aggregate)
  */
 
 import * as fs from 'fs';
@@ -21,15 +24,23 @@ import { loadDataset } from './loader';
 import { ingestQuestion } from './ingest';
 import { recallQuestion } from './recall';
 import { judgeAnswer } from './judge';
-import { buildSummary, formatSummary } from './scorer';
+import { buildSummary, formatSummary, loadResultsFromJsonl } from './scorer';
 import type { RunConfig, QuestionResult, LmeCategory } from './types';
 
-const OUTPUT_PATH = path.join(__dirname, '..', 'summary.json');
+const DEFAULT_OUTPUT_PATH = path.join(__dirname, '..', 'summary.json');
+const DEFAULT_RESULTS_DIR = path.join(__dirname, '..', 'results');
 
-function parseArgs(): Partial<RunConfig> & { outputPath: string } {
+interface ParsedArgs extends Partial<RunConfig> {
+  outputPath: string;
+  resultsDir: string;
+  resumePath?: string;
+}
+
+function parseArgs(): ParsedArgs {
   const args = process.argv.slice(2);
-  const opts: Partial<RunConfig> & { outputPath: string } = {
-    outputPath: OUTPUT_PATH,
+  const opts: ParsedArgs = {
+    outputPath: DEFAULT_OUTPUT_PATH,
+    resultsDir: DEFAULT_RESULTS_DIR,
     subset: 'smoke',
     judgeModel: 'claude-opus-4-7',
   };
@@ -50,13 +61,38 @@ function parseArgs(): Partial<RunConfig> & { outputPath: string } {
       }
     } else if (arg === '--output' && args[i + 1]) {
       opts.outputPath = args[++i];
+    } else if (arg === '--resume' && args[i + 1]) {
+      opts.resumePath = args[++i];
+    } else if (arg === '--results-dir' && args[i + 1]) {
+      opts.resultsDir = args[++i];
     }
   }
 
   return opts;
 }
 
-function buildConfig(parsed: ReturnType<typeof parseArgs>): RunConfig {
+/** Filesystem-safe ISO timestamp: 2026-05-22T19-03-12-345Z */
+function fsTimestamp(d: Date = new Date()): string {
+  return d.toISOString().replace(/:/g, '-').replace(/\./g, '-');
+}
+
+function resolveResultsPath(parsed: ParsedArgs): { resultsPath: string; resume: boolean } {
+  if (parsed.resumePath) {
+    const resolved = path.resolve(parsed.resumePath);
+    if (!fs.existsSync(resolved)) {
+      console.error(`Error: --resume path does not exist: ${resolved}`);
+      process.exit(1);
+    }
+    return { resultsPath: resolved, resume: true };
+  }
+  if (!fs.existsSync(parsed.resultsDir)) {
+    fs.mkdirSync(parsed.resultsDir, { recursive: true });
+  }
+  const filename = `${parsed.subset ?? 'smoke'}-${fsTimestamp()}.jsonl`;
+  return { resultsPath: path.join(parsed.resultsDir, filename), resume: false };
+}
+
+function buildConfig(parsed: ParsedArgs): RunConfig {
   const apiBase = process.env.ENGRAM_API_BASE ?? 'http://localhost:3000';
   const apiKey = process.env.ENGRAM_API_KEY ?? process.env.X_AM_API_KEY ?? '';
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY ?? '';
@@ -71,6 +107,8 @@ function buildConfig(parsed: ReturnType<typeof parseArgs>): RunConfig {
     process.exit(1);
   }
 
+  const { resultsPath, resume } = resolveResultsPath(parsed);
+
   return {
     apiBase,
     apiKey,
@@ -81,19 +119,31 @@ function buildConfig(parsed: ReturnType<typeof parseArgs>): RunConfig {
     category: parsed.category,
     subset: parsed.subset ?? 'smoke',
     outputPath: parsed.outputPath,
+    resultsPath,
+    resume,
   };
+}
+
+/** Append one QuestionResult as a JSON line. Sync write — durability > throughput. */
+function appendResult(jsonlPath: string, result: QuestionResult): void {
+  fs.appendFileSync(jsonlPath, JSON.stringify(result) + '\n', 'utf-8');
 }
 
 async function main() {
   const parsed = parseArgs();
   const config = buildConfig(parsed);
 
+  // Print the JSONL path on the FIRST line of stdout so the user can copy it
+  // for a future --resume even if everything else scrolls away.
+  console.log(`Results JSONL: ${config.resultsPath}`);
+  console.log('');
   console.log(`LongMemEval Eval Harness`);
   console.log(`  subset:   ${config.subset}`);
   console.log(`  limit:    ${config.limit ?? 'none'}`);
   console.log(`  category: ${config.category ?? 'all'}`);
   console.log(`  readModel: ${config.readModel}`);
   console.log(`  apiBase:   ${config.apiBase}`);
+  console.log(`  resume:    ${config.resume ? 'yes' : 'no'}`);
   console.log('');
 
   // Load dataset
@@ -106,36 +156,66 @@ async function main() {
     process.exit(1);
   }
 
-  // Run evaluation
-  const results: QuestionResult[] = [];
-  let done = 0;
+  // Load already-completed results when resuming
+  const priorResults = config.resume ? loadResultsFromJsonl(config.resultsPath) : [];
+  const completedIds = new Set(priorResults.map(r => r.questionId));
+
+  if (config.resume) {
+    const remaining = questions.filter(q => !completedIds.has(q.question_id));
+    console.log(
+      `Resuming from ${config.resultsPath}: ${completedIds.size} questions already complete, ${remaining.length} remaining`,
+    );
+    console.log('');
+  }
+
+  // Graceful shutdown — let in-flight question finish, then exit
+  let shouldStop = false;
+  let stopSignal = '';
+  const handleSignal = (signal: NodeJS.Signals) => {
+    if (shouldStop) {
+      // Second Ctrl-C: force exit
+      console.log(`\nReceived second ${signal}, forcing exit immediately.`);
+      process.exit(130);
+    }
+    shouldStop = true;
+    stopSignal = signal;
+    console.log(`\nReceived ${signal}, finishing in-flight question then exiting...`);
+  };
+  process.on('SIGINT', handleSignal);
+  process.on('SIGTERM', handleSignal);
+
+  // Run evaluation, streaming results to JSONL
+  let done = priorResults.length;
+  const totalToRun = questions.length;
 
   for (const question of questions) {
+    if (completedIds.has(question.question_id)) {
+      continue;
+    }
+    if (shouldStop) {
+      break;
+    }
+
     const start = Date.now();
-    process.stdout.write(`  [${done + 1}/${questions.length}] ${question.question_id} ...`);
+    process.stdout.write(`  [${done + 1}/${totalToRun}] ${question.question_id} ...`);
 
+    let result: QuestionResult;
     try {
-      // Step 1: Ingest session history
       const ingestResult = await ingestQuestion(question, config);
-
-      // Step 2: Recall + CoN reading
       const recallResult = await recallQuestion(
         question.question_id,
         question.question,
         ingestResult,
         config,
       );
-
-      // Step 3: Judge
       const judgeResult = await judgeAnswer(
         question.question,
         question.answer,
         recallResult.answer,
         config.anthropicApiKey,
       );
-
       const latencyMs = Date.now() - start;
-      const result: QuestionResult = {
+      result = {
         questionId: question.question_id,
         question: question.question,
         expected: question.answer,
@@ -144,15 +224,14 @@ async function main() {
         category: question.category,
         latencyMs,
         judgeReasoning: judgeResult.reasoning,
+        timestamp: new Date().toISOString(),
       };
-      results.push(result);
-
       const mark = judgeResult.correct ? '✓' : '✗';
       console.log(` ${mark} (${latencyMs}ms)`);
     } catch (err) {
       const latencyMs = Date.now() - start;
       console.log(` ERROR: ${(err as Error).message}`);
-      results.push({
+      result = {
         questionId: question.question_id,
         question: question.question,
         expected: question.answer,
@@ -161,25 +240,36 @@ async function main() {
         category: question.category,
         latencyMs,
         judgeReasoning: `Error: ${(err as Error).message}`,
-      });
+        timestamp: new Date().toISOString(),
+      };
     }
 
+    // Durable append BEFORE bumping counters or considering stop
+    appendResult(config.resultsPath, result);
+    completedIds.add(question.question_id);
     done++;
   }
 
-  // Build summary
-  const summary = buildSummary(results, config.subset);
+  if (shouldStop) {
+    console.log('');
+    console.log(`Stopped after ${stopSignal}. Completed: ${done}/${totalToRun}.`);
+    console.log(`Resume with: pnpm longmemeval --subset ${config.subset} --resume ${config.resultsPath}`);
+    process.exit(130);
+  }
 
-  // Write output
+  // Build final summary from the on-disk JSONL — single source of truth
+  const allResults = loadResultsFromJsonl(config.resultsPath);
+  const summary = buildSummary(allResults, config.subset);
+
   const outputDir = path.dirname(config.outputPath);
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
   fs.writeFileSync(config.outputPath, JSON.stringify(summary, null, 2), 'utf-8');
 
-  // Print report
   console.log(formatSummary(summary));
   console.log(`Summary written to: ${config.outputPath}`);
+  console.log(`Results JSONL:      ${config.resultsPath}`);
 }
 
 main().catch(err => {

@@ -7,7 +7,32 @@
  *  - Temporal-reasoning-ability category (hardest, ~7-11 pt range per paper)
  */
 
+import * as fs from 'fs';
 import type { QuestionResult, CategoryScore, SummaryReport, LmeCategory } from './types';
+
+/**
+ * Load per-question results from a JSONL file (one QuestionResult per line).
+ * Returns an empty array if the file doesn't exist.
+ * Blank lines are skipped; malformed lines throw with the line number for fast failure.
+ */
+export function loadResultsFromJsonl(jsonlPath: string): QuestionResult[] {
+  if (!fs.existsSync(jsonlPath)) return [];
+  const raw = fs.readFileSync(jsonlPath, 'utf-8');
+  const lines = raw.split('\n');
+  const results: QuestionResult[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    try {
+      results.push(JSON.parse(line) as QuestionResult);
+    } catch (err) {
+      throw new Error(
+        `Malformed JSONL at ${jsonlPath}:${i + 1}: ${(err as Error).message}`,
+      );
+    }
+  }
+  return results;
+}
 
 /**
  * Build the full SummaryReport from per-question results.

@@ -47,6 +47,8 @@ export interface QuestionResult {
   /** E2E latency from ingest to answer in ms */
   latencyMs: number;
   judgeReasoning?: string;
+  /** ISO timestamp when this question was completed (set when streamed to JSONL) */
+  timestamp?: string;
 }
 
 /** Per-category aggregate */
@@ -87,4 +89,8 @@ export interface RunConfig {
   subset: 'smoke' | 'full';
   /** Output path for summary.json */
   outputPath: string;
+  /** Path to JSONL results file (created fresh, or reused via --resume) */
+  resultsPath: string;
+  /** True when resuming an existing JSONL file */
+  resume: boolean;
 }
