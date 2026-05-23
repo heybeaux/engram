@@ -3,9 +3,13 @@
  *
  * Supports two sources:
  *  1. Local fixture file (smoke-20.json) — always available, used for CI/smoke runs.
- *  2. HuggingFace dataset download — requires HUGGINGFACE_TOKEN env var.
+ *  2. HuggingFace dataset download — HF_TOKEN (or HUGGINGFACE_TOKEN) used if set.
  *
- * The full LongMemEval dataset is at: xiaowu0162/longmemeval on HuggingFace.
+ * Full subset is loaded from the cleaned mirror:
+ *   xiaowu0162/longmemeval-cleaned -> longmemeval_s_cleaned.json (~500 questions).
+ * The cleaned mirror is public; token is optional but improves rate limits.
+ *
+ * No silent fallback to smoke fixture on HTTP errors — failures throw.
  */
 
 import * as fs from 'fs';
@@ -26,13 +30,10 @@ export async function loadDataset(config: Pick<RunConfig, 'subset' | 'limit' | '
   if (config.subset === 'smoke') {
     questions = loadFixture();
   } else {
-    try {
-      questions = await fetchFromHuggingFace();
-    } catch (err) {
-      console.warn(`[loader] HuggingFace download failed: ${(err as Error).message}`);
-      console.warn('[loader] Falling back to smoke-20 fixture.');
-      questions = loadFixture();
-    }
+    // No silent fallback: a 404/auth failure on the full subset must surface
+    // loudly so the harness doesn't quietly run a 20-question smoke set
+    // against benchmarks expecting 500.
+    questions = await fetchFromHuggingFace();
   }
 
   if (config.category) {
@@ -59,30 +60,31 @@ export function loadFixture(fixturePath: string = FIXTURE_PATH): LongMemEvalQues
 }
 
 /**
- * Attempt to download the LongMemEval dataset from HuggingFace.
- * Requires HUGGINGFACE_TOKEN env var.
+ * Download the LongMemEval "S" subset from the cleaned HuggingFace mirror.
+ * HF_TOKEN / HUGGINGFACE_TOKEN are optional (the cleaned dataset is public)
+ * but recommended to avoid rate limits.
  */
 export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
-  const token = process.env.HUGGINGFACE_TOKEN;
+  const token = process.env.HF_TOKEN ?? process.env.HUGGINGFACE_TOKEN;
 
-  // HuggingFace datasets API endpoint for the parquet/JSON files
-  // File is named longmemeval_s (no .json extension) in the dataset repo
-  const url = 'https://huggingface.co/datasets/xiaowu0162/longmemeval/resolve/main/longmemeval_s';
+  const url =
+    'https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_s_cleaned.json';
 
-  // Cache the 278MB download to avoid re-fetching on resume
+  // Cache to disk so resume/restart doesn't re-download.
   const cacheDir = path.join(__dirname, '..', 'data');
-  const cachePath = path.join(cacheDir, 'longmemeval_s.json');
+  const cachePath = path.join(cacheDir, 'longmemeval_s_cleaned.json');
   let raw: string;
 
   if (fs.existsSync(cachePath)) {
     console.log(`[loader] Using cached dataset: ${cachePath}`);
     raw = fs.readFileSync(cachePath, 'utf-8');
   } else {
-    if (!token) {
-      throw new Error('HUGGINGFACE_TOKEN env var not set — cannot download full dataset');
-    }
-    console.log(`[loader] Downloading dataset from HuggingFace (~278MB)...`);
-    raw = await httpGet(url, { Authorization: `Bearer ${token}` }, 600_000);
+    console.log(
+      `[loader] Downloading longmemeval_s_cleaned.json from HuggingFace${token ? ' (authenticated)' : ' (anonymous)'}...`,
+    );
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    raw = await httpGet(url, headers, 600_000);
     if (!fs.existsSync(cacheDir)) {
       fs.mkdirSync(cacheDir, { recursive: true });
     }
@@ -138,6 +140,14 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
   });
 
   validateQuestions(questions);
+  // Sanity-check: cleaned "S" subset is ~500 questions. Warn (not throw) on
+  // drift so a future dataset revision doesn't hard-break the harness.
+  if (questions.length < 400 || questions.length > 600) {
+    console.warn(
+      `[loader] Expected ~500 questions for "S" subset, got ${questions.length}. ` +
+        `Mirror may have changed.`,
+    );
+  }
   return questions;
 }
 
@@ -187,7 +197,13 @@ function httpGet(url: string, headers: Record<string, string> = {}, timeoutMs = 
         return;
       }
       if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`HTTP ${res.statusCode} from ${url}`));
+        const errChunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => errChunks.push(c));
+        res.on('end', () => {
+          const body = Buffer.concat(errChunks).toString('utf-8').slice(0, 500);
+          reject(new Error(`HTTP ${res.statusCode} from ${url}${body ? ` — ${body}` : ''}`));
+        });
+        res.on('error', reject);
         return;
       }
       const chunks: Buffer[] = [];
