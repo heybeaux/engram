@@ -45,7 +45,7 @@ export async function ingestQuestion(
     },
   };
 
-  const url = `${config.apiBase}/v1/memories/bulk-text`;
+  const url = `${config.apiBase}/v1/memories/bulk/text`;
   const response = await fetchWithRetry(url, {
     method: 'POST',
     headers: {

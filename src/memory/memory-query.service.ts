@@ -791,10 +791,18 @@ export class MemoryQueryService {
 
   /**
    * HEY-578: Build Prisma WHERE clause for sessionId filter.
+   * Accepts either the internal session id or the caller-provided
+   * externalId — sessions resolved by external string are looked up by
+   * the session relation.
    */
   buildSessionIdFilter(dto: QueryMemoryDto): Record<string, any> {
     if (!dto.sessionId) return {};
-    return { sessionId: dto.sessionId };
+    return {
+      OR: [
+        { sessionId: dto.sessionId },
+        { session: { externalId: dto.sessionId } },
+      ],
+    };
   }
 
   /**

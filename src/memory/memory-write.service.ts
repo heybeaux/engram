@@ -336,6 +336,11 @@ export class MemoryWriteService {
     const memoryIds: string[] = [];
     const now = new Date();
 
+    const resolvedSessionId = await this.resolveSessionId(
+      userId,
+      dto.context?.sessionId,
+    );
+
     const data = dto.memories.map((item) => {
       const id = crypto.randomUUID();
       memoryIds.push(id);
@@ -362,7 +367,7 @@ export class MemoryWriteService {
         confidence: 1.0,
         contentHash: generateContentHash(item.raw),
         projectId: dto.context?.projectId ?? null,
-        sessionId: dto.context?.sessionId ?? null,
+        sessionId: resolvedSessionId ?? null,
         agentId: dto.agentId ?? null,
         metadata: item.metadata ?? undefined,
         sessionPosition: item.sessionPosition ?? null,
@@ -390,6 +395,29 @@ export class MemoryWriteService {
               err,
             );
           });
+      }
+    } else {
+      // No queue available (e.g. local dev without Redis): embed inline so
+      // memories are immediately searchable. Sequential to avoid hammering
+      // the local embed server.
+      for (const record of data) {
+        try {
+          await this.pipelineService.extractAndEmbed(
+            record.id,
+            record.raw,
+            userId,
+            {
+              userId,
+              timestamp: now,
+              conversationId: dto.context?.sessionId,
+            },
+          );
+        } catch (err) {
+          this.logger.error(
+            `[BulkCreate] Inline embedding failed for ${record.id}:`,
+            err,
+          );
+        }
       }
     }
 
