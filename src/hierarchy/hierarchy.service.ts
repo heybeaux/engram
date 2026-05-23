@@ -124,14 +124,30 @@ export class HierarchyService {
       };
     }
 
+    const startedAt = Date.now();
     const units: ProcessResult['units'] = [];
+    let sentencesCount = 0;
+    let paragraphsCount = 0;
+    let l0Failures = 0;
+    let l1Failures = 0;
 
     try {
       // Extract sentences (L0)
       const sentences = this.segmentation.extractSentences(text);
+      sentencesCount = sentences.length;
 
       // Extract paragraphs (L1)
       const paragraphs = this.segmentation.extractParagraphs(text);
+      paragraphsCount = paragraphs.length;
+
+      this.logger.debug({
+        event: 'hierarchy.process.start',
+        memoryId,
+        userId,
+        textLength: text.length,
+        sentences: sentencesCount,
+        paragraphs: paragraphsCount,
+      });
 
       // Generate embeddings and store L0 units
       for (const sentence of sentences) {
@@ -151,6 +167,8 @@ export class HierarchyService {
             level: 'L0',
             text: sentence.text,
           });
+        } else {
+          l0Failures++;
         }
       }
 
@@ -174,12 +192,28 @@ export class HierarchyService {
             level: 'L1',
             text: paragraph.text,
           });
+        } else {
+          l1Failures++;
         }
       }
 
-      this.logger.debug(
-        `Processed memory ${memoryId}: ${sentences.length} sentences, ${paragraphs.length} paragraphs`,
-      );
+      const failures = l0Failures + l1Failures;
+      const logPayload = {
+        event: 'hierarchy.process.complete',
+        memoryId,
+        userId,
+        sentences: sentencesCount,
+        paragraphs: paragraphsCount,
+        unitsCreated: units.length,
+        l0Failures,
+        l1Failures,
+        elapsedMs: Date.now() - startedAt,
+      };
+      if (failures > 0) {
+        this.logger.warn(logPayload);
+      } else {
+        this.logger.debug(logPayload);
+      }
 
       return {
         memoryId,
@@ -188,7 +222,23 @@ export class HierarchyService {
         units,
       };
     } catch (error) {
-      this.logger.error(`Failed to process memory ${memoryId}:`, error);
+      const err = error as Error;
+      const message = err?.message ?? String(error);
+      const txClosed = /transaction already closed|tx.*closed/i.test(message);
+      this.logger.error({
+        event: 'hierarchy.process.failed',
+        memoryId,
+        userId,
+        textLength: text.length,
+        sentences: sentencesCount,
+        paragraphs: paragraphsCount,
+        unitsCreatedBeforeFailure: units.length,
+        l0Failures,
+        l1Failures,
+        transactionClosed: txClosed,
+        error: message,
+        stack: err?.stack,
+      });
       throw error;
     }
   }
@@ -249,7 +299,20 @@ export class HierarchyService {
 
       return unit;
     } catch (error) {
-      this.logger.error(`Failed to create ${level} unit:`, error);
+      const err = error as Error;
+      const message = err?.message ?? String(error);
+      const txClosed = /transaction already closed|tx.*closed/i.test(message);
+      this.logger.error({
+        event: 'hierarchy.unit.create_failed',
+        level,
+        sourceMemoryId,
+        userId,
+        position,
+        textLength: text.length,
+        transactionClosed: txClosed,
+        error: message,
+        stack: err?.stack,
+      });
       return null;
     }
   }

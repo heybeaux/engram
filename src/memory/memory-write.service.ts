@@ -372,10 +372,38 @@ export class MemoryWriteService {
     });
 
     // Batch insert via createMany for performance
-    await this.prisma.memory.createMany({ data });
+    const insertStart = Date.now();
+    try {
+      await this.prisma.memory.createMany({ data });
+    } catch (err) {
+      const message = (err as Error)?.message ?? String(err);
+      const txClosed = /transaction already closed|tx.*closed/i.test(message);
+      this.logger.error({
+        event: 'bulk_create.insert_failed',
+        userId,
+        chunkCount: data.length,
+        transactionClosed: txClosed,
+        error: message,
+        stack: (err as Error)?.stack,
+      });
+      throw err;
+    }
+    this.logger.log({
+      event: 'bulk_create.insert_complete',
+      userId,
+      chunkCount: data.length,
+      elapsedMs: Date.now() - insertStart,
+    });
 
     // Queue embedding jobs asynchronously
+    const progressEvery = Math.max(
+      50,
+      parseInt(process.env.BULK_INGEST_LOG_EVERY ?? '100', 10),
+    );
+    let enqueued = 0;
+    let enqueueErrors = 0;
     if (this.embeddingQueue) {
+      const enqueueStart = Date.now();
       for (const record of data) {
         this.embeddingQueue
           .enqueueEmbedding({
@@ -384,11 +412,32 @@ export class MemoryWriteService {
             raw: record.raw,
             runDedup: true,
           })
+          .then(() => {
+            enqueued++;
+            if (enqueued % progressEvery === 0) {
+              this.logger.log({
+                event: 'bulk_create.enqueue_progress',
+                userId,
+                enqueued,
+                total: data.length,
+                errors: enqueueErrors,
+                elapsedMs: Date.now() - enqueueStart,
+              });
+            }
+          })
           .catch((err) => {
-            this.logger.error(
-              `[BulkCreate] Failed to enqueue embedding for ${record.id}:`,
-              err,
+            enqueueErrors++;
+            const message = (err as Error)?.message ?? String(err);
+            const txClosed = /transaction already closed|tx.*closed/i.test(
+              message,
             );
+            this.logger.error({
+              event: 'bulk_create.enqueue_failed',
+              memoryId: record.id,
+              userId,
+              transactionClosed: txClosed,
+              error: message,
+            });
           });
       }
     }
@@ -416,9 +465,11 @@ export class MemoryWriteService {
     userId: string,
     dto: BulkTextImportDto,
   ): Promise<BulkTextResult> {
+    const startedAt = Date.now();
     const envDefault =
       process.env.ENABLE_ROUND_LEVEL_INGEST === 'true' ? 'ROUND' : 'CHUNK';
     const granularity = dto.granularity ?? envDefault;
+    const granularitySource = dto.granularity ? 'dto' : 'env_default';
     let chunks: string[];
 
     if (granularity === 'ROUND') {
@@ -427,6 +478,22 @@ export class MemoryWriteService {
       const chunkSize = dto.chunkSize ?? 3500;
       chunks = this.chunkText(dto.text, chunkSize);
     }
+
+    this.logger.log({
+      event: 'bulk_text_import.start',
+      userId,
+      granularity,
+      granularitySource,
+      chunkCount: chunks.length,
+      textLength: dto.text.length,
+      sessionId: dto.context?.sessionId,
+      projectId: dto.context?.projectId,
+      embeddingModel:
+        process.env.EMBEDDING_MODEL ??
+        process.env.VECTOR_SEARCH_MODEL ??
+        'unknown',
+      ensembleEnabled: process.env.EMBEDDING_ENSEMBLE === 'true',
+    });
 
     const isRound = granularity === 'ROUND';
     const bulkDto: BulkCreateMemoryDto = {
@@ -438,12 +505,36 @@ export class MemoryWriteService {
       context: dto.context,
     };
 
-    const result = await this.bulkCreate(userId, bulkDto);
-    return {
-      created: result.created,
-      chunks: chunks.length,
-      memoryIds: result.memoryIds,
-    };
+    try {
+      const result = await this.bulkCreate(userId, bulkDto);
+      this.logger.log({
+        event: 'bulk_text_import.complete',
+        userId,
+        granularity,
+        chunkCount: chunks.length,
+        created: result.created,
+        elapsedMs: Date.now() - startedAt,
+      });
+      return {
+        created: result.created,
+        chunks: chunks.length,
+        memoryIds: result.memoryIds,
+      };
+    } catch (err) {
+      const message = (err as Error)?.message ?? String(err);
+      const txClosed = /transaction already closed|tx.*closed/i.test(message);
+      this.logger.error({
+        event: 'bulk_text_import.failed',
+        userId,
+        granularity,
+        chunkCount: chunks.length,
+        elapsedMs: Date.now() - startedAt,
+        transactionClosed: txClosed,
+        error: message,
+        stack: (err as Error)?.stack,
+      });
+      throw err;
+    }
   }
 
   /**

@@ -167,9 +167,26 @@ export class MemoryQueryService {
       const originalFilterEnd = parsed.temporalFilter!.end;
       let temporalMemories: MemoryWithExtraction[];
       let expandPass = 0;
-      const expandDeadline = Date.now() + timeoutMs;
+      const expandStart = Date.now();
+      const expandDeadline = expandStart + timeoutMs;
 
+      // HEY-575: log expansion-loop entry config so we can correlate later
+      // termination reasons against the configured envelope.
+      this.logger.log({
+        event: 'recall.temporal_expand.enter',
+        adaptiveEnabled,
+        minResults,
+        maxExpand,
+        timeoutMs,
+        initialWindow: {
+          start: activeFilter.start.toISOString(),
+          end: originalFilterEnd.toISOString(),
+        },
+      });
+
+      let timedOut = false;
       do {
+        const passStart = Date.now();
         // Clamp end to originalFilterEnd so expansion never pulls in memories
         // newer than the parsed temporal intent allows.
         const clampedEnd =
@@ -212,16 +229,30 @@ export class MemoryQueryService {
           take: 200,
         });
 
-        if (expandPass > 0) {
-          this.logger.log(
-            `[Recall] Temporal expansion pass ${expandPass}: found ${temporalMemories.length} memories (window x${Math.pow(2, expandPass)})`,
-          );
-        }
+        this.logger.debug({
+          event: 'recall.temporal_expand.pass',
+          pass: expandPass,
+          windowStart: (activeCreatedAt.gte as Date).toISOString(),
+          windowEnd: (activeCreatedAt.lte as Date).toISOString(),
+          windowMultiplier: Math.pow(2, expandPass),
+          candidatesFound: temporalMemories.length,
+          elapsedMs: Date.now() - passStart,
+        });
 
         expandPass++;
 
         // Widen the window by doubling the span each pass
         activeFilter = this.temporalParser.expandWindow(activeFilter, 2.0);
+
+        if (
+          adaptiveEnabled &&
+          temporalMemories.length < minResults &&
+          expandPass <= maxExpand &&
+          Date.now() >= expandDeadline
+        ) {
+          timedOut = true;
+          break;
+        }
       } while (
         adaptiveEnabled &&
         temporalMemories.length < minResults &&
@@ -229,11 +260,34 @@ export class MemoryQueryService {
         Date.now() < expandDeadline
       );
 
-      this.logger.log(
-        '[Recall] Temporal path: found',
-        temporalMemories.length,
-        'memories in range',
-      );
+      const terminationReason = timedOut
+        ? 'timeout'
+        : !adaptiveEnabled
+          ? 'adaptive_disabled'
+          : temporalMemories.length >= minResults
+            ? 'min_results_satisfied'
+            : expandPass > maxExpand
+              ? 'max_expand_reached'
+              : 'unknown';
+
+      if (timedOut) {
+        this.logger.warn({
+          event: 'recall.temporal_expand.timeout',
+          passes: expandPass,
+          candidatesFound: temporalMemories.length,
+          minResults,
+          timeoutMs,
+          elapsedMs: Date.now() - expandStart,
+        });
+      }
+
+      this.logger.log({
+        event: 'recall.temporal_expand.exit',
+        passes: expandPass,
+        candidatesFound: temporalMemories.length,
+        terminationReason,
+        elapsedMs: Date.now() - expandStart,
+      });
 
       const vectorResults = await this.embedding.search(
         userId ?? 'default',
