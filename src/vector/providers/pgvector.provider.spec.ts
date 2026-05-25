@@ -82,6 +82,18 @@ describe('PgVectorProvider', () => {
         'mem-large',
       );
     });
+
+    it('should reject embeddings with null entries before hitting Postgres', async () => {
+      const record = {
+        id: 'mem-bad',
+        embedding: [0.1, null, 0.3] as unknown as number[],
+      };
+
+      await expect(provider.upsert(record)).rejects.toThrow(
+        'Invalid embedding for mem-bad',
+      );
+      expect(mockPrisma.$executeRawUnsafe).not.toHaveBeenCalled();
+    });
   });
 
   describe('upsertMany', () => {
@@ -191,6 +203,18 @@ describe('PgVectorProvider', () => {
         { id: 'mem-1', score: 0.95 },
         { id: 'mem-2', score: 0.88 },
       ]);
+    });
+
+    it('should reject query embeddings with null entries', async () => {
+      await expect(
+        provider.search([0.1, null, 0.3] as unknown as number[], {
+          userId: 'user-123',
+        }),
+      ).rejects.toThrow('Invalid embedding for query');
+      expect(mockPrisma.$queryRawUnsafe).not.toHaveBeenCalledWith(
+        expect.stringContaining('SELECT'),
+        expect.anything(),
+      );
     });
 
     it('should filter by layers when provided', async () => {

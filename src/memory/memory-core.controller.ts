@@ -169,6 +169,7 @@ export class MemoryCoreController {
     @Query('layer') layer?: string,
     @Query('userId') filterUserId?: string,
     @Query('agentId') agentId?: string,
+    @Query('sessionId') sessionId?: string,
   ): Promise<{
     memories: any[];
     total: number;
@@ -201,6 +202,13 @@ export class MemoryCoreController {
 
     if (agentId) {
       where.agentId = agentId;
+    }
+
+    if (sessionId) {
+      where.OR = [
+        { sessionId },
+        { session: { externalId: sessionId } },
+      ];
     }
 
     const [memories, total] = await Promise.all([

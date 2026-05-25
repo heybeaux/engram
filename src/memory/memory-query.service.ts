@@ -56,6 +56,38 @@ export class MemoryQueryService {
     @Optional() private memoryFailureService?: MemoryFailureService,
   ) {}
 
+  private buildTemporalWindowWhere(activeWindow: {
+    gte: Date;
+    lte: Date;
+  }): Record<string, unknown> {
+    return {
+      OR: [
+        {
+          extraction: {
+            is: {
+              when: activeWindow,
+            },
+          },
+        },
+        {
+          AND: [
+            {
+              OR: [
+                { extraction: { is: null } },
+                { extraction: { is: { when: null } } },
+              ],
+            },
+            { createdAt: activeWindow },
+          ],
+        },
+      ],
+    };
+  }
+
+  private getTemporalAnchor(memory: MemoryWithExtraction): Date {
+    return memory.extraction?.when ?? memory.createdAt;
+  }
+
   /**
    * Semantic search for memories
    */
@@ -194,7 +226,7 @@ export class MemoryQueryService {
             ? originalFilterEnd
             : activeFilter.end;
 
-        const activeCreatedAt: Record<string, any> = {
+        const activeCreatedAt: { gte: Date; lte: Date } = {
           gte: activeFilter.start,
           lte: clampedEnd,
         };
@@ -218,7 +250,7 @@ export class MemoryQueryService {
             deletedAt: null,
             supersededById: null,
             searchable: { not: false },
-            createdAt: activeCreatedAt,
+            ...this.buildTemporalWindowWhere(activeCreatedAt),
             ...subjectTypeFilter,
             ...visibilityFilter,
             ...metadataFilter,
@@ -309,7 +341,7 @@ export class MemoryQueryService {
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0.1;
           const temporalScore = this.temporalParser.calculateTemporalRelevance(
-            memory.createdAt,
+            this.getTemporalAnchor(memory),
             parsed.temporalFilter,
           );
           const importanceScore =
@@ -541,6 +573,22 @@ export class MemoryQueryService {
       rerankQuery,
       limit,
     );
+
+    // HEY-578: sessionId post-filter — surfaceInsights/mergeGraphResults can
+    // reintroduce memories from outside the requested session scope.
+    // Resolve externalId → cuid (one-shot lookup) so the comparison hits
+    // the column value, not the user-supplied externalId.
+    if (dto.sessionId) {
+      const resolvedSessionCuids = new Set<string>([dto.sessionId]);
+      const matched = await this.prisma.session.findFirst({
+        where: { externalId: dto.sessionId },
+        select: { id: true },
+      });
+      if (matched) resolvedSessionCuids.add(matched.id);
+      scoredMemories = scoredMemories.filter(
+        (m) => m.sessionId != null && resolvedSessionCuids.has(m.sessionId),
+      );
+    }
 
     // v1.7: Agent-scoped filter
     if (dto.filterAgentId) {
@@ -845,10 +893,16 @@ export class MemoryQueryService {
 
   /**
    * HEY-578: Build Prisma WHERE clause for sessionId filter.
+   * Accepts either a Session cuid or an externalId (resolved via Session relation).
    */
   buildSessionIdFilter(dto: QueryMemoryDto): Record<string, any> {
     if (!dto.sessionId) return {};
-    return { sessionId: dto.sessionId };
+    return {
+      OR: [
+        { sessionId: dto.sessionId },
+        { session: { externalId: dto.sessionId } },
+      ],
+    };
   }
 
   /**

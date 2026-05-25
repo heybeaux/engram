@@ -13,6 +13,8 @@ export type LmeCategory =
   | 'knowledge-update'
   | 'single-session-assistant';
 
+export type LmeAnswer = string | number | boolean | null;
+
 export interface RoundEntry {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -24,7 +26,7 @@ export interface LongMemEvalQuestion {
   question_id: string;
   question: string;
   /** Gold answer — may be null/empty for abstention-category questions */
-  answer: string;
+  answer: LmeAnswer;
   category: LmeCategory;
   /** The session history that should be ingested before answering */
   session_history: RoundEntry[];
@@ -40,7 +42,7 @@ export interface LmeDataset {
 export interface QuestionResult {
   questionId: string;
   question: string;
-  expected: string;
+  expected: LmeAnswer;
   predicted: string;
   correct: boolean;
   category: LmeCategory;
@@ -85,6 +87,10 @@ export interface RunConfig {
   limit?: number;
   /** Filter to a single category */
   category?: LmeCategory;
+  /** Optional allowlist of question IDs to evaluate */
+  questionIds?: string[];
+  /** Reuse previously ingested LongMemEval memories instead of ingesting again */
+  reuseExisting?: boolean;
   /** Dataset subset to use */
   subset: 'smoke' | 'full';
   /** Output path for summary.json */

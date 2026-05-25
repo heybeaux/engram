@@ -1,0 +1,2 @@
+{"questionId":"verify-q1","question":"fake question verify-q1","expected":"gold","predicted":"gold","correct":true,"category":"single-session-user","latencyMs":200,"judgeReasoning":"fake","timestamp":"2026-05-24T10:51:48.103Z"}
+{"questionId":"verify-q2","question":"fake question verify-q2","expected":"gold","predicted":"gold","correct":true,"category":"single-session-user","latencyMs":200,"judgeReasoning":"fake","timestamp":"2026-05-24T10:51:48.306Z"}

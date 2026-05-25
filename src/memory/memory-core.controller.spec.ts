@@ -116,4 +116,34 @@ describe('MemoryCoreController', () => {
       expect(memoryService.markUsed).toHaveBeenCalledWith('mem-1', userId);
     });
   });
+
+  describe('listMemories', () => {
+    it('should scope list queries by sessionId or session externalId', async () => {
+      const req = { accountId: 'acc-1', isInstanceKey: true };
+
+      await controller.listMemories(
+        req,
+        userId,
+        '25',
+        '0',
+        'SESSION',
+        userId,
+        'agent-1',
+        'session-123',
+      );
+
+      expect((controller as any).prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            layer: 'SESSION',
+            agentId: 'agent-1',
+            OR: [
+              { sessionId: 'session-123' },
+              { session: { externalId: 'session-123' } },
+            ],
+          }),
+        }),
+      );
+    });
+  });
 });

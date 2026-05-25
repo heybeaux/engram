@@ -1,4 +1,5 @@
 import { Injectable, Optional, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { rlsContext } from '../prisma/rls-context';
 import {
@@ -12,6 +13,7 @@ import { GraphExtractionService } from '../graph/services/graph-extraction.servi
 import { AttachmentPipelineService } from '../entity-profile/attachment-pipeline.service';
 import { EntityMemoryService } from './entity-memory.service';
 import { parseFlexibleDate } from '../utils/date-parser';
+import { TemporalParserService } from './temporal/temporal-parser.service';
 import {
   RELATED_SIMILARITY_THRESHOLD,
   DEDUP_SIMILARITY_THRESHOLD,
@@ -24,6 +26,8 @@ interface EmbeddingRetryEntry {
   raw: string;
   attempts: number;
   lastAttempt: Date;
+  context?: ExtractionContext;
+  requiresExtraction?: boolean;
 }
 
 @Injectable()
@@ -42,6 +46,7 @@ export class MemoryPipelineService {
     @Optional() private graphExtraction?: GraphExtractionService,
     @Optional() private attachmentPipeline?: AttachmentPipelineService,
     @Optional() private entityMemory?: EntityMemoryService,
+    @Optional() private temporalParser?: TemporalParserService,
   ) {}
 
   /**
@@ -114,6 +119,12 @@ export class MemoryPipelineService {
 
     const rawJsonData = {
       ...sourceMetadata,
+      ...this.buildTemporalMetadata(
+        raw,
+        extracted.when,
+        parsedWhen,
+        context?.timestamp,
+      ),
       ...(extracted.lesson
         ? { lesson: JSON.parse(JSON.stringify(extracted.lesson)) }
         : {}),
@@ -301,6 +312,108 @@ export class MemoryPipelineService {
     }
   }
 
+  private buildTemporalMetadata(
+    raw: string,
+    extractedWhen: string | null,
+    parsedWhen: Date | null,
+    referenceTimestamp?: Date,
+  ): Record<string, unknown> | undefined {
+    const reference = referenceTimestamp ?? new Date();
+    const temporalQuery = this.temporalParser?.parse(raw, reference);
+    const temporalFilter = temporalQuery?.temporalFilter ?? null;
+
+    if (!extractedWhen && !parsedWhen && !temporalFilter) {
+      return undefined;
+    }
+
+    return {
+      temporal: {
+        referenceTimestamp: reference.toISOString(),
+        relativeExpression: temporalFilter?.expression ?? null,
+        isRelative:
+          temporalFilter !== null ||
+          this.looksLikeRelativeTemporalExpression(extractedWhen),
+        extractedWhenRaw: extractedWhen ?? null,
+        resolvedWhen: parsedWhen?.toISOString() ?? null,
+        resolvedDate:
+          parsedWhen === null ? null : this.formatDateOnly(parsedWhen),
+        resolvedDateLabel:
+          parsedWhen === null ? null : this.formatLongDate(parsedWhen),
+        resolvedDayOfWeek:
+          parsedWhen === null ? null : this.formatWeekday(parsedWhen),
+        resolvedGranularity: this.inferTemporalGranularity(temporalFilter),
+        resolvedRange:
+          temporalFilter === null
+            ? null
+            : {
+                start: temporalFilter.start.toISOString(),
+                end: temporalFilter.end.toISOString(),
+                startDate: this.formatDateOnly(temporalFilter.start),
+                endDate: this.formatDateOnly(temporalFilter.end),
+              },
+      },
+    };
+  }
+
+  private looksLikeRelativeTemporalExpression(value: string | null): boolean {
+    if (!value) {
+      return false;
+    }
+
+    return /\b(today|yesterday|tomorrow|ago|last|next|this|tonight|morning|afternoon|evening|weekend|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(
+      value,
+    );
+  }
+
+  private formatDateOnly(value: Date): string {
+    return value.toISOString().slice(0, 10);
+  }
+
+  private formatLongDate(value: Date): string {
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(value);
+  }
+
+  private formatWeekday(value: Date): string {
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+    }).format(value);
+  }
+
+  private inferTemporalGranularity(
+    temporalFilter: { start: Date; end: Date } | null,
+  ): 'point' | 'day' | 'week' | 'month' | 'year' | 'range' | null {
+    if (!temporalFilter) {
+      return null;
+    }
+
+    const durationMs =
+      temporalFilter.end.getTime() - temporalFilter.start.getTime();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+
+    if (durationMs <= 60 * 60 * 1000) {
+      return 'point';
+    }
+    if (durationMs <= oneDayMs) {
+      return 'day';
+    }
+    if (durationMs <= oneDayMs * 8) {
+      return 'week';
+    }
+    if (durationMs <= oneDayMs * 32) {
+      return 'month';
+    }
+    if (durationMs <= oneDayMs * 370) {
+      return 'year';
+    }
+
+    return 'range';
+  }
+
   /**
    * Phase 2: Generate embedding with retry queue on failure (HEY-345).
    * If embedding fails, the memory is added to an in-memory retry queue.
@@ -373,20 +486,59 @@ export class MemoryPipelineService {
     failed: number;
     discovered: number;
   }> {
-    // 1. Discover memories without embeddings from DB (up to 100)
-    const unembedded = await this.prisma.memory.findMany({
-      where: {
-        OR: [
-          { embeddingId: null },
-          { embeddingStatus: 'FAILED' },
-          { embeddingStatus: 'PENDING' },
-        ],
-        deletedAt: null,
+    const discoveryLimit = 100;
+    const discoverySelect = {
+      id: true,
+      userId: true,
+      raw: true,
+      metadata: true,
+      extraction: {
+        select: {
+          memoryId: true,
+        },
       },
-      select: { id: true, userId: true, raw: true },
-      take: 100,
+    };
+    const discoveryWhere: Prisma.MemoryWhereInput = {
+      OR: [
+        { embeddingId: null },
+        { embeddingStatus: 'FAILED' },
+        { embeddingStatus: 'PENDING' },
+      ],
+      deletedAt: null,
+    };
+
+    // Prioritize session-backed memories first so eval/session ingestion does
+    // not get starved behind derived entity/profile memories.
+    const primaryUnembedded = await this.prisma.memory.findMany({
+      where: {
+        ...discoveryWhere,
+        sessionId: { not: null },
+      },
+      select: discoverySelect,
+      take: discoveryLimit,
       orderBy: { createdAt: 'desc' },
     });
+
+    const secondaryUnembedded =
+      primaryUnembedded.length < discoveryLimit
+        ? await this.prisma.memory.findMany({
+            where: {
+              ...discoveryWhere,
+              sessionId: null,
+            },
+            select: discoverySelect,
+            take: discoveryLimit - primaryUnembedded.length,
+            orderBy: { createdAt: 'desc' },
+          })
+        : [];
+
+    const unembedded: Array<{
+      id: string;
+      userId: string;
+      raw: string;
+      metadata: unknown;
+      extraction: { memoryId: string } | null;
+    }> = [...primaryUnembedded, ...secondaryUnembedded];
 
     let discovered = 0;
     for (const mem of unembedded) {
@@ -397,6 +549,8 @@ export class MemoryPipelineService {
           raw: mem.raw,
           attempts: 0,
           lastAttempt: new Date(0),
+          context: this.reconstructExtractionContext(mem.metadata),
+          requiresExtraction: !mem.extraction,
         });
         discovered++;
       }
@@ -413,11 +567,18 @@ export class MemoryPipelineService {
       }
 
       retried++;
-      const ok = await this.generateAndStoreEmbedding(
-        entry.memoryId,
-        entry.raw,
-        entry.userId,
-      );
+      const ok = entry.requiresExtraction
+        ? await this.extractAndEmbed(
+            entry.memoryId,
+            entry.raw,
+            entry.userId,
+            entry.context,
+          ).then(() => true)
+        : await this.generateAndStoreEmbedding(
+            entry.memoryId,
+            entry.raw,
+            entry.userId,
+          );
       if (ok) {
         succeeded++;
       } else {
@@ -429,6 +590,36 @@ export class MemoryPipelineService {
       `[Retry] Embedding retry complete: ${succeeded}/${retried} succeeded, ${discovered} discovered from DB`,
     );
     return { retried, succeeded, failed, discovered };
+  }
+
+  private reconstructExtractionContext(
+    metadata: unknown,
+  ): ExtractionContext | undefined {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      return undefined;
+    }
+
+    const sourceContext = (metadata as Record<string, unknown>).sourceContext;
+    if (!sourceContext || typeof sourceContext !== 'object') {
+      return undefined;
+    }
+
+    const source = sourceContext as Record<string, unknown>;
+
+    return {
+      ...(source.timestamp
+        ? { timestamp: new Date(String(source.timestamp)) }
+        : {}),
+      ...(source.turnIndex !== undefined
+        ? { turnIndex: source.turnIndex as number }
+        : {}),
+      ...(source.conversationId !== undefined
+        ? { conversationId: String(source.conversationId) }
+        : {}),
+      ...(source.userName !== undefined
+        ? { userName: String(source.userName) }
+        : {}),
+    };
   }
 
   /**

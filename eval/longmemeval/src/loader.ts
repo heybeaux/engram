@@ -24,7 +24,9 @@ const FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'smoke-20.json');
  * - subset=smoke: always load from fixture file
  * - subset=full: try HuggingFace, fall back to fixture with a warning
  */
-export async function loadDataset(config: Pick<RunConfig, 'subset' | 'limit' | 'category'>): Promise<LongMemEvalQuestion[]> {
+export async function loadDataset(
+  config: Pick<RunConfig, 'subset' | 'limit' | 'category' | 'questionIds'>,
+): Promise<LongMemEvalQuestion[]> {
   let questions: LongMemEvalQuestion[];
 
   if (config.subset === 'smoke') {
@@ -38,6 +40,11 @@ export async function loadDataset(config: Pick<RunConfig, 'subset' | 'limit' | '
 
   if (config.category) {
     questions = questions.filter(q => q.category === config.category);
+  }
+
+  if (config.questionIds && config.questionIds.length > 0) {
+    const allowedIds = new Set(config.questionIds);
+    questions = questions.filter(q => allowedIds.has(q.question_id));
   }
 
   if (config.limit !== undefined && config.limit > 0) {
@@ -128,7 +135,16 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
     const sessions: RoundEntry[][] = Array.isArray(item.haystack_sessions)
       ? item.haystack_sessions
       : [];
-    const session_history: RoundEntry[] = sessions.flat();
+    const haystackDates: string[] = Array.isArray(item.haystack_dates)
+      ? item.haystack_dates
+      : [];
+    const session_history: RoundEntry[] = sessions.flatMap((session: RoundEntry[], index: number) => {
+      const timestamp = normalizeHaystackDate(haystackDates[index]);
+      return session.map(entry => ({
+        ...entry,
+        ...(timestamp ? { timestamp } : {}),
+      }));
+    });
     return {
       question_id: item.question_id,
       question: item.question,
@@ -149,6 +165,22 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
     );
   }
   return questions;
+}
+
+export function normalizeHaystackDate(
+  value: string | undefined,
+): string | undefined {
+  if (!value) return undefined;
+
+  const match = value.match(
+    /^(\d{4})\/(\d{2})\/(\d{2}) \([A-Za-z]{3}\) (\d{2}):(\d{2})$/,
+  );
+  if (!match) return undefined;
+
+  const [, year, month, day, hour, minute] = match;
+  return new Date(
+    `${year}-${month}-${day}T${hour}:${minute}:00.000Z`,
+  ).toISOString();
 }
 
 /** Minimal validation to catch malformed fixture data early. */

@@ -19,6 +19,7 @@ export class LocalEmbedProvider implements EmbeddingProvider {
   private readonly baseUrl: string;
   private readonly model: string;
   private readonly dimensions: number;
+  private static readonly INVALID_EMBED_RETRY_ATTEMPTS = 2;
 
   constructor(private configService: ConfigService) {
     this.baseUrl = this.configService.get<string>(
@@ -66,22 +67,85 @@ export class LocalEmbedProvider implements EmbeddingProvider {
   }
 
   private async doFetch(fetchOptions: RequestInit): Promise<number[][]> {
-    const response = await fetch(`${this.baseUrl}/v1/embeddings`, fetchOptions);
+    let lastError: Error | null = null;
 
-    if (!response.ok) {
-      const error = await response.text();
+    for (
+      let attempt = 1;
+      attempt <= LocalEmbedProvider.INVALID_EMBED_RETRY_ATTEMPTS;
+      attempt++
+    ) {
+      try {
+        const response = await fetch(
+          `${this.baseUrl}/v1/embeddings`,
+          fetchOptions,
+        );
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(
+            `Local embedding API error: ${response.status} - ${error}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!data.data || !Array.isArray(data.data)) {
+          throw new Error('Invalid response from local embedding server');
+        }
+
+        return data.data.map((item: any, index: number) =>
+          this.validateEmbedding(item?.embedding, index),
+        );
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error : new Error(String(error ?? 'unknown'));
+
+        if (
+          attempt < LocalEmbedProvider.INVALID_EMBED_RETRY_ATTEMPTS &&
+          this.isRetryableInvalidEmbedding(lastError)
+        ) {
+          this.logger.warn(
+            `[LocalEmbed] Invalid embedding payload on attempt ${attempt}; retrying once: ${lastError.message}`,
+          );
+          continue;
+        }
+
+        throw lastError;
+      }
+    }
+
+    throw lastError ?? new Error('Local embedding request failed');
+  }
+
+  private validateEmbedding(value: unknown, index: number): number[] {
+    if (!Array.isArray(value)) {
       throw new Error(
-        `Local embedding API error: ${response.status} - ${error}`,
+        `Invalid embedding payload at index ${index}: expected array`,
       );
     }
 
-    const data = await response.json();
-
-    if (!data.data || !Array.isArray(data.data)) {
-      throw new Error('Invalid response from local embedding server');
+    if (value.length === 0) {
+      throw new Error(`Invalid embedding payload at index ${index}: empty`);
     }
 
-    return data.data.map((item: any) => item.embedding);
+    const invalidEntries = value.filter(
+      (item) => typeof item !== 'number' || !Number.isFinite(item),
+    ).length;
+
+    if (invalidEntries > 0) {
+      throw new Error(
+        `Invalid embedding payload at index ${index}: ${invalidEntries}/${value.length} entries were non-finite`,
+      );
+    }
+
+    return value as number[];
+  }
+
+  private isRetryableInvalidEmbedding(error: Error): boolean {
+    return (
+      error.message.includes('Invalid embedding payload') ||
+      error.message.includes('Invalid response from local embedding server')
+    );
   }
 
   getModelName(): string {

@@ -114,6 +114,41 @@ describe('LocalEmbedProvider', () => {
       );
     });
 
+    it('should retry once when embedding payload contains nulls', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [{ embedding: [0.1, null, 0.3] }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [{ embedding: [0.1, 0.2, 0.3] }],
+          }),
+        });
+
+      const result = await provider.embed(['test']);
+
+      expect(result).toEqual([[0.1, 0.2, 0.3]]);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw when embedding payload stays invalid after retry', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ embedding: [null, null, null] }],
+        }),
+      });
+
+      await expect(provider.embed(['test'])).rejects.toThrow(
+        'Invalid embedding payload',
+      );
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
     it('should send X-Priority header when priority option is set', async () => {
       mockFetch.mockResolvedValue({
         ok: true,

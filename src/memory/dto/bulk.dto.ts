@@ -11,6 +11,7 @@ import {
   Min,
   Max,
   IsNotEmpty,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -58,6 +59,21 @@ export class BulkCreateMemoryItemDto {
   @IsInt()
   @Min(0)
   sessionPosition?: number;
+
+  @ApiPropertyOptional({
+    description: 'Original source timestamp for relative-time resolution',
+  })
+  @IsOptional()
+  @IsDateString()
+  sourceTimestamp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Original turn index within the source conversation',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  sourceTurnIndex?: number;
 }
 
 export class BulkCreateMemoryDto {
@@ -163,4 +179,5 @@ export interface BulkTextResult {
   created: number;
   chunks: number;
   memoryIds: string[];
+  sessionId?: string;
 }

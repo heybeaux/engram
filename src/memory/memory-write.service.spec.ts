@@ -37,6 +37,13 @@ describe('MemoryWriteService', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      $transaction: jest.fn().mockImplementation(async (fn: any) => fn({
+        session: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'new-session' }),
+        },
+      })),
       memory: {
         create: jest.fn(),
         createMany: jest.fn(),
@@ -193,6 +200,49 @@ describe('MemoryWriteService', () => {
         userId: 'user-456',
         raw: 'Test',
         runDedup: true,
+        context: {
+          timestamp: expect.any(Date),
+          turnIndex: undefined,
+          conversationId: undefined,
+          userName: 'TestUser',
+        },
+      });
+    });
+
+    it('should enqueue extraction context for async embedding jobs', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.create.mockResolvedValue(mockMemory);
+
+      await service.remember('user-456', {
+        raw: 'Yesterday I went for a run.',
+        sourceTimestamp: new Date('2026-05-23T12:00:00.000Z'),
+        sourceTurnIndex: 7,
+        context: { sessionId: 'session-ext-1' },
+      });
+
+      expect(mockEmbeddingQueue.enqueueEmbedding).toHaveBeenCalledWith({
+        memoryId: mockMemory.id,
+        userId: 'user-456',
+        raw: 'Yesterday I went for a run.',
+        runDedup: true,
+        context: {
+          timestamp: new Date('2026-05-23T12:00:00.000Z'),
+          turnIndex: 7,
+          conversationId: 'session-ext-1',
+          userName: 'TestUser',
+        },
+      });
+
+      expect(mockPrisma.memory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: {
+            sourceContext: {
+              timestamp: '2026-05-23T12:00:00.000Z',
+              turnIndex: 7,
+              conversationId: 'session-ext-1',
+            },
+          },
+        }),
       });
     });
 
@@ -309,6 +359,126 @@ describe('MemoryWriteService', () => {
         'First sentence. Second sentence. Third sentence. Fourth sentence.';
       const result = service.chunkText(text, 30);
       expect(result.length).toBeGreaterThan(1);
+    });
+  });
+
+  describe('bulkCreate', () => {
+    it('should enqueue per-memory extraction context when provided', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.account = { findUnique: jest.fn().mockResolvedValue(null) };
+      mockPrisma.session.findUnique.mockResolvedValue(null);
+      mockPrisma.session.findFirst.mockResolvedValue({ id: 'resolved-session-1' });
+
+      await service.bulkCreate('user-456', {
+        memories: [
+          {
+            raw: 'User: Yesterday I went for a run.',
+            layer: MemoryLayer.SESSION,
+            sessionPosition: 0,
+            sourceTimestamp: '2026-05-23T12:00:00.000Z' as any,
+            sourceTurnIndex: 0,
+          } as any,
+        ],
+        context: { sessionId: 'session-internal-1' },
+        agentId: 'agent-1',
+      });
+
+      expect(mockEmbeddingQueue.enqueueEmbedding).toHaveBeenCalledWith({
+        memoryId: expect.any(String),
+        userId: 'user-456',
+        raw: 'User: Yesterday I went for a run.',
+        runDedup: true,
+        context: {
+          timestamp: new Date('2026-05-23T12:00:00.000Z'),
+          turnIndex: 0,
+          conversationId: 'session-internal-1',
+        },
+      });
+    });
+
+    it('should resolve external sessionId to an internal session FK before createMany', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.account = { findUnique: jest.fn().mockResolvedValue(null) };
+      mockPrisma.session.findUnique.mockResolvedValue(null);
+      mockPrisma.session.findFirst.mockResolvedValue({ id: 'resolved-session-1' });
+
+      await service.bulkCreate('user-456', {
+        memories: [{ raw: 'User: hi' } as any],
+        context: { sessionId: 'lme-gpt4_59149c77' },
+      });
+
+      expect(mockPrisma.memory.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            sessionId: 'resolved-session-1',
+          }),
+        ],
+      });
+    });
+
+    it('should create and use a committed session FK before createMany when session is new', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.account = { findUnique: jest.fn().mockResolvedValue(null) };
+      mockPrisma.session.findUnique.mockResolvedValue(null);
+      mockPrisma.session.findFirst.mockResolvedValue(null);
+
+      const tx = {
+        session: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'committed-session-1' }),
+        },
+      };
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(tx));
+
+      await service.bulkCreate('user-456', {
+        memories: [{ raw: 'User: hi' } as any],
+        context: { sessionId: 'lme-new-session' },
+      });
+
+      expect(mockPrisma.memory.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            sessionId: 'committed-session-1',
+          }),
+        ],
+      });
+    });
+
+    it('should persist source context in metadata for retry-safe extraction', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.account = { findUnique: jest.fn().mockResolvedValue(null) };
+      mockPrisma.session.findUnique.mockResolvedValue(null);
+      mockPrisma.session.findFirst.mockResolvedValue({ id: 'resolved-session-1' });
+
+      await service.bulkCreate('user-456', {
+        memories: [
+          {
+            raw: 'User: Yesterday I went for a run.',
+            sourceTimestamp: '2026-05-23T12:00:00.000Z' as any,
+            sourceTurnIndex: 0,
+          } as any,
+        ],
+        context: { sessionId: 'session-ext-1' },
+      });
+
+      expect(mockPrisma.memory.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            metadata: {
+              sourceContext: {
+                timestamp: '2026-05-23T12:00:00.000Z',
+                turnIndex: 0,
+                conversationId: 'session-ext-1',
+              },
+            },
+          }),
+        ],
+      });
     });
   });
 
@@ -468,6 +638,27 @@ describe('MemoryWriteService', () => {
       expect(mockPrisma.session.create).toHaveBeenCalledWith({
         data: { userId: 'user-456', externalId: 'new-session' },
       });
+    });
+
+    it('should create new session in a committed transaction when requested', async () => {
+      mockPrisma.session.findUnique.mockResolvedValue(null);
+      mockPrisma.session.findFirst.mockResolvedValue(null);
+
+      const tx = {
+        session: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'committed-session-id' }),
+        },
+      };
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(tx));
+
+      const result = await service.resolveSessionId('user-456', 'new-session', {
+        ensureCommitted: true,
+      });
+
+      expect(result).toBe('committed-session-id');
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
     });
   });
 });

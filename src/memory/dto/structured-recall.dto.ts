@@ -160,15 +160,32 @@ export function wantsStructuredResponse(
 export function toStructuredItem(
   memory: MemoryWithScore,
 ): StructuredMemoryItem {
+  const metadata = memory.metadata as Record<string, any> | null | undefined;
+  const sourceContext =
+    metadata && typeof metadata === 'object'
+      ? (metadata.sourceContext as Record<string, any> | undefined)
+      : undefined;
+  const sourceTimestamp =
+    typeof sourceContext?.timestamp === 'string'
+      ? sourceContext.timestamp
+      : sourceContext?.timestamp instanceof Date
+        ? sourceContext.timestamp.toISOString()
+        : undefined;
+  const timestampSource =
+    sourceTimestamp ??
+    (memory.extraction?.when instanceof Date
+      ? memory.extraction.when.toISOString()
+      : undefined) ??
+    (memory.createdAt instanceof Date
+      ? memory.createdAt.toISOString()
+      : new Date(memory.createdAt as any).toISOString());
+
   return {
     id: memory.id,
     fact: memory.raw,
     source_session: memory.sessionId ?? null,
     confidence: typeof memory.score === 'number' ? memory.score : null,
-    timestamp:
-      memory.createdAt instanceof Date
-        ? memory.createdAt.toISOString()
-        : new Date(memory.createdAt as any).toISOString(),
+    timestamp: timestampSource,
     memory_type: memory.memoryType ?? null,
   };
 }

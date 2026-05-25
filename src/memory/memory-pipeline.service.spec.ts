@@ -6,6 +6,7 @@ describe('MemoryPipelineService', () => {
   let extraction: any;
   let embedding: any;
   let hierarchy: any;
+  let temporalParser: any;
 
   beforeEach(() => {
     prisma = {
@@ -50,11 +51,18 @@ describe('MemoryPipelineService', () => {
       isEnabled: jest.fn().mockReturnValue(false),
       processMemory: jest.fn(),
     };
+    temporalParser = {
+      parse: jest.fn().mockReturnValue({ semanticQuery: 'test content', temporalFilter: null }),
+    };
     service = new MemoryPipelineService(
       prisma,
       extraction,
       embedding,
       hierarchy,
+      undefined,
+      undefined,
+      undefined,
+      temporalParser,
     );
   });
 
@@ -131,12 +139,83 @@ describe('MemoryPipelineService', () => {
     it('should pass context to extraction', async () => {
       const ctx = {
         userName: 'Bob',
-        timestamp: new Date(),
+        timestamp: new Date('2026-05-23T12:00:00.000Z'),
         turnIndex: 3,
         conversationId: 'conv-1',
       };
       await service.extractAndEmbed('m1', 'test', 'user-1', ctx);
       expect(extraction.extract).toHaveBeenCalledWith('test', ctx);
+    });
+
+    it('should persist resolved temporal metadata for relative-time memories', async () => {
+      const ctx = {
+        userName: 'Bob',
+        timestamp: new Date('2026-05-23T12:00:00.000Z'),
+        turnIndex: 3,
+        conversationId: 'conv-1',
+      };
+      extraction.extract.mockResolvedValue({
+        who: 'Bob',
+        what: 'Bob went for a run',
+        when: 'yesterday',
+        where: null,
+        why: null,
+        how: null,
+        topics: ['fitness'],
+        entities: [],
+        memoryType: 'EVENT',
+        typeConfidence: 0.9,
+        confidence: {
+          whoConfidence: 0.8,
+          whatConfidence: 0.9,
+          whenConfidence: 0.9,
+          whereConfidence: 0,
+          whyConfidence: 0,
+          howConfidence: 0,
+        },
+        lesson: null,
+        capabilities: [],
+        preferenceSignals: [],
+        factKeys: [],
+      });
+      temporalParser.parse.mockReturnValue({
+        semanticQuery: 'Bob went for a run',
+        temporalFilter: {
+          expression: 'yesterday',
+          start: new Date('2026-05-22T00:00:00.000Z'),
+          end: new Date('2026-05-22T23:59:59.999Z'),
+          confidence: 0.9,
+        },
+      });
+
+      await service.extractAndEmbed('m1', 'Yesterday I went for a run', 'user-1', ctx);
+
+      expect(prisma.memoryExtraction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            when: new Date('2026-05-22T07:00:00.000Z'),
+            rawJson: expect.objectContaining({
+              temporal: {
+                referenceTimestamp: '2026-05-23T12:00:00.000Z',
+                relativeExpression: 'yesterday',
+                isRelative: true,
+                extractedWhenRaw: 'yesterday',
+                resolvedWhen: '2026-05-22T07:00:00.000Z',
+                resolvedDate: '2026-05-22',
+                resolvedDateLabel: 'Friday, May 22, 2026',
+                resolvedDayOfWeek: 'Friday',
+                resolvedGranularity: 'day',
+                resolvedRange: {
+                  start: '2026-05-22T00:00:00.000Z',
+                  end: '2026-05-22T23:59:59.999Z',
+                  startDate: '2026-05-22',
+                  endDate: '2026-05-22',
+                },
+              },
+            }),
+          }),
+        }),
+      );
     });
 
     it('should process hierarchy when enabled', async () => {
@@ -395,6 +474,104 @@ describe('MemoryPipelineService', () => {
       await service.storeEntities('user-1', 'm1', [
         { name: 'X', type: 'other' },
       ]);
+    });
+  });
+
+  describe('retryFailedEmbeddings', () => {
+    it('should run full extraction for discovered memories that lack extractions', async () => {
+      prisma.memory.findMany = jest.fn().mockResolvedValue([
+        {
+          id: 'm-retry',
+          userId: 'user-1',
+          raw: 'Yesterday I went for a run.',
+          metadata: {
+            sourceContext: {
+              timestamp: '2026-05-23T12:00:00.000Z',
+              turnIndex: 4,
+              conversationId: 'conv-1',
+              userName: 'Beaux',
+            },
+          },
+          extraction: null,
+        },
+      ]);
+
+      const extractSpy = jest
+        .spyOn(service, 'extractAndEmbed')
+        .mockResolvedValue(undefined);
+      const embedSpy = jest
+        .spyOn(service, 'generateAndStoreEmbedding')
+        .mockResolvedValue(true);
+
+      const result = await service.retryFailedEmbeddings();
+
+      expect(result.discovered).toBe(1);
+      expect(extractSpy).toHaveBeenCalledWith(
+        'm-retry',
+        'Yesterday I went for a run.',
+        'user-1',
+        {
+          timestamp: new Date('2026-05-23T12:00:00.000Z'),
+          turnIndex: 4,
+          conversationId: 'conv-1',
+          userName: 'Beaux',
+        },
+      );
+      expect(embedSpy).not.toHaveBeenCalled();
+    });
+
+    it('should prioritize session-backed memories before derived memories during discovery', async () => {
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: 'm-session',
+            userId: 'user-1',
+            raw: 'Yesterday I visited the museum.',
+            metadata: {
+              sourceContext: {
+                timestamp: '2026-05-23T12:00:00.000Z',
+                turnIndex: 1,
+                conversationId: 'conv-1',
+              },
+            },
+            extraction: null,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 'm-derived',
+            userId: 'user-1',
+            raw: 'Museum is a person known to user-1.',
+            metadata: null,
+            extraction: null,
+          },
+        ]);
+
+      const extractSpy = jest
+        .spyOn(service, 'extractAndEmbed')
+        .mockResolvedValue(undefined);
+
+      await service.retryFailedEmbeddings();
+
+      expect(extractSpy).toHaveBeenNthCalledWith(
+        1,
+        'm-session',
+        'Yesterday I visited the museum.',
+        'user-1',
+        {
+          timestamp: new Date('2026-05-23T12:00:00.000Z'),
+          turnIndex: 1,
+          conversationId: 'conv-1',
+        },
+      );
+      expect(extractSpy).toHaveBeenNthCalledWith(
+        2,
+        'm-derived',
+        'Museum is a person known to user-1.',
+        'user-1',
+        undefined,
+      );
     });
   });
 });

@@ -1,0 +1,38 @@
+{
+  "runAt": "2026-05-24T07:40:21.197Z",
+  "subset": "full",
+  "totalQuestions": 2,
+  "correctCount": 1,
+  "accuracy": 0.5,
+  "byCategory": {
+    "single-session-user": {
+      "total": 2,
+      "correct": 1,
+      "accuracy": 0.5
+    }
+  },
+  "questions": [
+    {
+      "questionId": "c5e8278d",
+      "question": "What was my last name before I changed it?",
+      "expected": "Johnson",
+      "predicted": "Your last name before you changed it was Johnson. You've since changed it to Winters.",
+      "correct": true,
+      "category": "single-session-user",
+      "latencyMs": 19513,
+      "judgeReasoning": "The prediction correctly identifies Johnson as the previous last name.",
+      "timestamp": "2026-05-24T07:40:19.772Z"
+    },
+    {
+      "questionId": "6f9b354f",
+      "question": "What color did I repaint my bedroom walls?",
+      "expected": "a lighter shade of gray",
+      "predicted": "",
+      "correct": false,
+      "category": "single-session-user",
+      "latencyMs": 1424,
+      "judgeReasoning": "Prediction is empty; expected a non-empty answer.",
+      "timestamp": "2026-05-24T07:40:21.196Z"
+    }
+  ]
+}

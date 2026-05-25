@@ -21,6 +21,23 @@ export interface IngestResult {
 }
 
 /**
+ * Reconstruct the isolated identity used by LongMemEval without reingesting.
+ * This is safe because recall accepts either the internal Session CUID or the
+ * stable externalId (`lme-<question_id>`) for session filtering.
+ */
+export function reuseIngestResult(questionId: string): IngestResult {
+  const scopedId = `lme-${questionId}`;
+  return {
+    questionId,
+    sessionId: scopedId,
+    userId: scopedId,
+    agentId: scopedId,
+    memoryIds: [],
+    chunks: 0,
+  };
+}
+
+/**
  * Ingest a single question's session history into Engram.
  *
  * Creates an isolated (userId, agentId, sessionId) scoped to this question
@@ -34,18 +51,17 @@ export async function ingestQuestion(
   const userId = `lme-${question.question_id}`;
   const sessionId = `lme-${question.question_id}`;
 
-  const transcript = historyToTranscript(question.session_history);
+  const memories = buildRoundMemories(question.session_history);
 
   const body = {
-    text: transcript,
-    granularity: 'ROUND',
-    layer: 'SESSION',
+    memories,
     context: {
       sessionId,
     },
+    agentId,
   };
 
-  const url = `${config.apiBase}/v1/memories/bulk-text`;
+  const url = `${config.apiBase}/v1/memories/bulk`;
   const response = await fetchWithRetry(url, {
     method: 'POST',
     headers: {
@@ -62,16 +78,74 @@ export async function ingestQuestion(
     throw new Error(`Ingest failed for ${question.question_id}: HTTP ${response.status} — ${text}`);
   }
 
-  const data = await response.json() as { created: number; chunks: number; memoryIds: string[] };
+  const data = await response.json() as { created: number; chunks: number; memoryIds: string[]; sessionId?: string };
 
   return {
     questionId: question.question_id,
-    sessionId,
+    // Use the CUID returned by the server (resolvedSessionId) so recall queries
+    // can filter by sessions.id FK directly. Fall back to external string if
+    // server is running an older build that doesn't return sessionId.
+    sessionId: data.sessionId ?? sessionId,
     userId,
     agentId,
     memoryIds: data.memoryIds ?? [],
     chunks: data.chunks ?? data.created ?? 0,
   };
+}
+
+export function buildRoundMemories(
+  rounds: LongMemEvalQuestion['session_history'],
+): Array<{
+  raw: string;
+  layer: 'SESSION';
+  sessionPosition: number;
+  sourceTimestamp?: string;
+  sourceTurnIndex: number;
+}> {
+  const memories: Array<{
+    raw: string;
+    layer: 'SESSION';
+    sessionPosition: number;
+    sourceTimestamp?: string;
+    sourceTurnIndex: number;
+  }> = [];
+
+  let currentRound: string[] = [];
+  let currentTimestamp: string | undefined;
+  let position = 0;
+
+  const flush = () => {
+    if (currentRound.length === 0) return;
+    memories.push({
+      raw: currentRound.join('\n\n'),
+      layer: 'SESSION',
+      sessionPosition: position,
+      sourceTimestamp: currentTimestamp,
+      sourceTurnIndex: position,
+    });
+    position++;
+    currentRound = [];
+    currentTimestamp = undefined;
+  };
+
+  for (const round of rounds) {
+    const label =
+      round.role === 'user'
+        ? 'User'
+        : round.role === 'assistant'
+          ? 'Assistant'
+          : 'System';
+
+    if (label === 'User' && currentRound.length > 0) {
+      flush();
+    }
+
+    currentRound.push(`${label}: ${round.content}`);
+    currentTimestamp ??= round.timestamp;
+  }
+
+  flush();
+  return memories;
 }
 
 /**

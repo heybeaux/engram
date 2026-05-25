@@ -5,6 +5,8 @@
  * Usage:
  *   pnpm longmemeval [--limit N] [--category CATEGORY] [--subset smoke|full]
  *                    [--resume PATH] [--results-dir DIR] [--output PATH]
+ *                    [--question-ids-file PATH] [--rerun-failures-from PATH]
+ *                    [--reuse-existing]
  *
  * Env vars:
  *   ENGRAM_API_BASE          — default: http://localhost:3000
@@ -20,20 +22,51 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
 import { loadDataset } from './loader';
-import { ingestQuestion } from './ingest';
+import { ingestQuestion, reuseIngestResult } from './ingest';
 import { recallQuestion } from './recall';
 import { judgeAnswer } from './judge';
+import { waitForSessionReadiness } from './readiness';
 import { buildSummary, formatSummary, loadResultsFromJsonl } from './scorer';
 import type { RunConfig, QuestionResult, LmeCategory } from './types';
 
 const DEFAULT_OUTPUT_PATH = path.join(__dirname, '..', 'summary.json');
 const DEFAULT_RESULTS_DIR = path.join(__dirname, '..', 'results');
 
+function loadStableEnvFiles(): string[] {
+  const cwd = process.cwd();
+  const harnessDir = path.join(cwd, 'eval', 'longmemeval');
+  const candidates = [
+    path.join(harnessDir, '.env.local'),
+    path.join(harnessDir, '.env'),
+    path.join(cwd, '.env.local'),
+    path.join(cwd, '.env'),
+  ];
+
+  const loaded: string[] = [];
+  for (const envPath of candidates) {
+    if (!fs.existsSync(envPath)) {
+      continue;
+    }
+
+    dotenv.config({
+      path: envPath,
+      override: false,
+    });
+    loaded.push(path.relative(cwd, envPath) || path.basename(envPath));
+  }
+
+  return loaded;
+}
+
 interface ParsedArgs extends Partial<RunConfig> {
   outputPath: string;
   resultsDir: string;
   resumePath?: string;
+  questionIdsFile?: string;
+  rerunFailuresFrom?: string;
+  reuseExisting?: boolean;
 }
 
 function parseArgs(): ParsedArgs {
@@ -65,10 +98,56 @@ function parseArgs(): ParsedArgs {
       opts.resumePath = args[++i];
     } else if (arg === '--results-dir' && args[i + 1]) {
       opts.resultsDir = args[++i];
+    } else if (arg === '--question-ids-file' && args[i + 1]) {
+      opts.questionIdsFile = args[++i];
+    } else if (arg === '--rerun-failures-from' && args[i + 1]) {
+      opts.rerunFailuresFrom = args[++i];
+    } else if (arg === '--reuse-existing') {
+      opts.reuseExisting = true;
     }
   }
 
   return opts;
+}
+
+function loadQuestionIdsFromFile(filePath: string): string[] {
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) {
+    console.error(`Error: --question-ids-file path does not exist: ${resolved}`);
+    process.exit(1);
+  }
+
+  const ids = fs
+    .readFileSync(resolved, 'utf-8')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  if (ids.length === 0) {
+    console.error(`Error: no question IDs found in ${resolved}`);
+    process.exit(1);
+  }
+
+  return [...new Set(ids)];
+}
+
+function loadFailedQuestionIds(resultsPath: string): string[] {
+  const resolved = path.resolve(resultsPath);
+  if (!fs.existsSync(resolved)) {
+    console.error(`Error: --rerun-failures-from path does not exist: ${resolved}`);
+    process.exit(1);
+  }
+
+  const failedIds = loadResultsFromJsonl(resolved)
+    .filter(result => !result.correct)
+    .map(result => result.questionId);
+
+  if (failedIds.length === 0) {
+    console.error(`Error: no failed questions found in ${resolved}`);
+    process.exit(1);
+  }
+
+  return [...new Set(failedIds)];
 }
 
 /** Filesystem-safe ISO timestamp: 2026-05-22T19-03-12-345Z */
@@ -107,6 +186,22 @@ function buildConfig(parsed: ParsedArgs): RunConfig {
     process.exit(1);
   }
 
+  let questionIds: string[] | undefined;
+  if (parsed.questionIdsFile) {
+    questionIds = loadQuestionIdsFromFile(parsed.questionIdsFile);
+  }
+  if (parsed.rerunFailuresFrom) {
+    const failedIds = loadFailedQuestionIds(parsed.rerunFailuresFrom);
+    questionIds = questionIds
+      ? questionIds.filter(id => failedIds.includes(id))
+      : failedIds;
+
+    if (!questionIds || questionIds.length === 0) {
+      console.error('Error: combined question-id filters matched no failed questions');
+      process.exit(1);
+    }
+  }
+
   const { resultsPath, resume } = resolveResultsPath(parsed);
 
   return {
@@ -117,6 +212,8 @@ function buildConfig(parsed: ParsedArgs): RunConfig {
     judgeModel: 'claude-opus-4-7',
     limit: parsed.limit,
     category: parsed.category,
+    questionIds,
+    reuseExisting: parsed.reuseExisting ?? false,
     subset: parsed.subset ?? 'smoke',
     outputPath: parsed.outputPath,
     resultsPath,
@@ -130,6 +227,7 @@ function appendResult(jsonlPath: string, result: QuestionResult): void {
 }
 
 async function main() {
+  const loadedEnvFiles = loadStableEnvFiles();
   const parsed = parseArgs();
   const config = buildConfig(parsed);
 
@@ -141,9 +239,14 @@ async function main() {
   console.log(`  subset:   ${config.subset}`);
   console.log(`  limit:    ${config.limit ?? 'none'}`);
   console.log(`  category: ${config.category ?? 'all'}`);
+  console.log(`  questionIds: ${config.questionIds?.length ?? 'all'}`);
+  console.log(`  reuseExisting: ${config.reuseExisting ? 'yes' : 'no'}`);
   console.log(`  readModel: ${config.readModel}`);
   console.log(`  apiBase:   ${config.apiBase}`);
   console.log(`  resume:    ${config.resume ? 'yes' : 'no'}`);
+  console.log(
+    `  envFiles:  ${loadedEnvFiles.length > 0 ? loadedEnvFiles.join(', ') : 'process env only'}`,
+  );
   console.log('');
 
   // Load dataset
@@ -201,7 +304,19 @@ async function main() {
 
     let result: QuestionResult;
     try {
-      const ingestResult = await ingestQuestion(question, config);
+      const ingestResult = config.reuseExisting
+        ? reuseIngestResult(question.question_id)
+        : await ingestQuestion(question, config);
+      if (!config.reuseExisting) {
+        await waitForSessionReadiness(
+          ingestResult.userId,
+          ingestResult.agentId,
+          ingestResult.sessionId,
+          ingestResult.chunks,
+          config,
+          30_000,
+        );
+      }
       const recallResult = await recallQuestion(
         question.question_id,
         question.question,

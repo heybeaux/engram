@@ -65,6 +65,40 @@ describe('structured-recall (ENG-134)', () => {
       });
     });
 
+    it('prefers sourceContext.timestamp over ingest createdAt', () => {
+      const item = toStructuredItem({
+        id: 'm-src',
+        raw: 'fact text',
+        sessionId: 'sess-1',
+        score: 0.42,
+        createdAt: new Date('2026-05-25T13:24:39.707Z'),
+        memoryType: 'FACT',
+        metadata: {
+          sourceContext: {
+            timestamp: '2023-03-25T15:57:00.000Z',
+          },
+        },
+      } as any);
+
+      expect(item.timestamp).toBe('2023-03-25T15:57:00.000Z');
+    });
+
+    it('falls back to extraction.when when sourceContext timestamp is absent', () => {
+      const item = toStructuredItem({
+        id: 'm-when',
+        raw: 'fact text',
+        sessionId: 'sess-1',
+        score: 0.42,
+        createdAt: new Date('2026-05-25T13:24:39.707Z'),
+        memoryType: 'FACT',
+        extraction: {
+          when: new Date('2024-02-17T00:00:00.000Z'),
+        },
+      } as any);
+
+      expect(item.timestamp).toBe('2024-02-17T00:00:00.000Z');
+    });
+
     it('does not fabricate confidence when score is missing', () => {
       const item = toStructuredItem({
         id: 'm-2',

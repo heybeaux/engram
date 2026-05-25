@@ -31,6 +31,9 @@ describe('MemoryQueryService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      session: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
     } as any;
 
     embedding = {
@@ -140,8 +143,8 @@ describe('MemoryQueryService', () => {
           id: 'm1',
           raw: 'yesterday meeting',
           effectiveScore: 0.8,
-          createdAt: new Date('2026-02-14T10:00:00Z'),
-          extraction: {},
+          createdAt: new Date('2026-05-23T10:00:00Z'),
+          extraction: { when: new Date('2026-02-14T10:00:00Z') },
         },
       ]);
 
@@ -157,6 +160,59 @@ describe('MemoryQueryService', () => {
         0.8,
         true,
       );
+      expect(temporalParser.calculateTemporalRelevance).toHaveBeenCalledWith(
+        new Date('2026-02-14T10:00:00Z'),
+        expect.objectContaining({ expression: 'yesterday' }),
+      );
+    });
+
+    it('should use extraction.when in temporal filtering and fallback to createdAt only when event time is missing', async () => {
+      temporalParser.parse.mockReturnValue({
+        semanticQuery: 'meeting',
+        temporalFilter: {
+          expression: 'yesterday',
+          start: new Date('2026-02-14T00:00:00.000Z'),
+          end: new Date('2026-02-15T00:00:00.000Z'),
+          confidence: 0.9,
+        },
+      } as any);
+
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+      embedding.search.mockResolvedValue([]);
+
+      await service.recall(userId, {
+        query: 'yesterday meeting',
+      } as any);
+
+      const call = (prisma.memory.findMany as jest.Mock).mock.calls[0][0];
+      expect(call.where.OR).toEqual([
+        {
+          extraction: {
+            is: {
+              when: {
+                gte: new Date('2026-02-14T00:00:00.000Z'),
+                lte: new Date('2026-02-15T00:00:00.000Z'),
+              },
+            },
+          },
+        },
+        {
+          AND: [
+            {
+              OR: [
+                { extraction: { is: null } },
+                { extraction: { is: { when: null } } },
+              ],
+            },
+            {
+              createdAt: {
+                gte: new Date('2026-02-14T00:00:00.000Z'),
+                lte: new Date('2026-02-15T00:00:00.000Z'),
+              },
+            },
+          ],
+        },
+      ]);
     });
 
     it('should resolve pool IDs from agentSessionKey', async () => {
@@ -892,7 +948,12 @@ describe('MemoryQueryService', () => {
     it('returns sessionId clause when provided', () => {
       expect(
         service.buildSessionIdFilter({ sessionId: 'sess-xyz' } as any),
-      ).toEqual({ sessionId: 'sess-xyz' });
+      ).toEqual({
+        OR: [
+          { sessionId: 'sess-xyz' },
+          { session: { externalId: 'sess-xyz' } },
+        ],
+      });
     });
   });
 
@@ -908,7 +969,12 @@ describe('MemoryQueryService', () => {
 
       expect(prisma.memory.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ sessionId: 'session-X' }),
+          where: expect.objectContaining({
+            OR: [
+              { sessionId: 'session-X' },
+              { session: { externalId: 'session-X' } },
+            ],
+          }),
         }),
       );
     });
@@ -932,14 +998,15 @@ describe('MemoryQueryService', () => {
         prisma.memory.findMany as jest.Mock
       ).mock.calls.filter(
         (c: any[]) =>
-          c[0]?.where?.id !== undefined || c[0]?.where?.sessionId !== undefined,
+          c[0]?.where?.id !== undefined || c[0]?.where?.OR !== undefined,
       );
       expect(candidateCalls.length).toBeGreaterThan(0);
       const firstCandidateCall = (prisma.memory.findMany as jest.Mock).mock
         .calls[0];
-      expect(firstCandidateCall[0].where).toMatchObject({
-        sessionId: 'session-X',
-      });
+      expect(firstCandidateCall[0].where.OR).toEqual([
+        { sessionId: 'session-X' },
+        { session: { externalId: 'session-X' } },
+      ]);
     });
 
     it('cross-tenant isolation: sessionId filter composes with userId in embedding.search (tenant scoping preserved)', async () => {
@@ -960,7 +1027,10 @@ describe('MemoryQueryService', () => {
 
       // sessionId reaches prisma.memory.findMany (session filter)
       const call = (prisma.memory.findMany as jest.Mock).mock.calls[0][0];
-      expect(call.where).toMatchObject({ sessionId: 'session-X' });
+      expect(call.where.OR).toEqual([
+        { sessionId: 'session-X' },
+        { session: { externalId: 'session-X' } },
+      ]);
     });
 
     it('no regression: omitting sessionId leaves no sessionId key in where clause', async () => {

@@ -31,6 +31,11 @@ export interface JudgeResult {
   reasoning: string;
 }
 
+function normalizeAnswer(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
 /**
  * Judge whether a predicted answer is correct.
  *
@@ -41,18 +46,21 @@ export interface JudgeResult {
  */
 export async function judgeAnswer(
   question: string,
-  expected: string,
+  expected: string | number | boolean | null,
   predicted: string,
   apiKey: string,
 ): Promise<JudgeResult> {
+  const normalizedExpected = normalizeAnswer(expected);
+  const normalizedPredicted = normalizeAnswer(predicted);
+
   // Fast path: exact match (case-insensitive, trimmed) — skip LLM
-  if (expected.trim().toLowerCase() === predicted.trim().toLowerCase()) {
+  if (normalizedExpected.toLowerCase() === normalizedPredicted.toLowerCase()) {
     return { correct: true, reasoning: 'Exact match.' };
   }
 
   // Fast path: empty prediction — incorrect unless expected is also empty
-  if (!predicted.trim()) {
-    if (!expected.trim()) {
+  if (!normalizedPredicted) {
+    if (!normalizedExpected) {
       return { correct: true, reasoning: 'Both prediction and expected are empty.' };
     }
     return { correct: false, reasoning: 'Prediction is empty; expected a non-empty answer.' };
@@ -60,9 +68,9 @@ export async function judgeAnswer(
 
   const userMessage = `Question: ${question}
 
-Gold answer: ${expected}
+Gold answer: ${normalizedExpected}
 
-Predicted answer: ${predicted}
+Predicted answer: ${normalizedPredicted}
 
 Is the predicted answer correct?`;
 
@@ -89,7 +97,7 @@ Is the predicted answer correct?`;
   const data = await response.json() as { content: Array<{ type: string; text: string }> };
   const raw = data.content?.[0]?.text ?? '';
 
-  return parseJudgeResponse(raw, predicted, expected);
+  return parseJudgeResponse(raw, normalizedPredicted, normalizedExpected);
 }
 
 /** Parse the judge's JSON response with a graceful fallback. */

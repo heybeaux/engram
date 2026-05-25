@@ -32,6 +32,51 @@ import { TemporalGapMarkerService } from './temporal-gap-marker.service';
 export class MemoryWriteService {
   private readonly logger = new Logger(MemoryWriteService.name);
 
+  private buildStoredSourceMetadata(
+    existingMetadata: Record<string, any> | undefined,
+    sourceContext: {
+      timestamp?: Date | string;
+      turnIndex?: number;
+      conversationId?: string;
+      userName?: string;
+    },
+  ): Record<string, any> | undefined {
+    const timestamp =
+      sourceContext.timestamp instanceof Date
+        ? sourceContext.timestamp.toISOString()
+        : sourceContext.timestamp;
+
+    const hasSourceContext =
+      timestamp !== undefined ||
+      sourceContext.turnIndex !== undefined ||
+      sourceContext.conversationId !== undefined ||
+      sourceContext.userName !== undefined;
+
+    if (!existingMetadata && !hasSourceContext) {
+      return undefined;
+    }
+
+    return {
+      ...(existingMetadata ?? {}),
+      ...(hasSourceContext
+        ? {
+            sourceContext: {
+              ...(timestamp !== undefined ? { timestamp } : {}),
+              ...(sourceContext.turnIndex !== undefined
+                ? { turnIndex: sourceContext.turnIndex }
+                : {}),
+              ...(sourceContext.conversationId !== undefined
+                ? { conversationId: sourceContext.conversationId }
+                : {}),
+              ...(sourceContext.userName !== undefined
+                ? { userName: sourceContext.userName }
+                : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
   constructor(
     private prisma: PrismaService,
     private extraction: ExtractionService,
@@ -141,6 +186,11 @@ export class MemoryWriteService {
 
     // 7. Create memory record
     const contentHash = generateContentHash(rawContent);
+    const storedMetadata = this.buildStoredSourceMetadata(undefined, {
+      timestamp: dto.sourceTimestamp,
+      turnIndex: dto.sourceTurnIndex,
+      conversationId: dto.context?.sessionId,
+    });
     const memory = await this.prisma.memory.create({
       data: {
         userId,
@@ -158,6 +208,7 @@ export class MemoryWriteService {
         createdBySession: dto.agentSessionKey ?? undefined,
         visibility: (dto.visibility ?? 'PRIVATE') as any,
         contentHash,
+        metadata: storedMetadata,
         tags: dto.tags ?? [],
       },
     });
@@ -214,6 +265,12 @@ export class MemoryWriteService {
         userId,
         raw: rawContent,
         runDedup: true,
+        context: {
+          timestamp: extractionContext.timestamp,
+          turnIndex: extractionContext.turnIndex,
+          conversationId: extractionContext.conversationId,
+          userName: extractionContext.userName,
+        },
       });
     } else {
       this.runWithRls(accountId, () =>
@@ -335,6 +392,15 @@ export class MemoryWriteService {
   ): Promise<BulkCreateResult> {
     const memoryIds: string[] = [];
     const now = new Date();
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true, externalId: true },
+    });
+    const resolvedSessionId = await this.resolveSessionId(
+      userId,
+      dto.context?.sessionId,
+      { ensureCommitted: true },
+    );
 
     const data = dto.memories.map((item) => {
       const id = crypto.randomUUID();
@@ -351,6 +417,12 @@ export class MemoryWriteService {
         layer: layer as any,
       });
 
+      const metadata = this.buildStoredSourceMetadata(item.metadata, {
+        timestamp: item.sourceTimestamp,
+        turnIndex: item.sourceTurnIndex,
+        conversationId: dto.context?.sessionId,
+      });
+
       return {
         id,
         userId,
@@ -362,9 +434,9 @@ export class MemoryWriteService {
         confidence: 1.0,
         contentHash: generateContentHash(item.raw),
         projectId: dto.context?.projectId ?? null,
-        sessionId: dto.context?.sessionId ?? null,
+        sessionId: resolvedSessionId ?? null,
         agentId: dto.agentId ?? null,
-        metadata: item.metadata ?? undefined,
+        metadata,
         sessionPosition: item.sessionPosition ?? null,
         createdAt: now,
         updatedAt: now,
@@ -404,13 +476,21 @@ export class MemoryWriteService {
     let enqueueErrors = 0;
     if (this.embeddingQueue) {
       const enqueueStart = Date.now();
-      for (const record of data) {
+      for (const [index, record] of data.entries()) {
+        const sourceItem = dto.memories[index];
         this.embeddingQueue
           .enqueueEmbedding({
             memoryId: record.id,
             userId,
             raw: record.raw,
             runDedup: true,
+            context: {
+              timestamp: sourceItem?.sourceTimestamp
+                ? new Date(sourceItem.sourceTimestamp as any)
+                : undefined,
+              turnIndex: sourceItem?.sourceTurnIndex,
+              conversationId: dto.context?.sessionId,
+            },
           })
           .then(() => {
             enqueued++;
@@ -495,6 +575,13 @@ export class MemoryWriteService {
       ensembleEnabled: process.env.EMBEDDING_ENSEMBLE === 'true',
     });
 
+    // Resolve externalId → CUID before bulkCreate (which passes sessionId raw to createMany)
+    const resolvedSessionId = await this.resolveSessionId(
+      userId,
+      dto.context?.sessionId,
+      { ensureCommitted: true },
+    );
+
     const isRound = granularity === 'ROUND';
     const bulkDto: BulkCreateMemoryDto = {
       memories: chunks.map((chunk, index) => ({
@@ -502,7 +589,10 @@ export class MemoryWriteService {
         layer: dto.layer,
         ...(isRound ? { sessionPosition: index } : {}),
       })),
-      context: dto.context,
+      context: {
+        ...dto.context,
+        ...(resolvedSessionId !== undefined ? { sessionId: resolvedSessionId } : {}),
+      },
     };
 
     try {
@@ -519,6 +609,7 @@ export class MemoryWriteService {
         created: result.created,
         chunks: chunks.length,
         memoryIds: result.memoryIds,
+        sessionId: resolvedSessionId,
       };
     } catch (err) {
       const message = (err as Error)?.message ?? String(err);
@@ -701,6 +792,7 @@ export class MemoryWriteService {
   async resolveSessionId(
     userId: string,
     sessionId?: string,
+    options?: { ensureCommitted?: boolean },
   ): Promise<string | undefined> {
     if (!sessionId) return undefined;
 
@@ -718,6 +810,36 @@ export class MemoryWriteService {
       select: { id: true },
     });
     if (existingByExternalId) return existingByExternalId.id;
+
+    if (options?.ensureCommitted) {
+      // createMany must reference a committed session row for the FK to pass
+      // reliably under the request-scoped transaction wrapper.
+      return this.prisma.$transaction(async (tx) => {
+        const byId = await tx.session.findUnique({
+          where: { id: sessionId },
+          select: { id: true },
+        });
+        if (byId) return byId.id;
+
+        const byExternalId = await tx.session.findFirst({
+          where: {
+            userId,
+            externalId: sessionId,
+          },
+          select: { id: true },
+        });
+        if (byExternalId) return byExternalId.id;
+
+        const created = await tx.session.create({
+          data: {
+            userId,
+            externalId: sessionId,
+          },
+          select: { id: true },
+        });
+        return created.id;
+      });
+    }
 
     const newSession = await this.prisma.session.create({
       data: {

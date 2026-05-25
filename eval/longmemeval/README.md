@@ -22,6 +22,40 @@ HUGGINGFACE_TOKEN=<your-token> \
 pnpm longmemeval --subset full
 ```
 
+## Stable Local Env Path
+
+The runner now auto-loads credentials from a stable local file path before it
+checks `process.env`.
+
+Load order:
+
+1. `eval/longmemeval/.env.local`
+2. `eval/longmemeval/.env`
+3. `.env.local`
+4. `.env`
+
+Recommended setup:
+
+```bash
+cp eval/longmemeval/.env.example eval/longmemeval/.env.local
+```
+
+Then fill in:
+
+```bash
+ENGRAM_API_BASE=http://localhost:3002
+ENGRAM_API_KEY=...
+ANTHROPIC_API_KEY=...
+HUGGINGFACE_TOKEN=...
+```
+
+Notes:
+
+- `eval/longmemeval/.env.local` is the preferred benchmark-specific path.
+- Exported shell variables still win; the runner uses dotenv with `override=false`.
+- The harness prints which env file(s) it loaded at startup, so tmux and normal
+  shells are easy to verify.
+
 ## CLI Options
 
 | Flag | Default | Description |
@@ -32,6 +66,9 @@ pnpm longmemeval --subset full
 | `--output PATH` | `eval/longmemeval/summary.json` | Output file path for final aggregate |
 | `--results-dir DIR` | `eval/longmemeval/results/` | Directory for streamed per-question JSONL files (used when `--resume` is absent) |
 | `--resume PATH` | — | Resume an in-progress run from a JSONL file; skips already-completed `question_id`s and continues appending |
+| `--question-ids-file PATH` | — | Evaluate only the question IDs listed in a newline-delimited file |
+| `--rerun-failures-from PATH` | — | Evaluate only the questions marked incorrect in a prior JSONL run |
+| `--reuse-existing` | `false` | Skip ingest and embedding waits; reuse existing `lme-<question_id>` memories for recall/judging |
 
 ## Resume & Checkpoint
 
@@ -52,6 +89,53 @@ Behavior:
 - `SIGINT` / `SIGTERM` set a `shouldStop` flag and let the in-flight question finish before exiting — the judge call alone is the longest piece of work, no reason to throw it away.
 - A second Ctrl-C forces immediate exit.
 - The final `summary.json` is rebuilt from the JSONL after the loop completes, so it always reflects on-disk truth (not in-memory state).
+
+## Fast Reruns
+
+For post-fix comparisons, reuse the existing isolated LongMemEval memories instead
+of ingesting the dataset again:
+
+```bash
+pnpm longmemeval \
+  --subset full \
+  --rerun-failures-from eval/longmemeval/results/full-2026-05-23T17-55-19-246Z.jsonl \
+  --reuse-existing
+
+pnpm longmemeval \
+  --subset full \
+  --category temporal-reasoning-ability \
+  --reuse-existing
+```
+
+`--reuse-existing` works because recall accepts the stable external session id
+`lme-<question_id>` directly; a fresh ingest is not required for reruns.
+
+## Deterministic Temporal Pack
+
+For temporal product work, do not use the full 133-question category as the
+inner development loop. Use the curated `temporal-gold-16` pack first:
+
+```bash
+ENGRAM_API_KEY=<your-key> \
+ANTHROPIC_API_KEY=<your-key> \
+HUGGINGFACE_TOKEN=<your-token> \
+pnpm longmemeval \
+  --subset full \
+  --category temporal-reasoning-ability \
+  --question-ids-file eval/longmemeval/packs/temporal-gold-16.txt
+```
+
+Artifacts:
+
+- IDs: `eval/longmemeval/packs/temporal-gold-16.txt`
+- Rationale: `eval/longmemeval/packs/temporal-gold-16.md`
+
+Recommended loop:
+
+1. Run `temporal-gold-16`
+2. Run full `temporal-reasoning-ability`
+3. Run failure-only rerun
+4. Run full 500 only as the checkpoint
 
 ## Environment Variables
 

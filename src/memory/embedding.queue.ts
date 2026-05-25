@@ -7,4 +7,10 @@ export interface EmbedMemoryJobData {
   userId: string;
   raw: string;
   runDedup?: boolean;
+  context?: {
+    timestamp?: Date | string;
+    turnIndex?: number;
+    conversationId?: string;
+    userName?: string;
+  };
 }

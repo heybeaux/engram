@@ -112,6 +112,23 @@ describe('validateQuestions', () => {
     expect(result).toHaveLength(1);
     fs.unlinkSync(tmpPath);
   });
+
+  it('filters to an explicit question-id allowlist', async () => {
+    const result = await loadDataset({
+      subset: 'smoke',
+      questionIds: ['smoke_ssu_001', 'smoke_ssu_003', 'smoke_missing_999'],
+    });
+    expect(result.map(q => q.question_id)).toEqual(['smoke_ssu_001', 'smoke_ssu_003']);
+  });
+
+  it('applies question-id filtering after category filtering', async () => {
+    const result = await loadDataset({
+      subset: 'smoke',
+      category: 'temporal-reasoning-ability',
+      questionIds: ['smoke_tra_001', 'smoke_tra_002', 'smoke_ssu_001'],
+    });
+    expect(result.map(q => q.question_id)).toEqual(['smoke_tra_001', 'smoke_tra_002']);
+  });
 });
 
 describe('historyToTranscript', () => {

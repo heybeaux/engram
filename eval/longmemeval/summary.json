@@ -1,0 +1,192 @@
+{
+  "runAt": "2026-05-25T13:35:12.484Z",
+  "subset": "full",
+  "totalQuestions": 16,
+  "correctCount": 1,
+  "accuracy": 0.0625,
+  "byCategory": {
+    "temporal-reasoning-ability": {
+      "total": 16,
+      "correct": 1,
+      "accuracy": 0.0625
+    }
+  },
+  "questions": [
+    {
+      "questionId": "gpt4_59149c77",
+      "question": "How many days passed between my visit to the Museum of Modern Art (MoMA) and the 'Ancient Civilizations' exhibit at the Metropolitan Museum of Art?",
+      "expected": "7 days. 8 days (including the last day) is also acceptable.",
+      "predicted": "I cannot determine the exact number of days. The memories mention visiting the 'Ancient Civilizations' exhibit at the Metropolitan Museum of Art ('today' in conversations timestamped around May 23-25, 2026), and a separate visit to an unnamed art museum to see a modern art exhibit, but the modern art museum is not explicitly identified as MoMA, and no specific dates are given for that visit. There is insufficient information in the memories to calculate the number of days between the two visits.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 22485,
+      "judgeReasoning": "The prediction fails to provide the correct answer of 7 (or 8) days and instead claims insufficient information.",
+      "timestamp": "2026-05-25T13:24:39.707Z"
+    },
+    {
+      "questionId": "gpt4_f49edff3",
+      "question": "Which three events happened in the order from first to last: the day I helped my friend prepare the nursery, the day I helped my cousin pick out stuff for her baby shower, and the day I ordered a customized phone case for my friend's birthday?",
+      "expected": "First, I helped my friend prepare the nursery, then I helped my cousin pick out stuff for her baby shower, and lastly, I ordered a customized phone case for my friend's birthday.",
+      "predicted": "I don't have enough information to determine the full order. The memories indicate that helping the cousin pick out baby shower items and ordering the customized phone case were both mentioned on 2026-05-23, but there is no memory about helping a friend prepare the nursery, so I cannot place that event in the sequence.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 40472,
+      "judgeReasoning": "The prediction fails to provide the correct order and claims insufficient information, whereas the gold answer specifies a clear sequence.",
+      "timestamp": "2026-05-25T13:25:20.179Z"
+    },
+    {
+      "questionId": "gpt4_fa19884c",
+      "question": "How many days passed between the day I started playing along to my favorite songs on my old keyboard and the day I discovered a bluegrass band?",
+      "expected": "6 days. 7 days (including the last day) is also acceptable.",
+      "predicted": "Based on the memory timestamps, both events appear to have occurred on the same day (2026-05-23), so 0 days passed between them.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 40917,
+      "judgeReasoning": "The gold answer is 6-7 days, but the prediction says 0 days, which does not match.",
+      "timestamp": "2026-05-25T13:26:01.097Z"
+    },
+    {
+      "questionId": "gpt4_4929293a",
+      "question": "Which event happened first, my cousin's wedding or Michael's engagement party?",
+      "expected": "Michael's engagement party",
+      "predicted": "Both events appear to have been described as happening 'today' in conversations on 2026-05-23, so based on the available memories I cannot definitively determine which occurred first. They appear to have happened on the same day.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 47671,
+      "judgeReasoning": "The gold answer states Michael's engagement party happened first, but the prediction fails to identify this and instead claims uncertainty.",
+      "timestamp": "2026-05-25T13:26:48.768Z"
+    },
+    {
+      "questionId": "9a707b81",
+      "question": "How many days ago did I attend a baking class at a local culinary school when I made my friend's birthday cake?",
+      "expected": "21 days. 22 days (including the last day) is also acceptable.",
+      "predicted": "You attended the baking class 1 day before making your friend's birthday cake (the class was 'yesterday' and the cake was made 'today').",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 41116,
+      "judgeReasoning": "The gold answer indicates 21-22 days ago, but the prediction states 1 day, which does not match.",
+      "timestamp": "2026-05-25T13:27:29.884Z"
+    },
+    {
+      "questionId": "gpt4_1d4ab0c9",
+      "question": "How many days passed between the day I started watering my herb garden and the day I harvested my first batch of fresh herbs?",
+      "expected": "24 days. 25 days (including the last day) is also acceptable.",
+      "predicted": "Based on the timestamps of both memories (both dated 2026-05-23), 0 days passed — you started watering your herb garden and harvested your first batch of fresh herbs on the same day.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 41905,
+      "judgeReasoning": "The prediction says 0 days, but the gold answer is 24 (or 25) days.",
+      "timestamp": "2026-05-25T13:28:11.790Z"
+    },
+    {
+      "questionId": "gpt4_1d80365e",
+      "question": "How many days did I spend on my solo camping trip to Yosemite National Park?",
+      "expected": "2 days. 3 days (including the last day) is also acceptable.",
+      "predicted": "The memories don't specify an exact number of days. One mention refers to camping at Yosemite for 'a few days,' but no precise duration is given.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 45106,
+      "judgeReasoning": "The prediction fails to provide the specific number of days (2 or 3) given in the gold answer, instead claiming the duration is unspecified.",
+      "timestamp": "2026-05-25T13:28:56.896Z"
+    },
+    {
+      "questionId": "gpt4_1916e0ea",
+      "question": "How many days passed between the day I cancelled my FarmFresh subscription and the day I did my online grocery shopping from Instacart?",
+      "expected": "54 days. 55 days (including the last day) is also acceptable.",
+      "predicted": "Both events appear to be recorded with the same timestamp (2026-05-23), so based on the available memories, 0 days passed between the two events. However, the memories don't clearly specify the actual dates these events occurred, only when they were discussed, so an exact day count cannot be determined with certainty.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 43543,
+      "judgeReasoning": "The predicted answer states 0 days, which does not match the gold answer of 54-55 days.",
+      "timestamp": "2026-05-25T13:29:40.439Z"
+    },
+    {
+      "questionId": "gpt4_7a0daae1",
+      "question": "How many weeks passed between the day I bought my new tennis racket and the day I received it?",
+      "expected": "1 week",
+      "predicted": "There is not enough information in the memories to determine how many weeks passed between buying and receiving the tennis racket. Only the day of receipt is mentioned, not the purchase date.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 36888,
+      "judgeReasoning": "The prediction claims insufficient information, while the gold answer specifies 1 week.",
+      "timestamp": "2026-05-25T13:30:17.327Z"
+    },
+    {
+      "questionId": "gpt4_7abb270c",
+      "question": "What is the order of the six museums I visited from earliest to latest?",
+      "expected": "Science Museum, Museum of Contemporary Art, Metropolitan Museum of Art, Museum of History, Modern Art Museum, Natural History Museum",
+      "predicted": "I cannot determine a definitive chronological order of six museum visits from the memories. The memories reference visits to the Modern Art Museum/Gallery (with the only dated visit being February 17th for the Abstract Expressionism tour), the Metropolitan Museum of Art, the Natural History Museum, and the Science Museum — only four distinct museums, most without specific dates. There isn't enough information to order six museums from earliest to latest.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 50035,
+      "judgeReasoning": "The prediction fails to provide the ordered list and explicitly states it cannot determine the order.",
+      "timestamp": "2026-05-25T13:31:07.362Z"
+    },
+    {
+      "questionId": "gpt4_68e94287",
+      "question": "Which event happened first, my participation in the #PlankChallenge or my post about vegan chili recipe?",
+      "expected": "You posted a recipe for vegan chili on Instagram using the hashtag #FoodieAdventures first.",
+      "predicted": "I don't have enough information to answer this. The memories mention that you posted the vegan chili recipe yesterday, but there is no record of when you participated in the #PlankChallenge, so I can't determine which event happened first.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 37513,
+      "judgeReasoning": "The gold answer states the vegan chili post happened first, but the prediction fails to make this determination and instead expresses uncertainty.",
+      "timestamp": "2026-05-25T13:31:44.875Z"
+    },
+    {
+      "questionId": "9a707b82",
+      "question": "I mentioned cooking something for my friend a couple of days ago. What was it?",
+      "expected": "a chocolate cake",
+      "predicted": "I don't have any memory of you mentioning cooking something for a friend a couple of days ago. The only related cooking you mentioned was a strawberry rhubarb crisp you made a few weeks ago, but there was no mention of it being for a friend or being recent. Could you remind me what you cooked?",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 40359,
+      "judgeReasoning": "The prediction fails to identify the chocolate cake and instead claims no memory of it.",
+      "timestamp": "2026-05-25T13:32:25.234Z"
+    },
+    {
+      "questionId": "eac54add",
+      "question": "What was the significant buisiness milestone I mentioned four weeks ago?",
+      "expected": "I signed a contract with my first client.",
+      "predicted": "I don't have any memory of a significant business milestone you mentioned four weeks ago. The only related memory I have is about your current projects (wrapping up the Johnson account, onboarding a new team, and mentoring Alex), but no specific milestone from that timeframe is recorded. Could you remind me what it was?",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 39314,
+      "judgeReasoning": "The prediction fails to identify the milestone (signing a contract with the first client) and instead asks for clarification.",
+      "timestamp": "2026-05-25T13:33:04.549Z"
+    },
+    {
+      "questionId": "0bc8ad93",
+      "question": "I mentioned visiting a museum two months ago. Did I visit with a friend or not?",
+      "expected": "No, you did not visit with a friend.",
+      "predicted": "Based on the available memories, I can't determine whether you visited the museum with a friend or alone. The memories mention your recent museum visits and a private viewing of a contemporary art exhibit, but none specify whether you were accompanied by a friend.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 39410,
+      "judgeReasoning": "The gold answer states the user did not visit with a friend, but the prediction expresses uncertainty rather than confirming this.",
+      "timestamp": "2026-05-25T13:33:43.959Z"
+    },
+    {
+      "questionId": "gpt4_b5700ca0",
+      "question": "Where did I attend the religious activity last week?",
+      "expected": "the Episcopal Church",
+      "predicted": "I don't have any information in the memories about you attending a religious activity last week. None of the memories mention a personal religious activity or its location.",
+      "correct": false,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 48858,
+      "judgeReasoning": "The prediction fails to identify the Episcopal Church as the location.",
+      "timestamp": "2026-05-25T13:34:32.818Z"
+    },
+    {
+      "questionId": "gpt4_76048e76",
+      "question": "Which vehicle did I take care of first in February, the bike or the car?",
+      "expected": "bike",
+      "predicted": "Based on the available memories, I only have a record of you taking your bike in for repairs in mid-February (due to gear issues). There's no mention of car maintenance in February, so I can't definitively compare which came first. If you did take care of the car in February as well, I don't have that information.",
+      "correct": true,
+      "category": "temporal-reasoning-ability",
+      "latencyMs": 39664,
+      "judgeReasoning": "The prediction identifies the bike as the only February vehicle care event mentioned, which aligns with the gold answer of bike.",
+      "timestamp": "2026-05-25T13:35:12.483Z"
+    }
+  ]
+}

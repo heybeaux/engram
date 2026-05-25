@@ -41,7 +41,8 @@ export class PgVectorProvider implements VectorProvider {
   }
 
   async upsert(record: VectorRecord): Promise<void> {
-    const embeddingStr = `[${record.embedding.join(',')}]`;
+    const embedding = this.assertFiniteEmbedding(record.embedding, record.id);
+    const embeddingStr = `[${embedding.join(',')}]`;
 
     // Write to inline column for backward compat
     const updated = await this.prisma.$executeRawUnsafe(
@@ -75,7 +76,7 @@ export class PgVectorProvider implements VectorProvider {
         embeddingStr,
         record.id,
         this.searchModel,
-        record.embedding.length,
+        embedding.length,
       );
     }
   }
@@ -90,7 +91,8 @@ export class PgVectorProvider implements VectorProvider {
     embedding: number[],
     options: VectorSearchOptions,
   ): Promise<VectorSearchResult[]> {
-    const embeddingStr = `[${embedding.join(',')}]`;
+    const validatedEmbedding = this.assertFiniteEmbedding(embedding, 'query');
+    const embeddingStr = `[${validatedEmbedding.join(',')}]`;
     const limit = options.limit || 10;
 
     // Build WHERE clause for the memories table filters
@@ -167,7 +169,7 @@ export class PgVectorProvider implements VectorProvider {
 
     // DEBUG: log search params
     this.logger.log(
-      `[PgVector] search: model=${this.searchModel}, userId=${Array.isArray(options.userId) ? options.userId.join(',') : options.userId}, embDim=${embedding.length}, limit=${limit}, params=${params.length}, poolFilter=${!!options.filter?.poolIds}`,
+      `[PgVector] search: model=${this.searchModel}, userId=${Array.isArray(options.userId) ? options.userId.join(',') : options.userId}, embDim=${validatedEmbedding.length}, limit=${limit}, params=${params.length}, poolFilter=${!!options.filter?.poolIds}`,
     );
 
     // Determine whether to include legacy fallback (UNION ALL on memories.embedding)
@@ -258,6 +260,27 @@ export class PgVectorProvider implements VectorProvider {
     }
 
     return vectorResults;
+  }
+
+  private assertFiniteEmbedding(
+    embedding: number[],
+    recordId: string,
+  ): number[] {
+    if (!Array.isArray(embedding) || embedding.length === 0) {
+      throw new Error(`[PgVector] Invalid embedding for ${recordId}: empty`);
+    }
+
+    const invalidEntries = embedding.filter(
+      (value) => typeof value !== 'number' || !Number.isFinite(value),
+    ).length;
+
+    if (invalidEntries > 0) {
+      throw new Error(
+        `[PgVector] Invalid embedding for ${recordId}: ${invalidEntries}/${embedding.length} entries were non-finite`,
+      );
+    }
+
+    return embedding;
   }
 
   async delete(id: string): Promise<void> {

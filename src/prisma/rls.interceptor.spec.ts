@@ -200,6 +200,28 @@ describe('RlsInterceptor', () => {
     });
   });
 
+  it('should use long timeout for bulk ingest endpoints', (done) => {
+    const mockTx = {
+      $executeRawUnsafe: jest.fn().mockResolvedValue(undefined),
+    };
+
+    prisma.$transaction = jest.fn().mockImplementation(async (fn, opts) => {
+      expect(opts.timeout).toBe(300_000);
+      return fn(mockTx);
+    });
+
+    const ctx = createMockContext({
+      accountId: 'acc-123',
+      url: '/v1/memories/bulk',
+    });
+    const handler = createMockCallHandler('bulk-result');
+
+    interceptor.intercept(ctx, handler).subscribe({
+      next: () => done(),
+      error: done,
+    });
+  });
+
   it('should enforce RLS for sync pull endpoint', (done) => {
     const mockTx = {
       $executeRawUnsafe: jest.fn().mockResolvedValue(undefined),

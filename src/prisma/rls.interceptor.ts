@@ -51,13 +51,16 @@ export class RlsInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    // Determine timeout: long-running endpoints (sync) need more time
+    // Determine timeout: long-running endpoints (sync, bulk ingest) need more time
     const isLongRunning =
       url.includes('/sync') ||
       url.includes('/cloud/sync') ||
       url.includes('/admin/') ||
-      url.includes('/dedup/scan');
-    const txTimeout = isLongRunning ? 300_000 : 30_000; // 5 min for sync/admin, 30s default
+      url.includes('/dedup/scan') ||
+      url.includes('/memories/bulk') ||
+      url.includes('/bulk/text') ||
+      url.includes('/bulk-text');
+    const txTimeout = isLongRunning ? 300_000 : 30_000; // 5 min for sync/admin/bulk, 30s default
 
     // Wrap the request handler in an interactive transaction with SET LOCAL
     return from(

@@ -42,6 +42,8 @@
     "autoresearch-boost": "npx ts-node scripts/autoresearch-insight-boost.ts",
     "autoresearch-surfacing": "npx ts-node scripts/autoresearch-insight-surfacing.ts",
     "longmemeval": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' eval/longmemeval/src/runner.ts",
+    "longmemeval:temporal-pack": "pnpm longmemeval --subset full --category temporal-reasoning-ability --question-ids-file eval/longmemeval/packs/temporal-gold-16.txt",
+    "longmemeval:temporal-pack:reuse": "pnpm longmemeval --subset full --category temporal-reasoning-ability --question-ids-file eval/longmemeval/packs/temporal-gold-16.txt --reuse-existing",
     "longmemeval:test": "jest --config eval/longmemeval/jest.config.json --forceExit"
   },
   "dependencies": {

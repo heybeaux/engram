@@ -3,6 +3,7 @@
  */
 
 import { buildSummary, computeByCategory, formatSummary, checkThresholds } from '../src/scorer';
+import { judgeAnswer } from '../src/judge';
 import type { QuestionResult } from '../src/types';
 
 function makeResult(overrides: Partial<QuestionResult> = {}): QuestionResult {
@@ -120,5 +121,21 @@ describe('checkThresholds', () => {
     const failures = checkThresholds(summary);
     expect(failures.length).toBeGreaterThan(0);
     expect(failures[0]).toContain('No questions');
+  });
+});
+
+describe('judgeAnswer', () => {
+  it('handles numeric gold answers without throwing', async () => {
+    await expect(judgeAnswer('How many?', 42, '42', 'unused-key')).resolves.toEqual({
+      correct: true,
+      reasoning: 'Exact match.',
+    });
+  });
+
+  it('treats numeric gold answers as non-empty in empty-prediction fast path', async () => {
+    await expect(judgeAnswer('How many?', 42, '   ', 'unused-key')).resolves.toEqual({
+      correct: false,
+      reasoning: 'Prediction is empty; expected a non-empty answer.',
+    });
   });
 });

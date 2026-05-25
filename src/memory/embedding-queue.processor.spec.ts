@@ -88,6 +88,32 @@ describe('EmbeddingQueueProcessor', () => {
         'mem-123',
         'Test content',
         'user-456',
+        undefined,
+      );
+    });
+
+    it('should forward extraction context to the pipeline when present on the job', async () => {
+      await processor.process(
+        makeJob({
+          context: {
+            timestamp: '2026-05-23T12:00:00.000Z' as any,
+            turnIndex: 7 as any,
+            conversationId: 'conv-1' as any,
+            userName: 'Beaux' as any,
+          } as any,
+        }),
+      );
+
+      expect(mockPipeline.extractAndEmbed).toHaveBeenCalledWith(
+        'mem-123',
+        'Test content',
+        'user-456',
+        {
+          timestamp: new Date('2026-05-23T12:00:00.000Z'),
+          turnIndex: 7,
+          conversationId: 'conv-1',
+          userName: 'Beaux',
+        },
       );
     });
 
