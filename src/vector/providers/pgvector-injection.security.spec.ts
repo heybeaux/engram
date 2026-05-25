@@ -138,6 +138,5 @@ describe('PgVectorProvider — SQL injection prevention (GIN-42)', () => {
       expect(capturedSql).not.toContain(maliciousPoolId);
       expect(capturedParams).toContain(maliciousPoolId);
     });
-
   });
 });

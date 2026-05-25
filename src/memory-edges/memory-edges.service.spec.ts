@@ -14,7 +14,12 @@ const mockPrisma = {
 
 const agentId = 'agent-1';
 
-const makeEdge = (id: string, sourceId: string, targetId: string, edgeType = 'related_to') => ({
+const makeEdge = (
+  id: string,
+  sourceId: string,
+  targetId: string,
+  edgeType = 'related_to',
+) => ({
   id,
   sourceId,
   targetId,
@@ -71,7 +76,9 @@ describe('MemoryEdgesService', () => {
     });
 
     it('should apply default weight of 0.5 when not provided', async () => {
-      mockPrisma.memoryEdge.create.mockResolvedValue(makeEdge('e1', 'mem-1', 'mem-2'));
+      mockPrisma.memoryEdge.create.mockResolvedValue(
+        makeEdge('e1', 'mem-1', 'mem-2'),
+      );
 
       await service.createEdge(dto, agentId);
 
@@ -82,7 +89,9 @@ describe('MemoryEdgesService', () => {
     });
 
     it('should apply default confidence of 0.5 when not provided', async () => {
-      mockPrisma.memoryEdge.create.mockResolvedValue(makeEdge('e1', 'mem-1', 'mem-2'));
+      mockPrisma.memoryEdge.create.mockResolvedValue(
+        makeEdge('e1', 'mem-1', 'mem-2'),
+      );
 
       await service.createEdge(dto, agentId);
 
@@ -93,9 +102,14 @@ describe('MemoryEdgesService', () => {
     });
 
     it('should use provided weight and confidence', async () => {
-      mockPrisma.memoryEdge.create.mockResolvedValue(makeEdge('e1', 'mem-1', 'mem-2'));
+      mockPrisma.memoryEdge.create.mockResolvedValue(
+        makeEdge('e1', 'mem-1', 'mem-2'),
+      );
 
-      await service.createEdge({ ...dto, weight: 0.9, confidence: 0.85 }, agentId);
+      await service.createEdge(
+        { ...dto, weight: 0.9, confidence: 0.85 },
+        agentId,
+      );
 
       expect(mockPrisma.memoryEdge.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ weight: 0.9, confidence: 0.85 }),
@@ -104,7 +118,9 @@ describe('MemoryEdgesService', () => {
     });
 
     it('should apply default empty metadata when not provided', async () => {
-      mockPrisma.memoryEdge.create.mockResolvedValue(makeEdge('e1', 'mem-1', 'mem-2'));
+      mockPrisma.memoryEdge.create.mockResolvedValue(
+        makeEdge('e1', 'mem-1', 'mem-2'),
+      );
 
       await service.createEdge(dto, agentId);
 
@@ -115,25 +131,37 @@ describe('MemoryEdgesService', () => {
     });
 
     it('should convert temporalStart string to Date', async () => {
-      mockPrisma.memoryEdge.create.mockResolvedValue(makeEdge('e1', 'mem-1', 'mem-2'));
+      mockPrisma.memoryEdge.create.mockResolvedValue(
+        makeEdge('e1', 'mem-1', 'mem-2'),
+      );
 
-      await service.createEdge({ ...dto, temporalStart: '2026-01-01T00:00:00Z' }, agentId);
+      await service.createEdge(
+        { ...dto, temporalStart: '2026-01-01T00:00:00Z' },
+        agentId,
+      );
 
       const callData = mockPrisma.memoryEdge.create.mock.calls[0][0].data;
       expect(callData.temporalStart).toBeInstanceOf(Date);
     });
 
     it('should convert temporalEnd string to Date', async () => {
-      mockPrisma.memoryEdge.create.mockResolvedValue(makeEdge('e1', 'mem-1', 'mem-2'));
+      mockPrisma.memoryEdge.create.mockResolvedValue(
+        makeEdge('e1', 'mem-1', 'mem-2'),
+      );
 
-      await service.createEdge({ ...dto, temporalEnd: '2026-12-31T23:59:59Z' }, agentId);
+      await service.createEdge(
+        { ...dto, temporalEnd: '2026-12-31T23:59:59Z' },
+        agentId,
+      );
 
       const callData = mockPrisma.memoryEdge.create.mock.calls[0][0].data;
       expect(callData.temporalEnd).toBeInstanceOf(Date);
     });
 
     it('should leave temporalStart undefined when not provided', async () => {
-      mockPrisma.memoryEdge.create.mockResolvedValue(makeEdge('e1', 'mem-1', 'mem-2'));
+      mockPrisma.memoryEdge.create.mockResolvedValue(
+        makeEdge('e1', 'mem-1', 'mem-2'),
+      );
 
       await service.createEdge(dto, agentId);
 
@@ -142,9 +170,13 @@ describe('MemoryEdgesService', () => {
     });
 
     it('should propagate prisma create errors', async () => {
-      mockPrisma.memoryEdge.create.mockRejectedValue(new Error('Foreign key constraint'));
+      mockPrisma.memoryEdge.create.mockRejectedValue(
+        new Error('Foreign key constraint'),
+      );
 
-      await expect(service.createEdge(dto, agentId)).rejects.toThrow('Foreign key constraint');
+      await expect(service.createEdge(dto, agentId)).rejects.toThrow(
+        'Foreign key constraint',
+      );
     });
   });
 
@@ -193,7 +225,10 @@ describe('MemoryEdgesService', () => {
     it('should filter by edge types when provided', async () => {
       mockPrisma.memoryEdge.findMany.mockResolvedValue([]);
 
-      await service.getEdgesForMemory('mem-1', agentId, 'both', ['caused_by', 'led_to']);
+      await service.getEdgesForMemory('mem-1', agentId, 'both', [
+        'caused_by',
+        'led_to',
+      ]);
 
       expect(mockPrisma.memoryEdge.findMany).toHaveBeenCalledWith({
         where: {
@@ -306,8 +341,12 @@ describe('MemoryEdgesService', () => {
       const result = await service.findRelated('mem-1', 2, [], agentId);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual(expect.objectContaining({ memoryId: 'mem-2', depth: 1 }));
-      expect(result[1]).toEqual(expect.objectContaining({ memoryId: 'mem-3', depth: 2 }));
+      expect(result[0]).toEqual(
+        expect.objectContaining({ memoryId: 'mem-2', depth: 1 }),
+      );
+      expect(result[1]).toEqual(
+        expect.objectContaining({ memoryId: 'mem-3', depth: 2 }),
+      );
     });
 
     it('should not traverse beyond the specified depth', async () => {
@@ -327,7 +366,9 @@ describe('MemoryEdgesService', () => {
       // mem-1 -> mem-2 -> mem-1 (cycle)
       mockPrisma.memoryEdge.findMany
         .mockResolvedValueOnce([makeEdge('e1', 'mem-1', 'mem-2', 'related_to')])
-        .mockResolvedValueOnce([makeEdge('e2', 'mem-2', 'mem-1', 'related_to')]);
+        .mockResolvedValueOnce([
+          makeEdge('e2', 'mem-2', 'mem-1', 'related_to'),
+        ]);
 
       const result = await service.findRelated('mem-1', 3, [], agentId);
 

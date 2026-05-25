@@ -109,9 +109,7 @@ describe('TemporalGapMarkerService', () => {
     });
 
     it('returns true for a multi-hour gap (2h 14m)', () => {
-      const prev = new Date(
-        now.getTime() - (2 * 3600 + 14 * 60) * 1000,
-      );
+      const prev = new Date(now.getTime() - (2 * 3600 + 14 * 60) * 1000);
       expect(service.shouldInsertMarker(prev, now, threshold)).toBe(true);
     });
 

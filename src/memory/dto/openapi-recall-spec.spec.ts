@@ -64,12 +64,9 @@ describe('api-spec.json — recall structured response (ENG-134)', () => {
     });
 
     it('exposes the v2 media type directly', () => {
-      const v2 =
-        op.responses['201'].content['application/vnd.engram.v2+json'];
+      const v2 = op.responses['201'].content['application/vnd.engram.v2+json'];
       expect(v2).toBeDefined();
-      expect(v2.schema.$ref).toBe(
-        '#/components/schemas/StructuredQueryResult',
-      );
+      expect(v2.schema.$ref).toBe('#/components/schemas/StructuredQueryResult');
     });
 
     it('documents X-Response-Format response header', () => {

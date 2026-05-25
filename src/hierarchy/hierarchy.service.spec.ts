@@ -270,7 +270,11 @@ describe('HierarchyService', () => {
         updatedAt: new Date(),
       });
 
-      const result = await service.processMemory('mem-1', 'sentence.', 'user-1');
+      const result = await service.processMemory(
+        'mem-1',
+        'sentence.',
+        'user-1',
+      );
 
       expect(result.unitsCreated).toBeGreaterThan(0);
       expect(mockServicePrisma.hierarchyUnit.create).toHaveBeenCalledTimes(

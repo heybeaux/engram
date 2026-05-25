@@ -31,7 +31,9 @@ describe('HybridSearchService — SQL injection prevention (GIN-42)', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockImplementation((key: string, def: string) => def),
+            get: jest
+              .fn()
+              .mockImplementation((key: string, def: string) => def),
           },
         },
       ],

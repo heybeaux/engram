@@ -9,7 +9,7 @@ import { EmbedMemoryJobData } from './embedding.queue';
 import { EMBEDDING_QUEUE } from './embedding.queue';
 
 describe('EmbeddingQueueProcessor', () => {
-  it('should register with concurrency 2', () => {
+  it('should register with env-configurable concurrency (default 8)', () => {
     const processorMeta = Reflect.getMetadata(
       'bullmq:processor_metadata',
       EmbeddingQueueProcessor,
@@ -22,7 +22,11 @@ describe('EmbeddingQueueProcessor', () => {
       EmbeddingQueueProcessor,
     );
     expect(workerMeta).toBeDefined();
-    expect(workerMeta.concurrency).toBe(2);
+    const expectedConcurrency = Math.max(
+      1,
+      Number.parseInt(process.env.EMBEDDING_QUEUE_CONCURRENCY ?? '8', 10) || 8,
+    );
+    expect(workerMeta.concurrency).toBe(expectedConcurrency);
   });
   let processor: EmbeddingQueueProcessor;
   let mockPipeline: jest.Mocked<Partial<MemoryPipelineService>>;

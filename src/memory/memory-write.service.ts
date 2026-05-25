@@ -341,6 +341,16 @@ export class MemoryWriteService {
   ): Promise<BulkCreateResult> {
     const memoryIds: string[] = [];
     const now = new Date();
+    const sessionId = await this.resolveSessionId(userId, dto.context?.sessionId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        accountId: true,
+        externalId: true,
+        displayName: true,
+      },
+    });
+    const accountId = user?.accountId ?? undefined;
 
     const data = dto.memories.map((item) => {
       const id = crypto.randomUUID();
@@ -368,7 +378,7 @@ export class MemoryWriteService {
         confidence: 1.0,
         contentHash: generateContentHash(item.raw),
         projectId: dto.context?.projectId ?? null,
-        sessionId: dto.context?.sessionId ?? null,
+        sessionId: sessionId ?? null,
         agentId: dto.agentId ?? null,
         metadata: item.metadata ?? undefined,
         sessionPosition: item.sessionPosition ?? null,
@@ -452,6 +462,8 @@ export class MemoryWriteService {
             });
           });
       }
+    } else {
+      this.launchInlineBulkEmbeddings(accountId, userId, dto, data, now, user);
     }
 
     // Increment account memoriesUsed
@@ -460,6 +472,71 @@ export class MemoryWriteService {
     });
 
     return { created: memoryIds.length, memoryIds };
+  }
+
+  private launchInlineBulkEmbeddings(
+    accountId: string | undefined,
+    userId: string,
+    dto: BulkCreateMemoryDto,
+    data: Array<{ id: string; raw: string }>,
+    now: Date,
+    user?: { externalId: string | null; displayName: string | null } | null,
+  ): void {
+    const concurrency = Math.max(
+      1,
+      Number.parseInt(process.env.INLINE_BULK_EMBED_CONCURRENCY ?? '4', 10) ||
+        4,
+    );
+    let cursor = 0;
+
+    const runNext = async (): Promise<void> => {
+      const index = cursor++;
+      if (index >= data.length) return;
+
+      const record = data[index];
+      const sourceItem = dto.memories[index];
+      const extractionContext: ExtractionContext = {
+        userId,
+        userName: user?.displayName || user?.externalId || undefined,
+        timestamp:
+          typeof sourceItem?.sourceTimestamp === 'string'
+            ? new Date(sourceItem.sourceTimestamp)
+            : (sourceItem?.sourceTimestamp ?? now),
+        turnIndex: sourceItem?.sourceTurnIndex,
+        conversationId: dto.context?.sessionId,
+      };
+
+      await this.runWithRlsAsync(accountId, async () => {
+        try {
+          await this.pipelineService.extractAndEmbed(
+            record.id,
+            record.raw,
+            userId,
+            extractionContext,
+          );
+        } catch (err) {
+          this.logger.error({
+            event: 'bulk_create.inline_pipeline_failed',
+            memoryId: record.id,
+            userId,
+            error: (err as Error)?.message ?? String(err),
+          });
+        }
+      });
+
+      await runNext();
+    };
+
+    for (let worker = 0; worker < concurrency; worker++) {
+      setImmediate(() => {
+        runNext().catch((err) =>
+          this.logger.error(
+            '[BulkCreate] Inline bulk embedding worker failed:',
+            err,
+          ),
+        );
+      });
+    }
   }
 
   /**
@@ -764,6 +841,23 @@ export class MemoryWriteService {
       .catch((err) =>
         this.logger.error('[Memory] Background RLS op failed:', err),
       );
+  }
+
+  private async runWithRlsAsync(
+    accountId: string | undefined,
+    fn: () => Promise<void>,
+  ): Promise<void> {
+    if (!accountId) {
+      await fn();
+      return;
+    }
+    const sanitized = accountId.replace(/[^a-zA-Z0-9_-]/g, '');
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `SET LOCAL app.current_account_id = '${sanitized}'`,
+      );
+      await rlsContext.run(tx as any, () => fn());
+    });
   }
 
   /**

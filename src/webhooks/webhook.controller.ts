@@ -12,7 +12,13 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiSecurity,
+} from '@nestjs/swagger';
 import { WebhookService } from './webhook.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 import { CreateWebhookDto, UpdateWebhookDto } from './dto/webhook.dto';
@@ -39,7 +45,11 @@ export class WebhookController {
     const userId = req.user?.id ?? req.userId;
     if (!userId) {
       throw new HttpException(
-        { statusCode: 401, error: 'Unauthorized', message: 'Unable to resolve authenticated user' },
+        {
+          statusCode: 401,
+          error: 'Unauthorized',
+          message: 'Unable to resolve authenticated user',
+        },
         HttpStatus.UNAUTHORIZED,
       );
     }
@@ -49,7 +59,10 @@ export class WebhookController {
   @Post()
   @ApiOperation({ summary: 'Create a webhook subscription' })
   @ApiResponse({ status: 201, description: 'Webhook created.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid credentials.' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized — missing or invalid credentials.',
+  })
   async create(@Req() req: any, @Body() dto: CreateWebhookDto) {
     const userId = this.resolveUserId(req);
     try {
@@ -63,7 +76,9 @@ export class WebhookController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List webhook subscriptions for the authenticated user' })
+  @ApiOperation({
+    summary: 'List webhook subscriptions for the authenticated user',
+  })
   @ApiResponse({ status: 200, description: 'List of webhooks.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async list(@Req() req: any) {
@@ -93,7 +108,11 @@ export class WebhookController {
   @ApiResponse({ status: 200, description: 'Webhook updated.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   @ApiResponse({ status: 404, description: 'Not found.' })
-  async update(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateWebhookDto) {
+  async update(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateWebhookDto,
+  ) {
     const userId = this.resolveUserId(req);
     try {
       return await this.webhookService.update(id, userId, dto);

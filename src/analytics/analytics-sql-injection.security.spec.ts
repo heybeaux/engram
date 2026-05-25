@@ -17,7 +17,7 @@ const SQL_INJECTION_STRINGS = [
   "'; DROP TABLE memories; --",
   "' OR '1'='1",
   "' OR 1=1 --",
-  "1; SELECT * FROM users --",
+  '1; SELECT * FROM users --',
   "hour'; DELETE FROM memories WHERE '1'='1",
   "day' UNION SELECT table_name FROM information_schema.tables --",
   'day\x00',
@@ -60,9 +60,7 @@ describe('Analytics SQL Injection Security (GIN-42)', () => {
     (prisma.agent.findUnique as jest.Mock).mockResolvedValue({
       accountId: 'test-account',
     });
-    (prisma.user.findMany as jest.Mock).mockResolvedValue([
-      { id: 'user-1' },
-    ]);
+    (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1' }]);
   });
 
   // ---------------------------------------------------------------------------

@@ -146,7 +146,7 @@ export class ExtractionService {
         capabilities,
         preferenceSignals,
         factKeys: Array.isArray(result.fact_keys)
-          ? (result.fact_keys as string[]).filter(
+          ? result.fact_keys.filter(
               (k) => typeof k === 'string' && k.trim().length > 0,
             )
           : [],

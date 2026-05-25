@@ -11,7 +11,12 @@ import {
 import { MemoryLayer, MemorySource, MemoryType } from '@prisma/client';
 import { generateContentHash } from '../common/content-hash.util';
 
-@Processor(EMBEDDING_QUEUE, { concurrency: 2 })
+const EMBEDDING_QUEUE_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.EMBEDDING_QUEUE_CONCURRENCY ?? '8', 10) || 8,
+);
+
+@Processor(EMBEDDING_QUEUE, { concurrency: EMBEDDING_QUEUE_CONCURRENCY })
 export class EmbeddingQueueProcessor extends WorkerHost {
   private readonly logger = new Logger(EmbeddingQueueProcessor.name);
 

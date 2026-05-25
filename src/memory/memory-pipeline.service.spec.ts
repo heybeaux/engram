@@ -369,12 +369,19 @@ describe('MemoryPipelineService', () => {
   describe('extractAndEmbed — temporal metadata (Fix A)', () => {
     it('should populate temporal.referenceTimestamp from context.timestamp', async () => {
       const sourceTimestamp = new Date('2023-05-20T02:21:00.000Z');
-      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: 'yesterday' }));
+      extraction.extract.mockResolvedValue(
+        makeBaseExtraction({ when: 'yesterday' }),
+      );
 
-      await service.extractAndEmbed('m1', 'Yesterday I visited the museum.', 'user-1', {
-        userId: 'user-1',
-        timestamp: sourceTimestamp,
-      });
+      await service.extractAndEmbed(
+        'm1',
+        'Yesterday I visited the museum.',
+        'user-1',
+        {
+          userId: 'user-1',
+          timestamp: sourceTimestamp,
+        },
+      );
 
       const createCall = prisma.memoryExtraction.create.mock.calls[0][0];
       const temporal = createCall.data.rawJson?.temporal;
@@ -384,7 +391,9 @@ describe('MemoryPipelineService', () => {
 
     it('should resolve "yesterday" relative to context.timestamp, not wall clock', async () => {
       const sourceTimestamp = new Date('2023-05-20T10:00:00.000Z');
-      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: 'yesterday' }));
+      extraction.extract.mockResolvedValue(
+        makeBaseExtraction({ when: 'yesterday' }),
+      );
 
       await service.extractAndEmbed(
         'm1',
@@ -402,7 +411,9 @@ describe('MemoryPipelineService', () => {
     });
 
     it('should mark isRelative=true for relative temporal expressions', async () => {
-      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: 'last week' }));
+      extraction.extract.mockResolvedValue(
+        makeBaseExtraction({ when: 'last week' }),
+      );
 
       await service.extractAndEmbed(
         'm1',
@@ -419,7 +430,12 @@ describe('MemoryPipelineService', () => {
     it('should omit temporal block when no temporal signal present', async () => {
       extraction.extract.mockResolvedValue(makeBaseExtraction({ when: null }));
 
-      await service.extractAndEmbed('m1', 'The sky is blue.', 'user-1', undefined);
+      await service.extractAndEmbed(
+        'm1',
+        'The sky is blue.',
+        'user-1',
+        undefined,
+      );
 
       const createCall = prisma.memoryExtraction.create.mock.calls[0][0];
       const rawJson = createCall.data.rawJson;
@@ -429,9 +445,16 @@ describe('MemoryPipelineService', () => {
 
     it('should fall back to wall clock when context has no timestamp', async () => {
       const before = Date.now();
-      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: 'today' }));
+      extraction.extract.mockResolvedValue(
+        makeBaseExtraction({ when: 'today' }),
+      );
 
-      await service.extractAndEmbed('m1', 'Today was a good day.', 'user-1', undefined);
+      await service.extractAndEmbed(
+        'm1',
+        'Today was a good day.',
+        'user-1',
+        undefined,
+      );
 
       const after = Date.now();
       const createCall = prisma.memoryExtraction.create.mock.calls[0][0];

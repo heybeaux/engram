@@ -201,9 +201,11 @@ describe('EmbeddingQueueProcessor — fact key expansion (HEY-574)', () => {
       memory: {
         findUnique: jest.fn().mockResolvedValue(baseMemory),
         findFirst: jest.fn().mockResolvedValue(null), // no existing FACT_KEY child
-        create: jest.fn().mockImplementation((args: any) =>
-          Promise.resolve({ id: `child-${Math.random()}`, ...args.data }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation((args: any) =>
+            Promise.resolve({ id: `child-${Math.random()}`, ...args.data }),
+          ),
         update: jest.fn().mockResolvedValue({}),
       },
       memoryExtraction: {
@@ -239,7 +241,10 @@ describe('EmbeddingQueueProcessor — fact key expansion (HEY-574)', () => {
     // parent lookup
     mockPrisma.memory.findUnique
       .mockResolvedValueOnce(baseMemory) // job lookup
-      .mockResolvedValueOnce({ layer: MemoryLayer.SESSION, sessionId: 'sess-1' }); // parent lookup inside createFactKeyChildren
+      .mockResolvedValueOnce({
+        layer: MemoryLayer.SESSION,
+        sessionId: 'sess-1',
+      }); // parent lookup inside createFactKeyChildren
 
     await processor.process(makeJob());
 
@@ -258,7 +263,10 @@ describe('EmbeddingQueueProcessor — fact key expansion (HEY-574)', () => {
 
     mockPrisma.memory.findUnique
       .mockResolvedValueOnce(baseMemory)
-      .mockResolvedValueOnce({ layer: MemoryLayer.SESSION, sessionId: 'sess-1' });
+      .mockResolvedValueOnce({
+        layer: MemoryLayer.SESSION,
+        sessionId: 'sess-1',
+      });
 
     await processor.process(makeJob());
 
@@ -272,7 +280,10 @@ describe('EmbeddingQueueProcessor — fact key expansion (HEY-574)', () => {
 
     mockPrisma.memory.findUnique
       .mockResolvedValueOnce(baseMemory)
-      .mockResolvedValueOnce({ layer: MemoryLayer.SESSION, sessionId: 'sess-1' });
+      .mockResolvedValueOnce({
+        layer: MemoryLayer.SESSION,
+        sessionId: 'sess-1',
+      });
 
     // Simulate existing child row for first fact key
     mockPrisma.memory.findFirst
@@ -308,7 +319,10 @@ describe('EmbeddingQueueProcessor — fact key expansion (HEY-574)', () => {
 
     mockPrisma.memory.findUnique
       .mockResolvedValueOnce(baseMemory)
-      .mockResolvedValueOnce({ layer: MemoryLayer.SESSION, sessionId: 'sess-1' });
+      .mockResolvedValueOnce({
+        layer: MemoryLayer.SESSION,
+        sessionId: 'sess-1',
+      });
 
     mockPrisma.memoryExtraction.findUnique.mockRejectedValue(
       new Error('DB error'),
@@ -323,7 +337,10 @@ describe('EmbeddingQueueProcessor — fact key expansion (HEY-574)', () => {
 
     mockPrisma.memory.findUnique
       .mockResolvedValueOnce(baseMemory)
-      .mockResolvedValueOnce({ layer: MemoryLayer.SESSION, sessionId: 'sess-1' });
+      .mockResolvedValueOnce({
+        layer: MemoryLayer.SESSION,
+        sessionId: 'sess-1',
+      });
 
     mockPrisma.memoryExtraction.findUnique.mockResolvedValue({ factKeys: [] });
 

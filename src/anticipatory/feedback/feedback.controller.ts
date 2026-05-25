@@ -1,5 +1,18 @@
-import { Controller, Post, Body, Req, HttpCode, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiSecurity } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  HttpCode,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiSecurity,
+} from '@nestjs/swagger';
 import { FeedbackService } from './feedback.service';
 import { AnticipatoryFeedbackDto } from '../dto/anticipatory.dto';
 import { ApiKeyOrJwtGuard } from '../../common/guards/api-key-or-jwt.guard';
@@ -26,7 +39,10 @@ export class FeedbackController {
       'per-strategy weights for the user.',
   })
   @ApiResponse({ status: 200, description: 'Feedback recorded' })
-  @ApiResponse({ status: 401, description: 'Unauthorized — missing or invalid credentials.' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized — missing or invalid credentials.',
+  })
   async submitFeedback(
     @Body() dto: AnticipatoryFeedbackDto,
     @Req() req: any,

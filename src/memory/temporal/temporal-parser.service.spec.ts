@@ -277,7 +277,8 @@ describe('TemporalParserService', () => {
 
       const expanded = service.expandWindow(filter, 3.0);
 
-      const expandedMid = (expanded.start.getTime() + expanded.end.getTime()) / 2;
+      const expandedMid =
+        (expanded.start.getTime() + expanded.end.getTime()) / 2;
       expect(expandedMid).toBeCloseTo(mid, -3);
     });
 
