@@ -1,4 +1,30 @@
 import { MemoryPipelineService } from './memory-pipeline.service';
+import { TemporalParserService } from './temporal/temporal-parser.service';
+
+const makeBaseExtraction = (overrides: Partial<any> = {}) => ({
+  who: 'user',
+  what: 'test memory',
+  when: null,
+  where: null,
+  why: null,
+  how: null,
+  topics: ['testing'],
+  entities: [],
+  memoryType: 'FACT',
+  typeConfidence: 0.9,
+  confidence: {
+    whoConfidence: 0.8,
+    whatConfidence: 0.9,
+    whenConfidence: 0,
+    whereConfidence: 0,
+    whyConfidence: 0,
+    howConfidence: 0,
+  },
+  lesson: null,
+  capabilities: [],
+  preferenceSignals: [],
+  ...overrides,
+});
 
 describe('MemoryPipelineService', () => {
   let service: MemoryPipelineService;
@@ -6,6 +32,7 @@ describe('MemoryPipelineService', () => {
   let extraction: any;
   let embedding: any;
   let hierarchy: any;
+  let temporalParser: TemporalParserService;
 
   beforeEach(() => {
     prisma = {
@@ -16,29 +43,7 @@ describe('MemoryPipelineService', () => {
       memoryChainLink: { upsert: jest.fn() },
     };
     extraction = {
-      extract: jest.fn().mockResolvedValue({
-        who: 'user',
-        what: 'test memory',
-        when: null,
-        where: null,
-        why: null,
-        how: null,
-        topics: ['testing'],
-        entities: [],
-        memoryType: 'FACT',
-        typeConfidence: 0.9,
-        confidence: {
-          whoConfidence: 0.8,
-          whatConfidence: 0.9,
-          whenConfidence: 0,
-          whereConfidence: 0,
-          whyConfidence: 0,
-          howConfidence: 0,
-        },
-        lesson: null,
-        capabilities: [],
-        preferenceSignals: [],
-      }),
+      extract: jest.fn().mockResolvedValue(makeBaseExtraction()),
       getPriorityForType: jest.fn().mockReturnValue(5),
     };
     embedding = {
@@ -50,11 +55,16 @@ describe('MemoryPipelineService', () => {
       isEnabled: jest.fn().mockReturnValue(false),
       processMemory: jest.fn(),
     };
+    temporalParser = new TemporalParserService();
     service = new MemoryPipelineService(
       prisma,
       extraction,
       embedding,
       hierarchy,
+      undefined,
+      undefined,
+      undefined,
+      temporalParser,
     );
   });
 
@@ -353,6 +363,84 @@ describe('MemoryPipelineService', () => {
 
       const updateCall = prisma.memory.update.mock.calls[0][0];
       expect(updateCall.data).not.toHaveProperty('layer');
+    });
+  });
+
+  describe('extractAndEmbed — temporal metadata (Fix A)', () => {
+    it('should populate temporal.referenceTimestamp from context.timestamp', async () => {
+      const sourceTimestamp = new Date('2023-05-20T02:21:00.000Z');
+      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: 'yesterday' }));
+
+      await service.extractAndEmbed('m1', 'Yesterday I visited the museum.', 'user-1', {
+        userId: 'user-1',
+        timestamp: sourceTimestamp,
+      });
+
+      const createCall = prisma.memoryExtraction.create.mock.calls[0][0];
+      const temporal = createCall.data.rawJson?.temporal;
+      expect(temporal).toBeDefined();
+      expect(temporal.referenceTimestamp).toBe('2023-05-20T02:21:00.000Z');
+    });
+
+    it('should resolve "yesterday" relative to context.timestamp, not wall clock', async () => {
+      const sourceTimestamp = new Date('2023-05-20T10:00:00.000Z');
+      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: 'yesterday' }));
+
+      await service.extractAndEmbed(
+        'm1',
+        'I went to the gym yesterday.',
+        'user-1',
+        { userId: 'user-1', timestamp: sourceTimestamp },
+      );
+
+      const createCall = prisma.memoryExtraction.create.mock.calls[0][0];
+      const temporal = createCall.data.rawJson?.temporal;
+      expect(temporal).toBeDefined();
+      expect(temporal.referenceTimestamp).toBe(sourceTimestamp.toISOString());
+      // resolvedRange start should be 2023-05-19 (day before source timestamp)
+      expect(temporal.resolvedRange?.startDate).toBe('2023-05-19');
+    });
+
+    it('should mark isRelative=true for relative temporal expressions', async () => {
+      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: 'last week' }));
+
+      await service.extractAndEmbed(
+        'm1',
+        'Last week we shipped the feature.',
+        'user-1',
+        { userId: 'user-1', timestamp: new Date('2023-06-01T00:00:00.000Z') },
+      );
+
+      const createCall = prisma.memoryExtraction.create.mock.calls[0][0];
+      const temporal = createCall.data.rawJson?.temporal;
+      expect(temporal?.isRelative).toBe(true);
+    });
+
+    it('should omit temporal block when no temporal signal present', async () => {
+      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: null }));
+
+      await service.extractAndEmbed('m1', 'The sky is blue.', 'user-1', undefined);
+
+      const createCall = prisma.memoryExtraction.create.mock.calls[0][0];
+      const rawJson = createCall.data.rawJson;
+      // No source context and no temporal signal — rawJson should be undefined or lack temporal
+      expect(rawJson?.temporal).toBeUndefined();
+    });
+
+    it('should fall back to wall clock when context has no timestamp', async () => {
+      const before = Date.now();
+      extraction.extract.mockResolvedValue(makeBaseExtraction({ when: 'today' }));
+
+      await service.extractAndEmbed('m1', 'Today was a good day.', 'user-1', undefined);
+
+      const after = Date.now();
+      const createCall = prisma.memoryExtraction.create.mock.calls[0][0];
+      const temporal = createCall.data.rawJson?.temporal;
+      if (temporal) {
+        const ref = new Date(temporal.referenceTimestamp).getTime();
+        expect(ref).toBeGreaterThanOrEqual(before);
+        expect(ref).toBeLessThanOrEqual(after);
+      }
     });
   });
 

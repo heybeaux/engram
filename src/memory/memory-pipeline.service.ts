@@ -12,6 +12,7 @@ import { GraphExtractionService } from '../graph/services/graph-extraction.servi
 import { AttachmentPipelineService } from '../entity-profile/attachment-pipeline.service';
 import { EntityMemoryService } from './entity-memory.service';
 import { parseFlexibleDate } from '../utils/date-parser';
+import { TemporalParserService } from './temporal/temporal-parser.service';
 import {
   RELATED_SIMILARITY_THRESHOLD,
   DEDUP_SIMILARITY_THRESHOLD,
@@ -42,6 +43,7 @@ export class MemoryPipelineService {
     @Optional() private graphExtraction?: GraphExtractionService,
     @Optional() private attachmentPipeline?: AttachmentPipelineService,
     @Optional() private entityMemory?: EntityMemoryService,
+    @Optional() private temporalParser?: TemporalParserService,
   ) {}
 
   /**
@@ -114,6 +116,12 @@ export class MemoryPipelineService {
 
     const rawJsonData = {
       ...sourceMetadata,
+      ...this.buildTemporalMetadata(
+        raw,
+        extracted.when,
+        parsedWhen,
+        context?.timestamp,
+      ),
       ...(extracted.lesson
         ? { lesson: JSON.parse(JSON.stringify(extracted.lesson)) }
         : {}),
@@ -362,46 +370,105 @@ export class MemoryPipelineService {
     }
   }
 
+  // ===========================================================================
+  // Temporal metadata helpers (Fix A)
+  // ===========================================================================
+
+  private buildTemporalMetadata(
+    raw: string,
+    extractedWhen: string | null,
+    parsedWhen: Date | null,
+    referenceTimestamp?: Date,
+  ): Record<string, unknown> | undefined {
+    const reference = referenceTimestamp ?? new Date();
+    const temporalQuery = this.temporalParser?.parse(raw, reference);
+    const temporalFilter = temporalQuery?.temporalFilter ?? null;
+
+    if (!extractedWhen && !parsedWhen && !temporalFilter) {
+      return undefined;
+    }
+
+    return {
+      temporal: {
+        referenceTimestamp: reference.toISOString(),
+        relativeExpression: temporalFilter?.expression ?? null,
+        isRelative:
+          temporalFilter !== null ||
+          this.looksLikeRelativeTemporalExpression(extractedWhen),
+        extractedWhenRaw: extractedWhen ?? null,
+        resolvedWhen: parsedWhen?.toISOString() ?? null,
+        resolvedDate:
+          parsedWhen === null ? null : this.formatDateOnly(parsedWhen),
+        resolvedDateLabel:
+          parsedWhen === null ? null : this.formatLongDate(parsedWhen),
+        resolvedDayOfWeek:
+          parsedWhen === null ? null : this.formatWeekday(parsedWhen),
+        resolvedGranularity: this.inferTemporalGranularity(temporalFilter),
+        resolvedRange:
+          temporalFilter === null
+            ? null
+            : {
+                start: temporalFilter.start.toISOString(),
+                end: temporalFilter.end.toISOString(),
+                startDate: this.formatDateOnly(temporalFilter.start),
+                endDate: this.formatDateOnly(temporalFilter.end),
+              },
+      },
+    };
+  }
+
+  private looksLikeRelativeTemporalExpression(value: string | null): boolean {
+    if (!value) return false;
+    return /\b(today|yesterday|tomorrow|ago|last|next|this|tonight|morning|afternoon|evening|weekend|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(
+      value,
+    );
+  }
+
+  private formatDateOnly(value: Date): string {
+    return value.toISOString().slice(0, 10);
+  }
+
+  private formatLongDate(value: Date): string {
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(value);
+  }
+
+  private formatWeekday(value: Date): string {
+    return new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(value);
+  }
+
+  private inferTemporalGranularity(
+    temporalFilter: { start: Date; end: Date } | null,
+  ): 'point' | 'day' | 'week' | 'month' | 'year' | 'range' | null {
+    if (!temporalFilter) return null;
+    const durationMs =
+      temporalFilter.end.getTime() - temporalFilter.start.getTime();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    if (durationMs <= 60 * 60 * 1000) return 'point';
+    if (durationMs <= oneDayMs) return 'day';
+    if (durationMs <= oneDayMs * 8) return 'week';
+    if (durationMs <= oneDayMs * 32) return 'month';
+    if (durationMs <= oneDayMs * 370) return 'year';
+    return 'range';
+  }
+
   /**
-   * Retry all failed embeddings in the queue (HEY-345).
-   * Also discovers memories in DB that have no embedding.
-   * Can be called manually or via cron.
+   * Retry transient embedding failures recorded in the in-memory retry queue
+   * (HEY-345). Entries only land here after a write-time embedding failure —
+   * we no longer DB-sweep for unembedded memories. Extraction enqueue is
+   * synchronous on memory write (via the BullMQ embedding queue or the
+   * in-process pipeline fallback), so a "missing extraction" is a real bug,
+   * not a backlog to lazily reconcile from cron.
    */
   async retryFailedEmbeddings(): Promise<{
     retried: number;
     succeeded: number;
     failed: number;
-    discovered: number;
   }> {
-    // 1. Discover memories without embeddings from DB (up to 100)
-    const unembedded = await this.prisma.memory.findMany({
-      where: {
-        OR: [
-          { embeddingId: null },
-          { embeddingStatus: 'FAILED' },
-          { embeddingStatus: 'PENDING' },
-        ],
-        deletedAt: null,
-      },
-      select: { id: true, userId: true, raw: true },
-      take: 100,
-      orderBy: { createdAt: 'desc' },
-    });
-
-    let discovered = 0;
-    for (const mem of unembedded) {
-      if (!this.embeddingRetryQueue.has(mem.id)) {
-        this.embeddingRetryQueue.set(mem.id, {
-          memoryId: mem.id,
-          userId: mem.userId,
-          raw: mem.raw,
-          attempts: 0,
-          lastAttempt: new Date(0),
-        });
-        discovered++;
-      }
-    }
-
     let retried = 0;
     let succeeded = 0;
     let failed = 0;
@@ -409,7 +476,7 @@ export class MemoryPipelineService {
     const entries = Array.from(this.embeddingRetryQueue.values());
     for (const entry of entries) {
       if (entry.attempts >= MemoryPipelineService.MAX_RETRY_ATTEMPTS) {
-        continue; // Skip exhausted entries
+        continue;
       }
 
       retried++;
@@ -426,9 +493,9 @@ export class MemoryPipelineService {
     }
 
     this.logger.log(
-      `[Retry] Embedding retry complete: ${succeeded}/${retried} succeeded, ${discovered} discovered from DB`,
+      `[Retry] Embedding retry complete: ${succeeded}/${retried} succeeded (queueSize=${this.embeddingRetryQueue.size})`,
     );
-    return { retried, succeeded, failed, discovered };
+    return { retried, succeeded, failed };
   }
 
   /**
