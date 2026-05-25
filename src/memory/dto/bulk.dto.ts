@@ -58,6 +58,22 @@ export class BulkCreateMemoryItemDto {
   @IsInt()
   @Min(0)
   sessionPosition?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Source timestamp for this item (ISO 8601). Used as the temporal reference for extraction so relative expressions ("yesterday") resolve against conversation time, not ingest time.',
+  })
+  @IsOptional()
+  @IsString()
+  sourceTimestamp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Turn index of this item within the source conversation',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  sourceTurnIndex?: number;
 }
 
 export class BulkCreateMemoryDto {

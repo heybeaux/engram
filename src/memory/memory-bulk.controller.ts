@@ -367,7 +367,6 @@ export class MemoryBulkController {
     retried: number;
     succeeded: number;
     failed: number;
-    discovered: number;
   }> {
     return this.memoryPipeline.retryFailedEmbeddings();
   }

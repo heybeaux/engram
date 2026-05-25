@@ -136,16 +136,18 @@ describe('MemoryPipelineService — Embedding Decoupling (HEY-345)', () => {
       expect(result.failed).toBe(0);
     });
 
-    it('should discover unembedded memories from DB', async () => {
+    it('should NOT sweep the DB for unembedded memories (extraction is sync at write time)', async () => {
+      // Cron path must only retry in-memory transient failures — it must not
+      // discover work from the DB. That lazy-cron path was a backlog trap.
       mockPrisma.memory.findMany.mockResolvedValue([
         { id: 'mem-db-1', userId: 'user-1', raw: 'from db' },
       ]);
       mockEmbedding.generate.mockResolvedValue([0.1]);
 
       const result = await service.retryFailedEmbeddings();
-      expect(result.discovered).toBe(1);
-      expect(result.retried).toBe(1);
-      expect(result.succeeded).toBe(1);
+      expect(mockPrisma.memory.findMany).not.toHaveBeenCalled();
+      expect(result).not.toHaveProperty('discovered');
+      expect(result.retried).toBe(0);
     });
   });
 

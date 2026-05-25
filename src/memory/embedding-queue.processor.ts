@@ -24,7 +24,7 @@ export class EmbeddingQueueProcessor extends WorkerHost {
   }
 
   async process(job: Job<EmbedMemoryJobData>): Promise<void> {
-    const { memoryId, userId, raw, runDedup } = job.data;
+    const { memoryId, userId, raw, runDedup, context } = job.data;
     this.logger.log(`Processing embedding: memoryId=${memoryId}`);
     try {
       const memory = await this.prisma.memory.findUnique({
@@ -52,8 +52,28 @@ export class EmbeddingQueueProcessor extends WorkerHost {
         return;
       }
 
-      // Run embed + extraction pipeline (sets embeddingStatus → COMPLETE internally)
-      await this.pipeline.extractAndEmbed(memoryId, raw, userId);
+      // Run embed + extraction pipeline (sets embeddingStatus → COMPLETE internally).
+      // Thread ExtractionContext from write-time through the queue so relative
+      // temporal references ("yesterday") resolve against the conversation's
+      // source timestamp, not the worker's wall clock.
+      const extractionContext = context
+        ? {
+            userId,
+            userName: context.userName,
+            timestamp:
+              typeof context.timestamp === 'string'
+                ? new Date(context.timestamp)
+                : context.timestamp,
+            turnIndex: context.turnIndex,
+            conversationId: context.conversationId,
+          }
+        : undefined;
+      await this.pipeline.extractAndEmbed(
+        memoryId,
+        raw,
+        userId,
+        extractionContext,
+      );
 
       // [HEY-574] Create FACT_KEY child rows from extraction if feature flag is on
       if (process.env.ENABLE_FACT_KEY_EXPANSION === 'true') {

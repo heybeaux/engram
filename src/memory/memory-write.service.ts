@@ -214,6 +214,12 @@ export class MemoryWriteService {
         userId,
         raw: rawContent,
         runDedup: true,
+        context: {
+          timestamp: extractionContext.timestamp,
+          turnIndex: extractionContext.turnIndex,
+          conversationId: extractionContext.conversationId,
+          userName: extractionContext.userName,
+        },
       });
     } else {
       this.runWithRls(accountId, () =>
@@ -404,13 +410,19 @@ export class MemoryWriteService {
     let enqueueErrors = 0;
     if (this.embeddingQueue) {
       const enqueueStart = Date.now();
-      for (const record of data) {
+      for (const [index, record] of data.entries()) {
+        const sourceItem = dto.memories[index];
         this.embeddingQueue
           .enqueueEmbedding({
             memoryId: record.id,
             userId,
             raw: record.raw,
             runDedup: true,
+            context: {
+              timestamp: sourceItem?.sourceTimestamp,
+              turnIndex: sourceItem?.sourceTurnIndex,
+              conversationId: dto.context?.sessionId,
+            },
           })
           .then(() => {
             enqueued++;

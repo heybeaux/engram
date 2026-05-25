@@ -16,9 +16,9 @@ export class EmbeddingRetryCron {
     this.logger.debug('[EmbeddingRetry] Cron triggered');
     try {
       const result = await this.memoryPipeline.retryFailedEmbeddings();
-      if (result.retried > 0 || result.discovered > 0) {
+      if (result.retried > 0) {
         this.logger.log(
-          `[EmbeddingRetry] Retried ${result.retried}: ${result.succeeded} ok, ${result.failed} failed, ${result.discovered} discovered`,
+          `[EmbeddingRetry] Retried ${result.retried}: ${result.succeeded} ok, ${result.failed} failed`,
         );
       }
     } catch (error) {

@@ -88,6 +88,36 @@ describe('EmbeddingQueueProcessor', () => {
         'mem-123',
         'Test content',
         'user-456',
+        undefined,
+      );
+    });
+
+    it('should thread ExtractionContext (source timestamp + userName) into the pipeline', async () => {
+      // Without this, "yesterday" in a fixture from 2023 resolves against the
+      // worker's wall clock and produces wrong temporal extractions.
+      const sourceTimestamp = '2023-05-20T02:21:00.000Z';
+      await processor.process(
+        makeJob({
+          context: {
+            timestamp: sourceTimestamp,
+            turnIndex: 4,
+            conversationId: 'conv-1',
+            userName: 'Beaux',
+          },
+        }),
+      );
+
+      expect(mockPipeline.extractAndEmbed).toHaveBeenCalledWith(
+        'mem-123',
+        'Test content',
+        'user-456',
+        {
+          userId: 'user-456',
+          userName: 'Beaux',
+          timestamp: new Date(sourceTimestamp),
+          turnIndex: 4,
+          conversationId: 'conv-1',
+        },
       );
     });
 

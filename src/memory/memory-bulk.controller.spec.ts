@@ -564,7 +564,7 @@ describe('MemoryBulkController', () => {
 
   describe('retryFailedEmbeddings', () => {
     it('should trigger retry and return counts', async () => {
-      const result = { retried: 5, succeeded: 4, failed: 1, discovered: 6 };
+      const result = { retried: 5, succeeded: 4, failed: 1 };
       mockMemoryPipeline.retryFailedEmbeddings.mockResolvedValue(result);
 
       const out = await controller.retryFailedEmbeddings();

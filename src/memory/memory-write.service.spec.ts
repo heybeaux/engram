@@ -188,12 +188,38 @@ describe('MemoryWriteService', () => {
       const result = await service.remember('user-456', { raw: 'Test' });
 
       expect(result).toEqual(mockMemory);
-      expect(mockEmbeddingQueue.enqueueEmbedding).toHaveBeenCalledWith({
-        memoryId: mockMemory.id,
-        userId: 'user-456',
-        raw: 'Test',
-        runDedup: true,
-      });
+      expect(mockEmbeddingQueue.enqueueEmbedding).toHaveBeenCalledWith(
+        expect.objectContaining({
+          memoryId: mockMemory.id,
+          userId: 'user-456',
+          raw: 'Test',
+          runDedup: true,
+          context: expect.objectContaining({
+            timestamp: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('should pass sourceTimestamp through enqueued context (A: extraction temporal anchoring)', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.create.mockResolvedValue(mockMemory);
+
+      const sourceTimestamp = new Date('2023-05-20T02:21:00.000Z');
+      await service.remember('user-456', {
+        raw: 'Yesterday I went to the museum.',
+        sourceTimestamp,
+        sourceTurnIndex: 4,
+      } as any);
+
+      expect(mockEmbeddingQueue.enqueueEmbedding).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: expect.objectContaining({
+            timestamp: sourceTimestamp,
+            turnIndex: 4,
+          }),
+        }),
+      );
     });
 
     it('should throw when no content provided', async () => {
