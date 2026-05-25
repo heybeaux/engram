@@ -82,6 +82,18 @@ describe('PgVectorProvider', () => {
         'mem-large',
       );
     });
+
+    it('should reject non-finite values before serializing', async () => {
+      const record: VectorRecord = {
+        id: 'mem-bad',
+        embedding: [0.1, Number.NaN, 0.3],
+      };
+
+      await expect(provider.upsert(record)).rejects.toThrow(
+        'contains non-finite values',
+      );
+      expect(mockPrisma.$executeRawUnsafe).not.toHaveBeenCalled();
+    });
   });
 
   describe('upsertMany', () => {
@@ -191,6 +203,16 @@ describe('PgVectorProvider', () => {
         { id: 'mem-1', score: 0.95 },
         { id: 'mem-2', score: 0.88 },
       ]);
+    });
+
+    it('should reject invalid query embeddings before querying', async () => {
+      await expect(
+        provider.search([0.1, Number.POSITIVE_INFINITY], {
+          userId: 'user-123',
+          limit: 10,
+        }),
+      ).rejects.toThrow('contains non-finite values');
+      expect(mockPrisma.$queryRawUnsafe).not.toHaveBeenCalled();
     });
 
     it('should filter by layers when provided', async () => {

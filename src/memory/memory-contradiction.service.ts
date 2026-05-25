@@ -11,6 +11,7 @@ import {
   FindContradictionsResult,
   ContradictionResult,
 } from './dto/find-contradictions.dto';
+import { toValidatedVectorLiteral } from './vector-literal.util';
 
 @Injectable()
 export class MemoryContradictionService {
@@ -82,7 +83,12 @@ export class MemoryContradictionService {
       'm.searchable = true',
       `m.memory_type IN ('FACT', 'PREFERENCE', 'CONSTRAINT', 'LESSON')`,
     ];
-    const params: any[] = [`[${sourceEmbedding.join(',')}]`];
+    const params: any[] = [
+      toValidatedVectorLiteral(
+        sourceEmbedding,
+        'MemoryContradictionService.findContradictions',
+      ),
+    ];
     let paramIdx = 2;
 
     // Exclude source memory

@@ -145,6 +145,17 @@ describe('MemoryContradictionService', () => {
       );
     });
 
+    it('should reject invalid stored embeddings before contradiction search', async () => {
+      mockPrisma.$queryRawUnsafe.mockResolvedValueOnce([
+        { embedding: `[0.1,null,0.3]` },
+      ]);
+
+      await expect(service.findContradictions('user-1', dto)).rejects.toThrow(
+        'Invalid embedding for MemoryContradictionService.findContradictions',
+      );
+      expect(mockPrisma.$queryRawUnsafe).toHaveBeenCalledTimes(1);
+    });
+
     it('should exclude source memory from results', async () => {
       mockPrisma.$queryRawUnsafe
         .mockResolvedValueOnce([])

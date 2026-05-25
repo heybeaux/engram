@@ -45,7 +45,7 @@ describe('LocalEmbedProvider', () => {
 
   describe('embed', () => {
     it('should embed a single text', async () => {
-      const mockEmbedding = [0.1, 0.2, 0.3];
+      const mockEmbedding = new Array(768).fill(0.1);
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
@@ -66,8 +66,8 @@ describe('LocalEmbedProvider', () => {
 
     it('should embed multiple texts', async () => {
       const mockEmbeddings = [
-        { embedding: [0.1, 0.2] },
-        { embedding: [0.3, 0.4] },
+        { embedding: new Array(768).fill(0.1) },
+        { embedding: new Array(768).fill(0.2) },
       ];
       mockFetch.mockResolvedValue({
         ok: true,
@@ -76,8 +76,8 @@ describe('LocalEmbedProvider', () => {
 
       const result = await provider.embed(['hello', 'world']);
       expect(result).toEqual([
-        [0.1, 0.2],
-        [0.3, 0.4],
+        new Array(768).fill(0.1),
+        new Array(768).fill(0.2),
       ]);
       // Multiple texts should send as array
       expect(mockFetch).toHaveBeenCalledWith(
@@ -114,11 +114,37 @@ describe('LocalEmbedProvider', () => {
       );
     });
 
-    it('should send X-Priority header when priority option is set', async () => {
+    it('should throw on wrong embedding dimensions', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
           data: [{ embedding: [0.1, 0.2] }],
+        }),
+      });
+
+      await expect(provider.embed(['test'])).rejects.toThrow(
+        'expected 768 dimensions, got 2',
+      );
+    });
+
+    it('should throw on non-finite embedding values', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ embedding: new Array(768).fill(null) }],
+        }),
+      });
+
+      await expect(provider.embed(['test'])).rejects.toThrow(
+        'contains non-finite values',
+      );
+    });
+
+    it('should send X-Priority header when priority option is set', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [{ embedding: new Array(768).fill(0.1) }],
         }),
       });
 
@@ -140,7 +166,7 @@ describe('LocalEmbedProvider', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({
-          data: [{ embedding: [0.1, 0.2] }],
+          data: [{ embedding: new Array(768).fill(0.1) }],
         }),
       });
 

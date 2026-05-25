@@ -41,7 +41,7 @@ export class PgVectorProvider implements VectorProvider {
   }
 
   async upsert(record: VectorRecord): Promise<void> {
-    const embeddingStr = `[${record.embedding.join(',')}]`;
+    const embeddingStr = this.serializeEmbedding(record.embedding, 'upsert');
 
     // Write to inline column for backward compat
     const updated = await this.prisma.$executeRawUnsafe(
@@ -90,7 +90,7 @@ export class PgVectorProvider implements VectorProvider {
     embedding: number[],
     options: VectorSearchOptions,
   ): Promise<VectorSearchResult[]> {
-    const embeddingStr = `[${embedding.join(',')}]`;
+    const embeddingStr = this.serializeEmbedding(embedding, 'search');
     const limit = options.limit || 10;
 
     // Build WHERE clause for the memories table filters
@@ -258,6 +258,26 @@ export class PgVectorProvider implements VectorProvider {
     }
 
     return vectorResults;
+  }
+
+  private serializeEmbedding(embedding: number[], operation: string): string {
+    if (!Array.isArray(embedding) || embedding.length === 0) {
+      throw new Error(
+        `[PgVector] Invalid embedding for ${operation}: expected non-empty array`,
+      );
+    }
+
+    if (
+      embedding.some(
+        (value) => typeof value !== 'number' || !Number.isFinite(value),
+      )
+    ) {
+      throw new Error(
+        `[PgVector] Invalid embedding for ${operation}: contains non-finite values`,
+      );
+    }
+
+    return `[${embedding.join(',')}]`;
   }
 
   async delete(id: string): Promise<void> {

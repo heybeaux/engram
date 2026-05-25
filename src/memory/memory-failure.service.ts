@@ -6,6 +6,7 @@ import {
   FindFailuresResultDto,
 } from './dto/find-failures.dto';
 import { MemoryWithExtraction } from './memory.types';
+import { toValidatedVectorLiteral } from './vector-literal.util';
 
 @Injectable()
 export class MemoryFailureService {
@@ -52,7 +53,10 @@ export class MemoryFailureService {
 
     // 4. Query: semantic similarity + failure keyword/metadata filter
     //    We use $queryRawUnsafe to combine pgvector cosine distance with ILIKE filtering.
-    const embeddingLiteral = `[${goalEmbedding.join(',')}]`;
+    const embeddingLiteral = toValidatedVectorLiteral(
+      goalEmbedding,
+      'MemoryFailureService.findFailures',
+    );
 
     // Build the ILIKE ANY array literal for Postgres
     const patternsLiteral = `{${allPatterns.map((p) => `"${p}"`).join(',')}}`;

@@ -81,7 +81,35 @@ export class LocalEmbedProvider implements EmbeddingProvider {
       throw new Error('Invalid response from local embedding server');
     }
 
-    return data.data.map((item: any) => item.embedding);
+    return data.data.map((item: any, index: number) =>
+      this.validateEmbedding(item?.embedding, index),
+    );
+  }
+
+  private validateEmbedding(embedding: unknown, index: number): number[] {
+    if (!Array.isArray(embedding)) {
+      throw new Error(
+        `Invalid embedding at index ${index}: expected array from local embedding server`,
+      );
+    }
+
+    if (embedding.length !== this.dimensions) {
+      throw new Error(
+        `Invalid embedding at index ${index}: expected ${this.dimensions} dimensions, got ${embedding.length}`,
+      );
+    }
+
+    if (
+      embedding.some(
+        (value) => typeof value !== 'number' || !Number.isFinite(value),
+      )
+    ) {
+      throw new Error(
+        `Invalid embedding at index ${index}: contains non-finite values`,
+      );
+    }
+
+    return embedding;
   }
 
   getModelName(): string {

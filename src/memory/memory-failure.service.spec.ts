@@ -183,6 +183,19 @@ describe('MemoryFailureService', () => {
       );
     });
 
+    it('should reject invalid query embeddings before raw SQL', async () => {
+      mockEmbedding.generateForRecall.mockResolvedValue([
+        0.1,
+        Number.NaN,
+        0.3,
+      ]);
+
+      await expect(service.findFailures('user-1', baseDto)).rejects.toThrow(
+        'Invalid embedding for MemoryFailureService.findFailures',
+      );
+      expect(mockPrisma.$queryRawUnsafe).not.toHaveBeenCalled();
+    });
+
     it('should include latencyMs in result', async () => {
       mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
 
