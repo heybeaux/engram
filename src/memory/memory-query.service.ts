@@ -129,6 +129,8 @@ export class MemoryQueryService {
     const visibilityFilter = this.buildVisibilityFilter(dto);
     const metadataFilter = this.buildMetadataFilter(dto);
     const sessionIdFilter = this.buildSessionIdFilter(dto);
+    const allowInsightSurfacing =
+      !dto.layers || dto.layers.includes(MemoryLayer.INSIGHT);
     const limit = dto.limit ?? 10;
 
     // ENG-42: Extract filter params for vector search
@@ -532,6 +534,20 @@ export class MemoryQueryService {
       searchQuery,
       limit,
       queryEmbedding,
+      {
+        allow: allowInsightSurfacing,
+        where: allowInsightSurfacing
+          ? this.buildInsightSurfacingWhere(
+              userIdFilter,
+              dto,
+              subjectTypeFilter,
+              visibilityFilter,
+              metadataFilter,
+              sessionIdFilter,
+              temporalRangeFilter,
+            )
+          : undefined,
+      },
     );
 
     // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
@@ -849,6 +865,44 @@ export class MemoryQueryService {
   buildSessionIdFilter(dto: QueryMemoryDto): Record<string, any> {
     if (!dto.sessionId) return {};
     return { sessionId: dto.sessionId };
+  }
+
+  buildInsightSurfacingWhere(
+    userIdFilter: string | { in: string[] } | undefined,
+    dto: QueryMemoryDto,
+    subjectTypeFilter: Record<string, any>,
+    visibilityFilter: Record<string, any>,
+    metadataFilter: Record<string, any>,
+    sessionIdFilter: Record<string, any>,
+    temporalRangeFilter: Record<string, any>,
+  ): Record<string, any> {
+    const recentCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    const explicitCreatedAt = temporalRangeFilter.createdAt ?? {};
+    const createdAt: Record<string, any> = {
+      gte:
+        explicitCreatedAt.gte && explicitCreatedAt.gte > recentCutoff
+          ? explicitCreatedAt.gte
+          : recentCutoff,
+    };
+
+    if (explicitCreatedAt.lte) {
+      createdAt.lte = explicitCreatedAt.lte;
+    }
+
+    return {
+      ...(userIdFilter !== undefined ? { userId: userIdFilter } : {}),
+      layer: MemoryLayer.INSIGHT,
+      deletedAt: null,
+      supersededById: null,
+      searchable: { not: false },
+      importanceScore: { gte: 0.6 },
+      createdAt,
+      ...subjectTypeFilter,
+      ...visibilityFilter,
+      ...metadataFilter,
+      ...sessionIdFilter,
+      ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
+    };
   }
 
   /**

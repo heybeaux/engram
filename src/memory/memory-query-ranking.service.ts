@@ -8,6 +8,11 @@ import { RerankService } from '../embedding/rerank.service';
 import { GraphRecallService } from './graph-recall.service';
 import { SentimentService } from './sentiment.service';
 
+export interface InsightSurfacingOptions {
+  allow?: boolean;
+  where?: Record<string, any>;
+}
+
 @Injectable()
 export class MemoryQueryRankingService {
   private readonly logger = new Logger(MemoryQueryRankingService.name);
@@ -98,18 +103,22 @@ export class MemoryQueryRankingService {
     query: string,
     limit: number,
     cachedQueryEmbedding?: number[],
+    options?: InsightSurfacingOptions,
   ): Promise<MemoryWithScore[]> {
     try {
+      if (options?.allow === false) return existingResults;
+
+      const where = options?.where ?? {
+        userId: { in: userIds },
+        layer: 'INSIGHT',
+        deletedAt: null,
+        importanceScore: { gte: 0.6 },
+        createdAt: { gt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+      };
+
       // Find recent, high-confidence INSIGHT memories
       const insights = await this.prisma.memory.findMany({
-        where: {
-          userId: { in: userIds },
-          layer: 'INSIGHT',
-          deletedAt: null,
-          importanceScore: { gte: 0.6 }, // confidence threshold
-          // Only surface insights from the last 14 days
-          createdAt: { gt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
-        },
+        where,
         include: { extraction: true },
         orderBy: { importanceScore: 'desc' },
         take: 5,

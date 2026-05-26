@@ -838,6 +838,89 @@ describe('MemoryQueryService', () => {
       // Should NOT re-embed each insight individually — only 1 generate call
       expect(embedding.generateForRecall).toHaveBeenCalledTimes(1);
     });
+
+    it('should not surface insights when requested layers exclude INSIGHT', async () => {
+      const identityMemory = {
+        id: 'm1',
+        raw: 'identity memory',
+        layer: 'IDENTITY',
+        effectiveScore: 0.8,
+        extraction: {},
+      };
+
+      prisma.memory.findMany = jest.fn().mockImplementation((args: any) => {
+        if (args?.where?.layer === 'INSIGHT') {
+          return Promise.resolve([
+            {
+              id: 'insight-1',
+              raw: 'should not leak in',
+              layer: 'INSIGHT',
+              importanceScore: 0.9,
+              effectiveScore: 0.9,
+              createdAt: new Date(),
+              extraction: {},
+            },
+          ]);
+        }
+        return Promise.resolve([identityMemory]);
+      });
+
+      embedding.search.mockResolvedValueOnce([{ id: 'm1', score: 0.9 }] as any);
+
+      const result = await service.recall(userId, {
+        query: 'who am i',
+        layers: ['IDENTITY'],
+      } as any);
+
+      expect(result.memories.map((m) => m.id)).toEqual(['m1']);
+      expect(embedding.search).toHaveBeenCalledTimes(1);
+      expect(prisma.memory.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('should apply recall filters to surfaced insight lookup', async () => {
+      const insightMemory = {
+        id: 'insight-1',
+        raw: 'scoped insight',
+        layer: 'INSIGHT',
+        importanceScore: 0.8,
+        effectiveScore: 0.8,
+        createdAt: new Date(),
+        extraction: {},
+      };
+
+      prisma.memory.findMany = jest.fn().mockImplementation((args: any) => {
+        if (args?.where?.layer === 'INSIGHT') {
+          return Promise.resolve([insightMemory]);
+        }
+        return Promise.resolve([
+          { id: 'm1', raw: 'memory 1', effectiveScore: 0.8, extraction: {} },
+        ]);
+      });
+
+      embedding.search
+        .mockResolvedValueOnce([{ id: 'm1', score: 0.9 }])
+        .mockResolvedValueOnce([{ id: 'insight-1', score: 0.5 }]);
+
+      await service.recall(userId, {
+        query: 'test query',
+        layers: ['INSIGHT', 'IDENTITY'],
+        sessionId: 'session-X',
+        visibility: ['TEAM'],
+        filterAgentId: 'agent-7',
+      } as any);
+
+      const insightCall = (prisma.memory.findMany as jest.Mock).mock.calls.find(
+        ([args]) => args?.where?.layer === 'INSIGHT',
+      )?.[0];
+
+      expect(insightCall).toBeDefined();
+      expect(insightCall.where).toMatchObject({
+        layer: 'INSIGHT',
+        sessionId: 'session-X',
+        visibility: { in: ['TEAM'] },
+        agentId: 'agent-7',
+      });
+    });
   });
 
   describe('recall with multiQuery', () => {
