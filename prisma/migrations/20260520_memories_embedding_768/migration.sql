@@ -3,6 +3,7 @@
 -- All existing values are NULL (no successful local-embed writes ever landed), so this is
 -- a pure type swap with no data migration. HNSW index is rebuilt for the new dimension.
 
+DROP INDEX IF EXISTS memories_embedding_idx;
 DROP INDEX IF EXISTS memories_embedding_hnsw_idx;
 
 ALTER TABLE memories
