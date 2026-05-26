@@ -27,7 +27,7 @@
         },
         "responses": {
           "201": {
-            "description": "Memory created successfully."
+            "description": "Memory created successfully. Response may include `warnings?: string[]` (e.g. `[\"relative_extraction_skipped\"]`) when `source = HISTORICAL` and `observedAt` is omitted — see openspec/changes/temporal-anchoring (T6)."
           }
         },
         "summary": "Create a memory",
@@ -158,7 +158,7 @@
         },
         "responses": {
           "201": {
-            "description": "Memories created successfully."
+            "description": "Memories created successfully. Response may include top-level `warnings?: string[]` (e.g. `[\"relative_extraction_skipped\"]`) when any item had `source = HISTORICAL` without `observedAt`. See openspec/changes/temporal-anchoring (T6)."
           }
         },
         "summary": "Bulk create memories",
@@ -663,7 +663,7 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Import result. May include top-level `warnings?: string[]` per the temporal-anchoring T6 contract; current importMemories pins source=EXPLICIT_STATEMENT so the field is reserved but typically absent."
           }
         },
         "summary": "Import memories",
@@ -6622,7 +6622,7 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Per-item sync results. Each result item may include `warnings?: string[]` (e.g. `[\"relative_extraction_skipped\"]`) when the pushed memory had `source = HISTORICAL` without `observedAt`. See openspec/changes/temporal-anchoring (T6)."
           }
         },
         "summary": "Batch push memories from local instance",

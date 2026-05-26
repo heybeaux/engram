@@ -228,6 +228,13 @@ model Memory {
   // e.g. insightType, signalSource, actionable, expiresAt, acknowledged)
   metadata Json? @map("metadata")
 
+  // Temporal anchoring (temporal-anchoring spec):
+  //   observedAt is the speaker's "now" — the anchor for relative-phrase resolution.
+  //   For real-time capture it equals createdAt; for bulk/historical import the caller supplies it.
+  observedAt           DateTime?            @map("observed_at")
+  temporalAnchorSource TemporalAnchorSource @default(FALLBACK_RECORDED_AT) @map("temporal_anchor_source")
+  eventTimes           MemoryEventTime[]
+
   // Semantic Memory Graph relations
   graphMentions        GraphEntityMention[]
   graphEntityFirstSeen GraphEntity[]        @relation("GraphEntityFirstSeen")
@@ -275,7 +282,33 @@ model Memory {
   @@index([embeddingStatus])
   @@index([tags], type: Gin) // ENG-42: Fast tag containment queries
   @@index([userId, processedAt])
+  @@index([userId, observedAt])
+  @@index([observedAt])
   @@map("memories")
+}
+
+/// Extracted temporal references from memory content, resolved against Memory.observedAt.
+/// See openspec/changes/temporal-anchoring for the field model and resolution rules.
+model MemoryEventTime {
+  id                 String              @id @default(cuid())
+  memoryId           String              @map("memory_id")
+  memory             Memory              @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  surface            String              // original phrase from content
+  resolvedInstant    DateTime?           @map("resolved_instant")
+  resolvedRangeStart DateTime?           @map("resolved_range_start")
+  resolvedRangeEnd   DateTime?           @map("resolved_range_end")
+
+  anchor             DateTime            // the observedAt this was resolved against
+  confidence         EventTimeConfidence
+  extractor          EventTimeExtractor
+
+  createdAt          DateTime            @default(now()) @map("created_at")
+
+  @@index([memoryId])
+  @@index([resolvedInstant])
+  @@index([resolvedRangeStart, resolvedRangeEnd])
+  @@map("memory_event_times")
 }
 
 /// UX feedback from dashboard users (in-app widget + NPS)
@@ -707,6 +740,26 @@ enum MemorySource {
   PATTERN_DETECTED
   SYSTEM
   GIT_HISTORY
+  HISTORICAL
+}
+
+/// Provenance of Memory.observedAt — used to decide whether relative-phrase extraction is safe to run.
+enum TemporalAnchorSource {
+  EXPLICIT_CALLER
+  INFERRED_FROM_CONTENT
+  FALLBACK_RECORDED_AT
+}
+
+enum EventTimeConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum EventTimeExtractor {
+  REGEX
+  DATEPARSER
+  LLM
 }
 
 /// Importance hint from API caller
