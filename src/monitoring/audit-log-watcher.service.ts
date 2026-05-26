@@ -59,10 +59,9 @@ export class AuditLogWatcherService implements OnModuleInit, OnModuleDestroy {
   /** Callbacks registered by consumers that want to process new log lines. */
   private readonly handlers: Array<(entry: AuditLogEntry) => void> = [];
 
-  constructor(options?: AuditLogWatcherOptions) {
-    this.filePath =
-      options?.filePath ?? path.resolve(process.cwd(), 'logs', 'audit.log');
-    this.pollIntervalMs = options?.pollIntervalMs ?? 1000;
+  constructor() {
+    this.filePath = path.resolve(process.cwd(), 'logs', 'audit.log');
+    this.pollIntervalMs = 1000;
   }
 
   onModuleInit(): void {
