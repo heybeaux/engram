@@ -3,10 +3,13 @@ import {
   IsOptional,
   IsEnum,
   IsArray,
+  IsISO8601,
+  Validate,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ObservedAtNotFarFutureConstraint } from './create-memory.dto';
 
 export class ExportQueryDto {
   @ApiPropertyOptional({ enum: ['json', 'ndjson'], default: 'json' })
@@ -86,6 +89,21 @@ export class ImportMemoryItemDto {
   @IsOptional()
   @IsString()
   updatedAt?: string;
+
+  /**
+   * Temporal anchoring (Phase 1): when the event occurred (vs when recorded).
+   * ISO 8601. Rejected if more than 1 hour in the future (clock-skew tolerance).
+   * Mirrors CreateMemoryDto.observedAt.
+   */
+  @ApiPropertyOptional({
+    description:
+      'When the event occurred (vs when recorded). ISO 8601. Reject if >1h in future.',
+    example: '2024-06-15T14:00:00Z',
+  })
+  @IsOptional()
+  @IsISO8601()
+  @Validate(ObservedAtNotFarFutureConstraint)
+  observedAt?: string;
 
   // Ignored on import (re-generated) but accepted for format compatibility
   @IsOptional()

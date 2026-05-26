@@ -1,5 +1,9 @@
 import { MemoryExportService } from './memory-export.service';
-import { MemoryLayer, MemorySource } from '@prisma/client';
+import {
+  MemoryLayer,
+  MemorySource,
+  TemporalAnchorSource,
+} from '@prisma/client';
 
 describe('MemoryExportService', () => {
   let service: MemoryExportService;
@@ -238,6 +242,32 @@ describe('MemoryExportService', () => {
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'memory.created',
         expect.anything(),
+      );
+    });
+
+    // T5a: temporal anchoring forwarding
+    it('persists observedAt + EXPLICIT_CALLER when item has observedAt', async () => {
+      await service.importMemories('user-1', [
+        { raw: 'Old event', observedAt: '2024-01-15T14:00:00Z' },
+      ]);
+
+      const createCall = prisma.memory.create.mock.calls[0][0];
+      expect(createCall.data.observedAt).toBeInstanceOf(Date);
+      expect(createCall.data.observedAt.toISOString()).toBe(
+        '2024-01-15T14:00:00.000Z',
+      );
+      expect(createCall.data.temporalAnchorSource).toBe(
+        TemporalAnchorSource.EXPLICIT_CALLER,
+      );
+    });
+
+    it('persists observedAt=null + FALLBACK_RECORDED_AT when item has no observedAt', async () => {
+      await service.importMemories('user-1', [{ raw: 'Plain import' }]);
+
+      const createCall = prisma.memory.create.mock.calls[0][0];
+      expect(createCall.data.observedAt).toBeNull();
+      expect(createCall.data.temporalAnchorSource).toBe(
+        TemporalAnchorSource.FALLBACK_RECORDED_AT,
       );
     });
   });

@@ -11,7 +11,11 @@ import {
   ImportMemoryItemDto,
   ImportResult,
 } from './dto/export-import.dto';
-import { MemoryLayer, MemorySource } from '@prisma/client';
+import {
+  MemoryLayer,
+  MemorySource,
+  TemporalAnchorSource,
+} from '@prisma/client';
 import { generateContentHash } from '../common/content-hash.util';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MemoryCreatedEvent } from '../events/event-types';
@@ -148,6 +152,11 @@ export class MemoryExportService {
             ? Math.max(0, Math.min(1, item.importance))
             : this.importance.calculate({ layer });
 
+        const observedAt = item.observedAt ? new Date(item.observedAt) : null;
+        const temporalAnchorSource = observedAt
+          ? TemporalAnchorSource.EXPLICIT_CALLER
+          : TemporalAnchorSource.FALLBACK_RECORDED_AT;
+
         const memory = await this.prisma.memory.create({
           data: {
             userId,
@@ -157,6 +166,8 @@ export class MemoryExportService {
             importanceScore,
             confidence: 1.0,
             contentHash: generateContentHash(item.raw),
+            observedAt,
+            temporalAnchorSource,
           },
         });
 
