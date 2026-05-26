@@ -27,10 +27,9 @@ describe('AuditLogWatcherService', () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'engram-audit-'));
     logPath = path.join(tmpDir, 'audit.log');
-    svc = new AuditLogWatcherService({
-      filePath: logPath,
-      pollIntervalMs: 9999,
-    });
+    svc = new AuditLogWatcherService();
+    (svc as any).filePath = logPath;
+    (svc as any).pollIntervalMs = 9999;
   });
 
   afterEach(() => {
