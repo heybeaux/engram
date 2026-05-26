@@ -8,6 +8,11 @@ import {
   IsDate,
   IsNotEmpty,
   ValidateIf,
+  IsISO8601,
+  Validate,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  ValidationArguments,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -55,6 +60,26 @@ function mapImportanceToHint(
   if (num >= 0.7) return ImportanceHint.HIGH;
   if (num >= 0.5) return ImportanceHint.MEDIUM;
   return ImportanceHint.LOW;
+}
+
+/**
+ * Validates observedAt: parseable ISO 8601 and not more than 1 hour in the future
+ * (clock-skew tolerance). Temporal anchoring spec, Phase 1 T3.
+ */
+@ValidatorConstraint({ name: 'ObservedAtNotFarFuture', async: false })
+export class ObservedAtNotFarFutureConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(value: unknown, _args: ValidationArguments) {
+    if (value === undefined || value === null) return true;
+    const d = value instanceof Date ? value : new Date(value as string);
+    if (isNaN(d.getTime())) return false;
+    const oneHourMs = 60 * 60 * 1000;
+    return d.getTime() <= Date.now() + oneHourMs;
+  }
+  defaultMessage(_args: ValidationArguments) {
+    return 'observedAt must be a valid ISO 8601 date no more than 1 hour in the future';
+  }
 }
 
 export class CreateMemoryDto {
@@ -149,11 +174,28 @@ export class CreateMemoryDto {
       'PATTERN_DETECTED',
       'SYSTEM',
       'GIT_HISTORY',
+      'HISTORICAL',
     ],
     type: String,
   })
   @IsEnum(MemorySource)
   source?: string;
+
+  /**
+   * Temporal anchoring (Phase 1): when the event being memorialized actually
+   * occurred, as opposed to when the memory record was created. Used to anchor
+   * relative-time extraction ("yesterday", "last week") for historical imports.
+   * ISO 8601. Rejected if more than 1 hour in the future (clock-skew tolerance).
+   */
+  @ApiPropertyOptional({
+    description:
+      'When the event occurred (vs when recorded). ISO 8601. Reject if >1h in future.',
+    example: '2024-06-15T14:00:00Z',
+  })
+  @IsOptional()
+  @IsISO8601()
+  @Validate(ObservedAtNotFarFutureConstraint)
+  observedAt?: string;
 
   // Source attribution fields (for tracking where memories came from)
   @IsOptional()
@@ -191,10 +233,55 @@ export class CreateMemoryBatchDto {
     ts?: string; // ISO timestamp
     layer?: string;
     importanceHint?: ImportanceHint;
+    /** Temporal anchoring: when the event occurred (ISO 8601). */
+    observedAt?: string;
+    /** Memory source type (e.g. HISTORICAL for backfilled data). */
+    source?: string;
   }>;
 
   context?: {
     projectId?: string;
     sessionId?: string;
   };
+}
+
+/**
+ * Swagger-serialisable representation of a temporal ingest warning.
+ * Mirrors the `TemporalWarning` interface in memory.types.ts.
+ */
+export class TemporalWarningDto {
+  @ApiProperty({
+    description: 'Machine-readable warning code.',
+    example: 'HISTORICAL_WITHOUT_ANCHOR',
+  })
+  code: string;
+
+  @ApiProperty({
+    description: 'Human-readable explanation for API callers.',
+    example:
+      'Memory ingested with source=HISTORICAL but no observedAt supplied. Relative-phrase extraction will be skipped.',
+  })
+  message: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the specific memory that triggered this warning.',
+    example: 'mem_01HXXXXXXXXXXXXX',
+  })
+  memoryId?: string;
+}
+
+/** Response shape for POST /v1/memories/batch */
+export class BatchCreateResponseDto {
+  @ApiProperty({ example: 3 })
+  created: number;
+
+  @ApiProperty({ example: 0 })
+  failed: number;
+
+  @ApiPropertyOptional({
+    type: [TemporalWarningDto],
+    description:
+      'Non-fatal warnings raised during ingest. Present only when at least one warning was triggered.',
+  })
+  warnings?: TemporalWarningDto[];
 }

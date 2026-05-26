@@ -13,7 +13,12 @@ import {
   BulkTextImportDto,
   BulkTextResult,
 } from './dto/bulk.dto';
-import { MemoryLayer, MemorySource, SubjectType } from '@prisma/client';
+import {
+  MemoryLayer,
+  MemorySource,
+  SubjectType,
+  TemporalAnchorSource,
+} from '@prisma/client';
 import { CorrectionService } from '../correction/correction.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { generateContentHash } from '../common/content-hash.util';
@@ -24,7 +29,11 @@ import { EmbeddingQueueProducer } from './embedding-queue.producer';
 import { rlsContext } from '../prisma/rls-context';
 import { HypeService } from './hype.service';
 import { DurabilityClassifierService } from './durability-classifier.service';
-import { MemoryWithExtraction } from './memory.types';
+import {
+  MemoryWithExtraction,
+  TEMPORAL_WARNING_HISTORICAL_WITHOUT_ANCHOR,
+  TemporalWarning,
+} from './memory.types';
 import { ElasticsearchService } from '../search/elasticsearch.service';
 import { TemporalGapMarkerService } from './temporal-gap-marker.service';
 
@@ -141,7 +150,16 @@ export class MemoryWriteService {
 
     // 7. Create memory record
     const contentHash = generateContentHash(rawContent);
-    const memory = await this.prisma.memory.create({
+
+    // Temporal anchoring (Phase 1, T5): resolve observedAt + temporalAnchorSource
+    // per the four-case design matrix in openspec/changes/temporal-anchoring/design.md.
+    const temporal = this.resolveTemporalAnchor({
+      callerObservedAt: dto.observedAt,
+      source: source as MemorySource,
+      now: new Date(),
+    });
+
+    const memory: MemoryWithExtraction = await this.prisma.memory.create({
       data: {
         userId,
         raw: rawContent,
@@ -159,8 +177,22 @@ export class MemoryWriteService {
         visibility: (dto.visibility ?? 'PRIVATE') as any,
         contentHash,
         tags: dto.tags ?? [],
+        observedAt: temporal.observedAt,
+        temporalAnchorSource: temporal.temporalAnchorSource,
       },
     });
+
+    // T6: surface HISTORICAL_WITHOUT_ANCHOR on HISTORICAL ingest without anchor.
+    if (
+      this.shouldEmitRelativeExtractionSkippedWarning(
+        source as MemorySource,
+        temporal.temporalAnchorSource,
+      )
+    ) {
+      memory.warnings = [
+        { ...TEMPORAL_WARNING_HISTORICAL_WITHOUT_ANCHOR, memoryId: memory.id },
+      ];
+    }
 
     // HyPE: generate hypothetical prompt embeddings (fire-and-forget)
     if (this.hypeService) {
@@ -303,18 +335,33 @@ export class MemoryWriteService {
   async rememberAll(
     userId: string,
     dto: CreateMemoryBatchDto,
-  ): Promise<{ created: number; failed: number }> {
+  ): Promise<{
+    created: number;
+    failed: number;
+    warnings?: TemporalWarning[];
+  }> {
     let created = 0;
     let failed = 0;
+    // Deduplicate by code — rememberAll returns per-code (not per-item) warnings
+    // because it doesn't expose per-item identifiers in its response shape.
+    const warningsByCode = new Map<string, TemporalWarning>();
 
     for (const item of dto.memories) {
       try {
-        await this.remember(userId, {
+        const persisted = await this.remember(userId, {
           raw: item.raw,
           layer: item.layer,
           importanceHint: item.importanceHint,
+          observedAt: item.observedAt,
+          source: item.source,
           context: dto.context,
         });
+        for (const w of persisted.warnings ?? []) {
+          if (!warningsByCode.has(w.code)) {
+            // Omit memoryId at the aggregate level — one code entry per batch
+            warningsByCode.set(w.code, { code: w.code, message: w.message });
+          }
+        }
         created++;
       } catch (err) {
         this.logger.error('Batch create failed:', err);
@@ -322,7 +369,10 @@ export class MemoryWriteService {
       }
     }
 
-    return { created, failed };
+    // T6: surface deduplicated warnings array; omit field when clean.
+    const warnings =
+      warningsByCode.size > 0 ? [...warningsByCode.values()] : undefined;
+    return warnings ? { created, failed, warnings } : { created, failed };
   }
 
   /**
@@ -335,6 +385,7 @@ export class MemoryWriteService {
   ): Promise<BulkCreateResult> {
     const memoryIds: string[] = [];
     const now = new Date();
+    let relativeExtractionSkippedCount = 0;
 
     const data = dto.memories.map((item) => {
       const id = crypto.randomUUID();
@@ -351,12 +402,29 @@ export class MemoryWriteService {
         layer: layer as any,
       });
 
+      const effectiveSource =
+        (item.source as MemorySource) ?? MemorySource.EXPLICIT_STATEMENT;
+      const temporal = this.resolveTemporalAnchor({
+        callerObservedAt: item.observedAt,
+        source: effectiveSource,
+        now,
+      });
+
+      if (
+        this.shouldEmitRelativeExtractionSkippedWarning(
+          effectiveSource,
+          temporal.temporalAnchorSource,
+        )
+      ) {
+        relativeExtractionSkippedCount++;
+      }
+
       return {
         id,
         userId,
         raw: item.raw,
         layer: layer as any,
-        source: (item.source as any) ?? MemorySource.EXPLICIT_STATEMENT,
+        source: effectiveSource as any,
         importanceHint: item.importanceHint ?? undefined,
         importanceScore,
         confidence: 1.0,
@@ -366,6 +434,8 @@ export class MemoryWriteService {
         agentId: dto.agentId ?? null,
         metadata: item.metadata ?? undefined,
         sessionPosition: item.sessionPosition ?? null,
+        observedAt: temporal.observedAt,
+        temporalAnchorSource: temporal.temporalAnchorSource,
         createdAt: now,
         updatedAt: now,
       };
@@ -447,7 +517,33 @@ export class MemoryWriteService {
       this.logger.error('[BulkCreate] Failed to increment memoriesUsed:', err);
     });
 
-    return { created: memoryIds.length, memoryIds };
+    // Emit memory.created for each new memory so the EnsembleService writes
+    // ensemble embeddings (openai-small, etc.) to memory_embeddings.
+    for (const record of data) {
+      this.emitEvent(
+        'memory.created',
+        new MemoryCreatedEvent(
+          record.id,
+          record.layer,
+          record.importanceScore,
+          [],
+          userId,
+          record.raw.substring(0, 200),
+        ),
+      );
+    }
+
+    // T6: surface HISTORICAL_WITHOUT_ANCHOR at batch level when any item was
+    // HISTORICAL-without-anchor. Top-level (not per-item) matches the existing
+    // {created, memoryIds} shape — see DTO comment for per-item deferral note.
+    const warnings: TemporalWarning[] | undefined =
+      relativeExtractionSkippedCount > 0
+        ? [{ ...TEMPORAL_WARNING_HISTORICAL_WITHOUT_ANCHOR }]
+        : undefined;
+
+    return warnings
+      ? { created: memoryIds.length, memoryIds, warnings }
+      : { created: memoryIds.length, memoryIds };
   }
 
   /**
@@ -495,6 +591,12 @@ export class MemoryWriteService {
       ensembleEnabled: process.env.EMBEDDING_ENSEMBLE === 'true',
     });
 
+    // Resolve sessionId to a real session record (creates if not exists) so that
+    // bulkCreate's createMany FK constraint on memories.session_id is satisfied.
+    const resolvedSessionId = dto.context?.sessionId
+      ? await this.resolveSessionId(userId, dto.context.sessionId)
+      : undefined;
+
     const isRound = granularity === 'ROUND';
     const bulkDto: BulkCreateMemoryDto = {
       memories: chunks.map((chunk, index) => ({
@@ -502,7 +604,9 @@ export class MemoryWriteService {
         layer: dto.layer,
         ...(isRound ? { sessionPosition: index } : {}),
       })),
-      context: dto.context,
+      context: dto.context
+        ? { ...dto.context, sessionId: resolvedSessionId }
+        : undefined,
     };
 
     try {
@@ -519,6 +623,7 @@ export class MemoryWriteService {
         created: result.created,
         chunks: chunks.length,
         memoryIds: result.memoryIds,
+        resolvedSessionId,
       };
     } catch (err) {
       const message = (err as Error)?.message ?? String(err);
@@ -660,6 +765,79 @@ export class MemoryWriteService {
 
     // Fallback: if no rounds were detected, treat the whole text as one chunk
     return rounds.length > 0 ? rounds : [text.trim()];
+  }
+
+  /**
+   * Temporal anchoring (Phase 1, T5/T5a): resolve `observedAt` + `temporalAnchorSource`
+   * per the four-case matrix in openspec/changes/temporal-anchoring/design.md.
+   *
+   *  1. real-time, no anchor       → FALLBACK_RECORDED_AT, observedAt = null
+   *  2. real-time, with anchor     → EXPLICIT_CALLER, observedAt = caller value
+   *  3. historical, with anchor    → EXPLICIT_CALLER, observedAt = caller value
+   *  4. historical, no anchor      → FALLBACK_RECORDED_AT, observedAt = null,
+   *                                  log warning (downstream pass-2 extraction
+   *                                  will be skipped — see design.md "refusal mode")
+   *
+   * T5a strict-null semantics: when there is no caller anchor we persist `null`
+   * rather than a synthetic `now`. Downstream readers use
+   * `COALESCE(observed_at, recorded_at)` to honour the API-layer convention.
+   * The `temporalAnchorSource` provenance column is the source of truth for
+   * whether the anchor was caller-supplied vs. falling back to recordedAt.
+   */
+  resolveTemporalAnchor(input: {
+    callerObservedAt?: string | Date | null;
+    source: MemorySource;
+    now: Date;
+  }): {
+    observedAt: Date | null;
+    temporalAnchorSource: TemporalAnchorSource;
+  } {
+    const { callerObservedAt, source } = input;
+    const isHistorical = source === MemorySource.HISTORICAL;
+
+    if (callerObservedAt !== undefined && callerObservedAt !== null) {
+      const parsed =
+        callerObservedAt instanceof Date
+          ? callerObservedAt
+          : new Date(callerObservedAt);
+      // DTO already validated parseability + future-skew, but guard defensively.
+      if (!isNaN(parsed.getTime())) {
+        return {
+          observedAt: parsed,
+          temporalAnchorSource: TemporalAnchorSource.EXPLICIT_CALLER,
+        };
+      }
+    }
+
+    if (isHistorical) {
+      this.logger.warn(
+        '[Memory] HISTORICAL source without observedAt — observedAt left null (downstream coalesces to recordedAt). ' +
+          'Relative-phrase extraction will be skipped for this memory.',
+      );
+    }
+
+    return {
+      observedAt: null,
+      temporalAnchorSource: TemporalAnchorSource.FALLBACK_RECORDED_AT,
+    };
+  }
+
+  /**
+   * Temporal anchoring (Phase 1, T6): true iff the API layer should emit
+   * `relative_extraction_skipped` for the just-ingested memory. Fires only on
+   * the case-4 cell of the resolver matrix: caller used `source = HISTORICAL`
+   * AND did not provide `observedAt` (so the resolver fell back to
+   * `FALLBACK_RECORDED_AT`). For other real-time sources, `FALLBACK_RECORDED_AT`
+   * is the default and does not warrant a warning.
+   */
+  shouldEmitRelativeExtractionSkippedWarning(
+    source: MemorySource,
+    temporalAnchorSource: TemporalAnchorSource,
+  ): boolean {
+    return (
+      source === MemorySource.HISTORICAL &&
+      temporalAnchorSource === TemporalAnchorSource.FALLBACK_RECORDED_AT
+    );
   }
 
   /**

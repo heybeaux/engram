@@ -16,7 +16,11 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { MemoryService, MemoryWithExtraction } from './memory.service';
-import { CreateMemoryDto, CreateMemoryBatchDto } from './dto/create-memory.dto';
+import {
+  CreateMemoryDto,
+  CreateMemoryBatchDto,
+  BatchCreateResponseDto,
+} from './dto/create-memory.dto';
 import { UpdateMemoryDto } from './dto/update-memory.dto';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -94,10 +98,15 @@ export class MemoryCoreController {
     description:
       'Import multiple memories at once (e.g., conversation history).',
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Batch created. `warnings` present when any item triggered a non-fatal ingest warning.',
+    type: BatchCreateResponseDto,
+  })
   async rememberAll(
     @UserId() userId: string,
     @Body() dto: CreateMemoryBatchDto,
-  ): Promise<{ created: number; failed: number }> {
+  ): Promise<BatchCreateResponseDto> {
     return this.memoryService.rememberAll(userId, dto);
   }
 

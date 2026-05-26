@@ -10,6 +10,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ObservedAtNotFarFutureConstraint } from './create-memory.dto';
+import { TemporalWarning } from '../memory.types';
 
 export class ExportQueryDto {
   @ApiPropertyOptional({ enum: ['json', 'ndjson'], default: 'json' })
@@ -114,4 +115,12 @@ export interface ImportResult {
   imported: number;
   skipped: number;
   errors: number;
+  /**
+   * Temporal anchoring T6: batch-level structured warnings.
+   * Reserves `HISTORICAL_WITHOUT_ANCHOR` for HISTORICAL-without-anchor items.
+   * The current importMemories path uses `source = EXPLICIT_STATEMENT` by
+   * default so this field is structurally never populated today, but is
+   * included so SDKs can rely on a uniform ingest response shape.
+   */
+  warnings?: TemporalWarning[];
 }

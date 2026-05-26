@@ -5,8 +5,17 @@ import { EmbeddingService } from './embedding.service';
 import { ImportanceService } from './importance.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { EmbeddingQueueProducer } from './embedding-queue.producer';
-import { ImportanceHint, MemoryLayer, MemorySource } from '@prisma/client';
+import {
+  ImportanceHint,
+  MemoryLayer,
+  MemorySource,
+  TemporalAnchorSource,
+} from '@prisma/client';
 import { ElasticsearchService } from '../search/elasticsearch.service';
+import {
+  TemporalWarningCode,
+  TEMPORAL_WARNING_HISTORICAL_WITHOUT_ANCHOR,
+} from './memory.types';
 
 describe('MemoryWriteService', () => {
   let service: MemoryWriteService;
@@ -235,6 +244,284 @@ describe('MemoryWriteService', () => {
     });
   });
 
+  // Temporal anchoring Phase 1, T5 — four-case design matrix.
+  // See openspec/changes/temporal-anchoring/design.md.
+  describe('temporal anchoring (T5)', () => {
+    describe('resolveTemporalAnchor (pure helper)', () => {
+      const now = new Date('2026-05-26T12:00:00Z');
+
+      it('case 1: real-time, no anchor → FALLBACK_RECORDED_AT + observedAt=null (strict-null)', () => {
+        const result = service.resolveTemporalAnchor({
+          callerObservedAt: undefined,
+          source: MemorySource.EXPLICIT_STATEMENT,
+          now,
+        });
+        expect(result.temporalAnchorSource).toBe(
+          TemporalAnchorSource.FALLBACK_RECORDED_AT,
+        );
+        expect(result.observedAt).toBeNull();
+      });
+
+      it('case 2: real-time, with anchor → EXPLICIT_CALLER + caller value', () => {
+        const caller = '2026-05-20T08:00:00Z';
+        const result = service.resolveTemporalAnchor({
+          callerObservedAt: caller,
+          source: MemorySource.EXPLICIT_STATEMENT,
+          now,
+        });
+        expect(result.temporalAnchorSource).toBe(
+          TemporalAnchorSource.EXPLICIT_CALLER,
+        );
+        expect(result.observedAt!.toISOString()).toBe(
+          new Date(caller).toISOString(),
+        );
+      });
+
+      it('case 3: historical, with anchor → EXPLICIT_CALLER + caller value', () => {
+        const caller = '2024-01-15T14:00:00Z';
+        const result = service.resolveTemporalAnchor({
+          callerObservedAt: caller,
+          source: MemorySource.HISTORICAL,
+          now,
+        });
+        expect(result.temporalAnchorSource).toBe(
+          TemporalAnchorSource.EXPLICIT_CALLER,
+        );
+        expect(result.observedAt!.toISOString()).toBe(
+          new Date(caller).toISOString(),
+        );
+      });
+
+      it('case 4: historical, no anchor → FALLBACK_RECORDED_AT + null + warning logged', () => {
+        const warnSpy = jest
+          .spyOn((service as any).logger, 'warn')
+          .mockImplementation(() => {});
+        const result = service.resolveTemporalAnchor({
+          callerObservedAt: undefined,
+          source: MemorySource.HISTORICAL,
+          now,
+        });
+        expect(result.temporalAnchorSource).toBe(
+          TemporalAnchorSource.FALLBACK_RECORDED_AT,
+        );
+        expect(result.observedAt).toBeNull();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('HISTORICAL source without observedAt'),
+        );
+        warnSpy.mockRestore();
+      });
+    });
+
+    describe('remember() integration', () => {
+      it('persists observedAt + temporalAnchorSource on the created memory', async () => {
+        mockImportance.calculate.mockReturnValue(0.5);
+        mockPrisma.memory.create.mockResolvedValue(mockMemory);
+
+        await service.remember('user-456', {
+          raw: 'Historical note',
+          source: MemorySource.HISTORICAL as any,
+          observedAt: '2024-01-15T14:00:00Z',
+        });
+
+        expect(mockPrisma.memory.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            temporalAnchorSource: TemporalAnchorSource.EXPLICIT_CALLER,
+            observedAt: expect.any(Date),
+          }),
+        });
+        const createArg = mockPrisma.memory.create.mock.calls[0][0];
+        expect(createArg.data.observedAt.toISOString()).toBe(
+          '2024-01-15T14:00:00.000Z',
+        );
+      });
+
+      it('defaults to FALLBACK_RECORDED_AT + observedAt=null when no anchor provided (T5a strict-null)', async () => {
+        mockImportance.calculate.mockReturnValue(0.5);
+        mockPrisma.memory.create.mockResolvedValue(mockMemory);
+
+        await service.remember('user-456', { raw: 'Plain note' });
+
+        expect(mockPrisma.memory.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            temporalAnchorSource: TemporalAnchorSource.FALLBACK_RECORDED_AT,
+            observedAt: null,
+          }),
+        });
+      });
+    });
+  });
+
+  // Temporal anchoring Phase 1, T6 — relative_extraction_skipped warning.
+  // Warning emits iff request source = HISTORICAL AND resolver falls back
+  // to FALLBACK_RECORDED_AT (case 4 of the resolver matrix).
+  describe('temporal anchoring (T6) — relative_extraction_skipped warning', () => {
+    describe('shouldEmitRelativeExtractionSkippedWarning (pure helper)', () => {
+      it('(a) HISTORICAL + FALLBACK_RECORDED_AT → true (warning emitted)', () => {
+        expect(
+          service.shouldEmitRelativeExtractionSkippedWarning(
+            MemorySource.HISTORICAL,
+            TemporalAnchorSource.FALLBACK_RECORDED_AT,
+          ),
+        ).toBe(true);
+      });
+
+      it('(b) HISTORICAL + EXPLICIT_CALLER → false (anchor provided, no warning)', () => {
+        expect(
+          service.shouldEmitRelativeExtractionSkippedWarning(
+            MemorySource.HISTORICAL,
+            TemporalAnchorSource.EXPLICIT_CALLER,
+          ),
+        ).toBe(false);
+      });
+
+      it('(c) real-time source + FALLBACK_RECORDED_AT → false (default real-time case)', () => {
+        expect(
+          service.shouldEmitRelativeExtractionSkippedWarning(
+            MemorySource.EXPLICIT_STATEMENT,
+            TemporalAnchorSource.FALLBACK_RECORDED_AT,
+          ),
+        ).toBe(false);
+        expect(
+          service.shouldEmitRelativeExtractionSkippedWarning(
+            MemorySource.AGENT_OBSERVATION,
+            TemporalAnchorSource.FALLBACK_RECORDED_AT,
+          ),
+        ).toBe(false);
+      });
+    });
+
+    describe('remember() attaches warnings to response', () => {
+      beforeEach(() => {
+        mockImportance.calculate.mockReturnValue(0.5);
+        // Silence the resolver's own logger.warn for case-4.
+        jest
+          .spyOn((service as any).logger, 'warn')
+          .mockImplementation(() => {});
+      });
+
+      it('(a) HISTORICAL + no observedAt → warnings with HISTORICAL_WITHOUT_ANCHOR code and memoryId', async () => {
+        mockPrisma.memory.create.mockResolvedValue({ ...mockMemory });
+
+        const result = await service.remember('user-456', {
+          raw: 'Old historical note',
+          source: MemorySource.HISTORICAL as any,
+        });
+
+        expect(result.warnings).toHaveLength(1);
+        expect(result.warnings![0].code).toBe(
+          TemporalWarningCode.HISTORICAL_WITHOUT_ANCHOR,
+        );
+        expect(result.warnings![0].message).toBe(
+          TEMPORAL_WARNING_HISTORICAL_WITHOUT_ANCHOR.message,
+        );
+        expect(result.warnings![0].memoryId).toBe(mockMemory.id);
+      });
+
+      it('(b) HISTORICAL + observedAt → no warnings (anchor honored)', async () => {
+        mockPrisma.memory.create.mockResolvedValue({ ...mockMemory });
+
+        const result = await service.remember('user-456', {
+          raw: 'Old historical note',
+          source: MemorySource.HISTORICAL as any,
+          observedAt: '2024-01-15T14:00:00Z',
+        });
+
+        expect(result.warnings).toBeUndefined();
+      });
+
+      it('(c) real-time source + no observedAt → no warnings (FALLBACK is normal here)', async () => {
+        mockPrisma.memory.create.mockResolvedValue({ ...mockMemory });
+
+        const result = await service.remember('user-456', {
+          raw: 'Just-now note',
+          source: MemorySource.EXPLICIT_STATEMENT as any,
+        });
+
+        expect(result.warnings).toBeUndefined();
+      });
+    });
+
+    describe('rememberAll() aggregates per-item warnings to top level', () => {
+      beforeEach(() => {
+        mockImportance.calculate.mockReturnValue(0.5);
+        jest
+          .spyOn((service as any).logger, 'warn')
+          .mockImplementation(() => {});
+      });
+
+      it('(d) explicit non-HISTORICAL bulk source → no warnings', async () => {
+        mockPrisma.memory.create.mockResolvedValue({ ...mockMemory });
+
+        const result = await service.rememberAll('user-456', {
+          memories: [
+            { raw: 'A', source: MemorySource.EXPLICIT_STATEMENT },
+            { raw: 'B', source: MemorySource.AGENT_OBSERVATION },
+          ],
+        });
+
+        expect(result.warnings).toBeUndefined();
+      });
+
+      it('emits aggregated warning when any item is HISTORICAL-without-anchor', async () => {
+        mockPrisma.memory.create.mockResolvedValue({ ...mockMemory });
+
+        const result = await service.rememberAll('user-456', {
+          memories: [
+            { raw: 'A', source: MemorySource.EXPLICIT_STATEMENT },
+            { raw: 'B', source: MemorySource.HISTORICAL },
+          ],
+        });
+
+        expect(result.warnings).toHaveLength(1);
+        expect(result.warnings![0].code).toBe(
+          TemporalWarningCode.HISTORICAL_WITHOUT_ANCHOR,
+        );
+        // memoryId is omitted at the aggregate rememberAll level
+        expect(result.warnings![0].memoryId).toBeUndefined();
+      });
+    });
+
+    describe('bulkCreate() emits batch-level warning', () => {
+      beforeEach(() => {
+        mockImportance.calculate.mockReturnValue(0.5);
+        mockPrisma.memory.createMany.mockResolvedValue({ count: 2 });
+        jest
+          .spyOn((service as any).logger, 'warn')
+          .mockImplementation(() => {});
+      });
+
+      it('includes warnings when any item is HISTORICAL-without-anchor', async () => {
+        const result = await service.bulkCreate('user-456', {
+          memories: [
+            { raw: 'A' },
+            { raw: 'B', source: MemorySource.HISTORICAL as any },
+          ],
+        });
+
+        expect(result.warnings).toHaveLength(1);
+        expect(result.warnings![0].code).toBe(
+          TemporalWarningCode.HISTORICAL_WITHOUT_ANCHOR,
+        );
+        expect(result.created).toBe(2);
+      });
+
+      it('omits warnings when all items have anchors or are real-time', async () => {
+        const result = await service.bulkCreate('user-456', {
+          memories: [
+            { raw: 'A' },
+            {
+              raw: 'B',
+              source: MemorySource.HISTORICAL as any,
+              observedAt: '2024-01-15T14:00:00Z',
+            },
+          ],
+        });
+
+        expect(result.warnings).toBeUndefined();
+      });
+    });
+  });
+
   describe('rememberAll', () => {
     it('should create multiple memories in batch', async () => {
       mockImportance.calculate.mockReturnValue(0.5);
@@ -289,6 +576,33 @@ describe('MemoryWriteService', () => {
         hint: ImportanceHint.CRITICAL,
         layer: MemoryLayer.IDENTITY,
       });
+    });
+
+    // T5a: rememberAll forwards observedAt + source per-item to the temporal resolver.
+    it('forwards observedAt + source from HISTORICAL items through to the persisted record', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.create.mockResolvedValue(mockMemory);
+
+      await service.rememberAll('user-456', {
+        memories: [
+          {
+            raw: 'Old event',
+            source: MemorySource.HISTORICAL,
+            observedAt: '2024-01-15T14:00:00Z',
+          },
+        ],
+      });
+
+      expect(mockPrisma.memory.create).toHaveBeenCalledTimes(1);
+      const createArg = mockPrisma.memory.create.mock.calls[0][0];
+      expect(createArg.data.source).toBe(MemorySource.HISTORICAL);
+      expect(createArg.data.temporalAnchorSource).toBe(
+        TemporalAnchorSource.EXPLICIT_CALLER,
+      );
+      expect(createArg.data.observedAt).toBeInstanceOf(Date);
+      expect(createArg.data.observedAt.toISOString()).toBe(
+        '2024-01-15T14:00:00.000Z',
+      );
     });
   });
 

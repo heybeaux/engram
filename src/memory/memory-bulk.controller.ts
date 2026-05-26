@@ -21,6 +21,7 @@ import {
 import {
   BulkCreateMemoryDto,
   BulkCreateResult,
+  BulkCreateResponseDto,
   BulkTextImportDto,
   BulkTextResult,
   ExportFilteredQueryDto,
@@ -57,7 +58,11 @@ export class MemoryBulkController {
     description:
       'Insert up to 1000 memories in a single createMany call. Embeddings are queued asynchronously.',
   })
-  @ApiResponse({ status: 201, description: 'Memories created successfully.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Memories created. `warnings` present when any item triggered a non-fatal ingest warning.',
+    type: BulkCreateResponseDto,
+  })
   async bulkCreate(
     @UserId() userId: string,
     @Body() dto: BulkCreateMemoryDto,

@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CreateMemoryDto, CreateMemoryBatchDto } from './dto/create-memory.dto';
+import {
+  CreateMemoryDto,
+  CreateMemoryBatchDto,
+  BatchCreateResponseDto,
+} from './dto/create-memory.dto';
 import {
   ExportedMemory,
   ImportMemoryItemDto,
@@ -73,7 +77,7 @@ export class MemoryService {
   async rememberAll(
     userId: string,
     dto: CreateMemoryBatchDto,
-  ): Promise<{ created: number; failed: number }> {
+  ): Promise<BatchCreateResponseDto> {
     return this.writeService.rememberAll(userId, dto);
   }
 

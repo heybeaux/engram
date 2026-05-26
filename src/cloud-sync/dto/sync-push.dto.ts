@@ -6,9 +6,13 @@ import {
   IsEnum,
   ValidateNested,
   ArrayMaxSize,
+  IsISO8601,
+  Validate,
 } from 'class-validator';
+import { ObservedAtNotFarFutureConstraint } from '../../memory/dto/create-memory.dto';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { TemporalWarning } from '../../memory/memory.types';
 
 export class SyncMemoryEntityDto {
   @ApiProperty()
@@ -139,6 +143,15 @@ export class SyncMemoryPayloadDto {
   @IsString()
   createdAt?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'When the event occurred (vs when recorded). ISO 8601. Reject if >1h in future.',
+  })
+  @IsOptional()
+  @IsISO8601()
+  @Validate(ObservedAtNotFarFutureConstraint)
+  observedAt?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @ValidateNested()
@@ -172,6 +185,13 @@ export interface SyncPushResultItem {
   cloudMemoryId?: string;
   status: 'created' | 'updated' | 'skipped' | 'failed';
   error?: string;
+  /**
+   * Temporal anchoring T6: per-item structured warnings.
+   * Emits `HISTORICAL_WITHOUT_ANCHOR` for memories pushed with
+   * `source = HISTORICAL` and no `observedAt`. Per-item (not top-level) here
+   * because the sync response already has per-item rows.
+   */
+  warnings?: TemporalWarning[];
 }
 
 export interface SyncPushResponse {

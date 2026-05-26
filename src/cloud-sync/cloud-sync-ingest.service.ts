@@ -6,6 +6,11 @@ import {
   SyncPushResultItem,
 } from './dto/sync-push.dto';
 import { randomUUID, createHash } from 'crypto';
+import { MemorySource } from '@prisma/client';
+import {
+  TEMPORAL_WARNING_HISTORICAL_WITHOUT_ANCHOR,
+  TemporalWarning,
+} from '../memory/memory.types';
 
 /**
  * Cloud-side: Handles incoming sync push from local instances,
@@ -171,10 +176,25 @@ export class CloudSyncIngestService {
             memPayload.contentHash,
           );
 
+          // T6: emit per-item warning when synced memory is HISTORICAL-without-anchor.
+          const isHistoricalWithoutAnchor =
+            (memPayload.source as MemorySource) === MemorySource.HISTORICAL &&
+            !memPayload.observedAt;
+          const warnings: TemporalWarning[] | undefined =
+            isHistoricalWithoutAnchor
+              ? [
+                  {
+                    ...TEMPORAL_WARNING_HISTORICAL_WITHOUT_ANCHOR,
+                    memoryId: memory.id,
+                  },
+                ]
+              : undefined;
+
           return {
             sourceMemoryId: memPayload.localId,
             cloudMemoryId: memory.id,
             status: 'created' as const,
+            ...(warnings && { warnings }),
           };
         });
 
