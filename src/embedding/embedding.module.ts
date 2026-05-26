@@ -15,6 +15,7 @@ import { OpenAIEmbedProvider } from './openai-embed.provider';
 import { CloudEnsembleService } from './cloud-ensemble.service';
 import { CloudEnsembleEmbedProvider } from './cloud-ensemble-embed.provider';
 import { EmbeddingProxyController } from './embedding-proxy.controller';
+import { EmbeddingRouterService } from './embedding-router.service';
 
 @Global()
 @Module({
@@ -26,7 +27,8 @@ import { EmbeddingProxyController } from './embedding-proxy.controller';
     CloudEnsembleService,
     CloudEnsembleEmbedProvider,
     EmbeddingService,
+    EmbeddingRouterService,
   ],
-  exports: [EmbeddingService, CloudEnsembleService],
+  exports: [EmbeddingService, CloudEnsembleService, EmbeddingRouterService],
 })
 export class EmbeddingModule {}

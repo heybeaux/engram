@@ -243,6 +243,12 @@ model Memory {
   // Multi-model ensemble embeddings
   ensembleEmbeddings MemoryEmbedding[]
 
+  // Per-model embedding tables (feat/embed-per-model-tables)
+  embeddingsOpenaiSmall EmbeddingOpenaiSmall?
+  embeddingsBgeBase     EmbeddingBgeBase?
+  embeddingsMinilm      EmbeddingMinilm?
+  embeddingsNomic       EmbeddingNomic?
+
   // Entity Profiles
   entityProfiles EntityProfileMemory[]
 
@@ -1101,6 +1107,69 @@ model MemoryEmbedding {
   @@index([modelId])
   @@index([memoryId])
   @@map("memory_embeddings")
+}
+
+// ============================================================================
+// PER-MODEL EMBEDDING TABLES (feat/embed-per-model-tables)
+// Each table stores fixed-dimension vectors for a single model, enabling
+// targeted ivfflat indexes and clean per-model ANN queries without casting.
+// EmbeddingNomic is QUARANTINED — retained for backfill only.
+// ============================================================================
+
+/// OpenAI text-embedding-3-small — 1536 dimensions
+model EmbeddingOpenaiSmall {
+  id           String   @id @default(cuid())
+  memoryId     String   @unique @map("memory_id")
+  modelVersion String   @map("model_version") // e.g. "text-embedding-3-small"
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  embedding Unsupported("vector(1536)")?
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@map("embedding_openai_small")
+}
+
+/// BGE-base-en-v1.5 — 768 dimensions
+model EmbeddingBgeBase {
+  id           String   @id @default(cuid())
+  memoryId     String   @unique @map("memory_id")
+  modelVersion String   @map("model_version") // e.g. "bge-base-en-v1.5"
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  embedding Unsupported("vector(768)")?
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@map("embedding_bge_base")
+}
+
+/// all-MiniLM-L6-v2 — 384 dimensions
+model EmbeddingMinilm {
+  id           String   @id @default(cuid())
+  memoryId     String   @unique @map("memory_id")
+  modelVersion String   @map("model_version") // e.g. "all-MiniLM-L6-v2"
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  embedding Unsupported("vector(384)")?
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@map("embedding_minilm")
+}
+
+/// nomic-embed-text-v1 — 768 dimensions — QUARANTINED, schema kept for backfill
+model EmbeddingNomic {
+  id           String   @id @default(cuid())
+  memoryId     String   @unique @map("memory_id")
+  modelVersion String   @map("model_version") // e.g. "nomic-embed-text-v1"
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  embedding Unsupported("vector(768)")?
+
+  memory Memory @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+
+  @@map("embedding_nomic")
 }
 
 /// Drift snapshot for tracking embedding drift over time
