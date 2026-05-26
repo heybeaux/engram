@@ -134,6 +134,29 @@ console.log(result.created);  // 3
 console.log(result.failed);   // 0
 ```
 
+**Historical import example:**
+
+When importing past notes or conversation history, pass `observedAt` (ISO 8601) so temporal recall anchors to the original event time. Also set `source` to `"HISTORICAL"`:
+
+```typescript
+const result = await engram.rememberAll([
+  {
+    raw: "Decided to rewrite the auth service after the OAuth2 incident",
+    source: "HISTORICAL",
+    observedAt: "2025-09-14T11:00:00Z",
+  },
+  {
+    raw: "Shipped v2 dashboard to staging",
+    source: "HISTORICAL",
+    observedAt: "2025-10-01T16:30:00Z",
+  },
+], {
+  projectId: 'proj_auth',
+});
+```
+
+If `source` is `"HISTORICAL"` but `observedAt` is missing, the response for that item includes `warnings: [{ code: "HISTORICAL_WITHOUT_ANCHOR" }]` — temporal extraction is skipped and the ingest time is used as the fallback anchor.
+
 **Use cases:**
 - Import conversation history
 - Bulk onboarding

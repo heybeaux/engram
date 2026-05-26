@@ -42,10 +42,12 @@ POST /v1/memories
 | `raw` | string | ✓ | The memory text |
 | `layer` | enum | | Memory layer: `IDENTITY`, `PROJECT`, `SESSION`, `TASK` |
 | `importanceHint` | enum | | Importance: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
+| `source` | enum | | Memory source; use `HISTORICAL` for imported/past content |
+| `observedAt` | string (ISO 8601) | | When the event actually occurred. Set this for historical imports so temporal recall anchors to the original event time rather than the ingest time. Omit for real-time memories — the server uses the ingest timestamp. Cannot be more than 1 hour in the future. |
 | `context.projectId` | string | | Associate with a project |
 | `context.sessionId` | string | | Associate with a session |
 
-**Example:**
+**Example (real-time):**
 
 ```bash
 POST /v1/memories
@@ -54,6 +56,19 @@ POST /v1/memories
   "raw": "User prefers dark mode for all interfaces",
   "layer": "IDENTITY",
   "importanceHint": "HIGH"
+}
+```
+
+**Example (historical import):**
+
+```bash
+POST /v1/memories
+
+{
+  "raw": "Decided to migrate auth service to OAuth2 after security review",
+  "layer": "PROJECT",
+  "source": "HISTORICAL",
+  "observedAt": "2025-11-03T10:00:00Z"
 }
 ```
 
@@ -77,6 +92,18 @@ POST /v1/memories
 }
 ```
 
+If `source` is `HISTORICAL` and `observedAt` is absent, the response includes a `warnings` array:
+
+```json
+{
+  "id": "clx1abc123",
+  ...
+  "warnings": [
+    { "code": "HISTORICAL_WITHOUT_ANCHOR", "message": "Historical memory has no observedAt; temporal extraction skipped." }
+  ]
+}
+```
+
 ---
 
 ### Batch Create Memories
@@ -96,19 +123,29 @@ POST /v1/memories/batch
 | `memories[].ts` | string | | ISO timestamp |
 | `memories[].layer` | enum | | Memory layer |
 | `memories[].importanceHint` | enum | | Importance hint |
+| `memories[].source` | enum | | Use `HISTORICAL` for imported/past content |
+| `memories[].observedAt` | string (ISO 8601) | | Original event time for historical items (see [Create Memory](#create-memory)) |
 | `context.projectId` | string | | Associate all with a project |
 | `context.sessionId` | string | | Associate all with a session |
 
-**Example:**
+**Example (importing historical conversation notes):**
 
 ```bash
 POST /v1/memories/batch
 
 {
   "memories": [
-    { "raw": "Working on the dashboard redesign" },
-    { "raw": "Meeting with design team tomorrow at 2pm" },
-    { "raw": "User wants to prioritize mobile experience" }
+    {
+      "raw": "Agreed on microservices split for auth and billing",
+      "source": "HISTORICAL",
+      "observedAt": "2025-10-12T09:30:00Z"
+    },
+    {
+      "raw": "Working on the dashboard redesign"
+    },
+    {
+      "raw": "User wants to prioritize mobile experience"
+    }
   ],
   "context": {
     "projectId": "project_dashboard_v2"
