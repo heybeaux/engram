@@ -21,10 +21,22 @@ export interface MemoryHealthReport {
 @Injectable()
 export class HealthMetricsService {
   private readonly logger = new Logger(HealthMetricsService.name);
+  private inFlightCompute: Promise<MemoryHealthReport> | null = null;
 
   constructor(private readonly prisma: ServicePrismaService) {}
 
-  async compute(): Promise<MemoryHealthReport> {
+  compute(): Promise<MemoryHealthReport> {
+    if (this.inFlightCompute) {
+      this.logger.debug('compute() already in flight — sharing existing promise');
+      return this.inFlightCompute;
+    }
+    this.inFlightCompute = this.computeUncached().finally(() => {
+      this.inFlightCompute = null;
+    });
+    return this.inFlightCompute;
+  }
+
+  private async computeUncached(): Promise<MemoryHealthReport> {
     const computedAt = new Date().toISOString();
     const [
       totalMemories,
