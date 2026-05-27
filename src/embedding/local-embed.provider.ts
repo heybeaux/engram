@@ -29,10 +29,16 @@ export class LocalEmbedProvider implements EmbeddingProvider {
       'LOCAL_EMBED_MODEL',
       'bge-base-en-v1.5',
     );
-    this.dimensions = this.configService.get<number>(
+    const rawDimensions = this.configService.get<number | string>(
       'LOCAL_EMBED_DIMENSIONS',
       768,
     );
+    this.dimensions = Number(rawDimensions);
+    if (!Number.isInteger(this.dimensions) || this.dimensions <= 0) {
+      throw new Error(
+        `LOCAL_EMBED_DIMENSIONS must be a positive integer, got ${JSON.stringify(rawDimensions)}`,
+      );
+    }
   }
 
   async embed(texts: string[], options?: EmbedOptions): Promise<number[][]> {

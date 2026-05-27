@@ -216,4 +216,57 @@ describe('LocalEmbedProvider', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('LOCAL_EMBED_DIMENSIONS coercion', () => {
+    it('coerces stringified env value to number and accepts matching embedding', async () => {
+      const stringDimConfig = {
+        get: jest.fn((key: string, defaultValue?: any) => {
+          const config: Record<string, any> = {
+            LOCAL_EMBED_URL: 'http://localhost:8080',
+            LOCAL_EMBED_MODEL: 'minilm',
+            LOCAL_EMBED_DIMENSIONS: '384',
+          };
+          return config[key] ?? defaultValue;
+        }),
+      };
+      const module = await Test.createTestingModule({
+        providers: [
+          LocalEmbedProvider,
+          { provide: ConfigService, useValue: stringDimConfig },
+        ],
+      }).compile();
+      const stringProvider = module.get<LocalEmbedProvider>(LocalEmbedProvider);
+
+      expect(stringProvider.getDimensions()).toBe(384);
+
+      const mockEmbedding = new Array(384).fill(0.1);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [{ embedding: mockEmbedding }] }),
+      });
+      const result = await stringProvider.embed(['hello']);
+      expect(result[0]).toHaveLength(384);
+    });
+
+    it('throws on non-numeric LOCAL_EMBED_DIMENSIONS', async () => {
+      const badConfig = {
+        get: jest.fn((key: string, defaultValue?: any) => {
+          const config: Record<string, any> = {
+            LOCAL_EMBED_URL: 'http://localhost:8080',
+            LOCAL_EMBED_MODEL: 'minilm',
+            LOCAL_EMBED_DIMENSIONS: 'not-a-number',
+          };
+          return config[key] ?? defaultValue;
+        }),
+      };
+      await expect(
+        Test.createTestingModule({
+          providers: [
+            LocalEmbedProvider,
+            { provide: ConfigService, useValue: badConfig },
+          ],
+        }).compile(),
+      ).rejects.toThrow(/LOCAL_EMBED_DIMENSIONS must be a positive integer/);
+    });
+  });
 });
