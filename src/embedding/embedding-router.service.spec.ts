@@ -1,8 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  EmbeddingRouterService,
-  PerModelId,
-} from './embedding-router.service';
+import { EmbeddingRouterService, PerModelId } from './embedding-router.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const makeVec = (dim: number, fill = 0.5) => Array(dim).fill(fill);
@@ -43,15 +40,19 @@ describe('EmbeddingRouterService', () => {
       await service.writeEmbedding('mem-1', model, vec);
 
       expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledTimes(1);
-      const [sql, , , , vecStr] =
-        mockPrisma.$executeRawUnsafe.mock.calls[0];
+      const [sql, , , , vecStr] = mockPrisma.$executeRawUnsafe.mock.calls[0];
       expect(sql).toContain(`"${expectedTable}"`);
       expect(vecStr).toBe(`[${vec.join(',')}]`);
     });
 
     it('uses provided modelVersion string', async () => {
       mockPrisma.$executeRawUnsafe.mockResolvedValue(1);
-      await service.writeEmbedding('mem-1', 'minilm', makeVec(4), 'all-MiniLM-L6-v2');
+      await service.writeEmbedding(
+        'mem-1',
+        'minilm',
+        makeVec(4),
+        'all-MiniLM-L6-v2',
+      );
 
       const [, , , version] = mockPrisma.$executeRawUnsafe.mock.calls[0];
       expect(version).toBe('all-MiniLM-L6-v2');
@@ -64,6 +65,22 @@ describe('EmbeddingRouterService', () => {
       const [, , , version] = mockPrisma.$executeRawUnsafe.mock.calls[0];
       expect(version).toBe('bge-base');
     });
+
+    it.each<[string, unknown[]]>([
+      ['NaN slot', [0.1, Number.NaN, 0.3, 0.4]],
+      ['null slot', [0.1, null, 0.3, 0.4]],
+      ['undefined slot', [0.1, undefined, 0.3, 0.4]],
+      ['Infinity slot', [0.1, Number.POSITIVE_INFINITY, 0.3, 0.4]],
+      ['empty array', []],
+    ])(
+      'rejects malformed vector (%s) before touching prisma',
+      async (_label, vector) => {
+        await expect(
+          service.writeEmbedding('mem-bad', 'minilm', vector as number[]),
+        ).rejects.toThrow(/Invalid embedding/);
+        expect(mockPrisma.$executeRawUnsafe).not.toHaveBeenCalled();
+      },
+    );
   });
 
   // ── queryByModel ────────────────────────────────────────────────────────────
@@ -78,8 +95,16 @@ describe('EmbeddingRouterService', () => {
       const result = await service.queryByModel('minilm', makeVec(4), 5);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ memoryId: 'a', modelVersion: 'v1', score: 0.9 });
-      expect(result[1]).toEqual({ memoryId: 'b', modelVersion: 'v1', score: 0.7 });
+      expect(result[0]).toEqual({
+        memoryId: 'a',
+        modelVersion: 'v1',
+        score: 0.9,
+      });
+      expect(result[1]).toEqual({
+        memoryId: 'b',
+        modelVersion: 'v1',
+        score: 0.7,
+      });
     });
 
     it('passes correct table and k to prisma', async () => {
@@ -89,6 +114,13 @@ describe('EmbeddingRouterService', () => {
       const [sql, , limit] = mockPrisma.$queryRawUnsafe.mock.calls[0];
       expect(sql).toContain('"embedding_openai_small"');
       expect(limit).toBe(10);
+    });
+
+    it('rejects malformed query vector before touching prisma', async () => {
+      await expect(
+        service.queryByModel('minilm', [0.1, Number.NaN, 0.3] as number[], 5),
+      ).rejects.toThrow(/Invalid embedding/);
+      expect(mockPrisma.$queryRawUnsafe).not.toHaveBeenCalled();
     });
   });
 

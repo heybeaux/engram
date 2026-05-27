@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { toValidatedVectorLiteral } from '../memory/vector-literal.util';
 
 export type PerModelId =
   | 'openai-small'
@@ -33,6 +34,10 @@ export class EmbeddingRouterService {
     const table = this.tableFor(model);
     const version = modelVersion ?? model;
     const id = randomUUID();
+    const vectorLiteral = toValidatedVectorLiteral(
+      vector,
+      `EmbeddingRouterService.writeEmbedding ${model}/${memoryId}`,
+    );
 
     await this.prisma.$executeRawUnsafe(
       `
@@ -46,7 +51,7 @@ export class EmbeddingRouterService {
       id,
       memoryId,
       version,
-      `[${vector.join(',')}]`,
+      vectorLiteral,
     );
   }
 
@@ -60,7 +65,10 @@ export class EmbeddingRouterService {
     k: number,
   ): Promise<EmbeddingRow[]> {
     const table = this.tableFor(model);
-    const vec = `[${queryVector.join(',')}]`;
+    const vec = toValidatedVectorLiteral(
+      queryVector,
+      `EmbeddingRouterService.queryByModel ${model}`,
+    );
 
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{ memory_id: string; model_version: string; score: number }>
