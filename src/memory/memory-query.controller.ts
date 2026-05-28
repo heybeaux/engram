@@ -122,7 +122,7 @@ export class MemoryQueryController {
     @Headers('accept') acceptHeader?: string,
   ): Promise<QueryResult | StructuredQueryResult> {
     const accountUserIds =
-      scope === 'user' ? null : await this.resolveAccountUserIds(req, agentId);
+      scope === 'account' ? await this.resolveAccountUserIds(req, agentId) : null;
     const result = await this.memoryService.recall(
       accountUserIds || userId,
       dto,

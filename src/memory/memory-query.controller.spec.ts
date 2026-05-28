@@ -13,6 +13,7 @@ describe('MemoryQueryController', () => {
   let contextualRecallService: jest.Mocked<ContextualRecallService>;
   let temporalGapService: jest.Mocked<TemporalGapService>;
   let projectStateService: jest.Mocked<ProjectStateService>;
+  let prismaService: { user: { findMany: jest.Mock } };
 
   const userId = 'user-123';
 
@@ -32,9 +33,9 @@ describe('MemoryQueryController', () => {
       detectGaps: jest.fn(),
     } as any;
 
-    const prismaService = {
+    prismaService = {
       user: { findMany: jest.fn().mockResolvedValue([]) },
-    } as any;
+    };
 
     const retrievalSignals = {
       logQuery: jest.fn().mockResolvedValue('query-id'),
@@ -53,7 +54,7 @@ describe('MemoryQueryController', () => {
       memoryQueryService,
       contextualRecallService,
       temporalGapService,
-      prismaService,
+      prismaService as any,
       retrievalSignals,
       projectStateService,
       new ChainOfNoteService(),
@@ -72,6 +73,49 @@ describe('MemoryQueryController', () => {
 
       expect(result).toEqual(expected);
       expect(memoryService.recall).toHaveBeenCalledWith(userId, dto);
+    });
+
+    describe('scope', () => {
+      it('defaults to user scope — does not expand to account user IDs', async () => {
+        memoryService.recall.mockResolvedValue({ memories: [], total: 0 } as any);
+        prismaService.user.findMany.mockResolvedValue([
+          { id: 'user-123' },
+          { id: 'other-1' },
+          { id: 'other-2' },
+        ]);
+
+        const req = { isInstanceKey: false, accountId: 'acc-1' };
+        const res = { set: jest.fn() } as any;
+        await controller.recall(userId, { query: 'x' } as any, req, res, 'agent-1');
+
+        expect(prismaService.user.findMany).not.toHaveBeenCalled();
+        expect(memoryService.recall).toHaveBeenCalledWith(userId, expect.anything());
+      });
+
+      it('expands to account user IDs when scope=account is opted in', async () => {
+        memoryService.recall.mockResolvedValue({ memories: [], total: 0 } as any);
+        prismaService.user.findMany.mockResolvedValue([
+          { id: 'user-123' },
+          { id: 'other-1' },
+        ]);
+
+        const req = { isInstanceKey: false, accountId: 'acc-1' };
+        const res = { set: jest.fn() } as any;
+        await controller.recall(
+          userId,
+          { query: 'x' } as any,
+          req,
+          res,
+          'agent-1',
+          'account',
+        );
+
+        expect(prismaService.user.findMany).toHaveBeenCalled();
+        expect(memoryService.recall).toHaveBeenCalledWith(
+          ['user-123', 'other-1'],
+          expect.anything(),
+        );
+      });
     });
 
     // ENG-134: structured response format
