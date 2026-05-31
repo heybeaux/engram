@@ -11,7 +11,6 @@ export interface ResolutionStats {
   processed: number;
   autoMerged: number;
   autoConsolidated: number;
-  contradictionsResolved: number;
   queued: number;
   skipped: number;
   errors: number;
@@ -21,9 +20,7 @@ type MemorySlim = {
   id: string;
   raw: string;
   importanceScore: number;
-  typeConfidence: number | null;
   userId: string;
-  agentId: string | null;
   createdAt: Date;
   safetyCritical: boolean;
   memoryType: string | null;
@@ -43,7 +40,7 @@ type MemorySlim = {
  *     confidence 0.7-0.9 → queue
  *     confidence <  0.7  → queue
  *
- *   CONFLICTING          → auto-resolve: supersede weaker memory, create INSIGHT
+ *   CONFLICTING          → always queue — never auto-resolve conflicts
  *   RELATED              → no action (resolve immediately)
  *
  * Safety rules:
@@ -79,9 +76,7 @@ export class DedupResolutionService {
             id: true,
             raw: true,
             importanceScore: true,
-            typeConfidence: true,
             userId: true,
-            agentId: true,
             createdAt: true,
             safetyCritical: true,
             memoryType: true,
@@ -92,9 +87,7 @@ export class DedupResolutionService {
             id: true,
             raw: true,
             importanceScore: true,
-            typeConfidence: true,
             userId: true,
-            agentId: true,
             createdAt: true,
             safetyCritical: true,
             memoryType: true,
@@ -113,7 +106,6 @@ export class DedupResolutionService {
       processed: 0,
       autoMerged: 0,
       autoConsolidated: 0,
-      contradictionsResolved: 0,
       queued: 0,
       skipped: 0,
       errors: 0,
@@ -176,8 +168,9 @@ export class DedupResolutionService {
             break;
 
           case 'CONFLICTING':
-            await this.resolveContradiction(candidate.id, memory1, memory2);
-            stats.contradictionsResolved++;
+            // Always queue — never auto-resolve conflicts
+            await this.markQueued(candidate.id, 'conflicting');
+            stats.queued++;
             break;
 
           case 'RELATED':
@@ -203,7 +196,7 @@ export class DedupResolutionService {
     }
 
     this.logger.log(
-      `[DedupResolution] Done — merged: ${stats.autoMerged}, consolidated: ${stats.autoConsolidated}, contradictions: ${stats.contradictionsResolved}, queued: ${stats.queued}, skipped: ${stats.skipped}, errors: ${stats.errors}`,
+      `[DedupResolution] Done — merged: ${stats.autoMerged}, consolidated: ${stats.autoConsolidated}, queued: ${stats.queued}, skipped: ${stats.skipped}, errors: ${stats.errors}`,
     );
 
     return stats;
@@ -331,97 +324,6 @@ export class DedupResolutionService {
     this.logger.log(
       `[DedupResolution] Auto-consolidated ${loser.id} → ${winner.id}`,
     );
-  }
-
-  /**
-   * Resolve a contradiction: the stronger memory supersedes the weaker one.
-   * Strength is determined by recency first, then confidence scores.
-   * Creates an INSIGHT memory documenting the resolution.
-   */
-  private async resolveContradiction(
-    candidateId: string,
-    memory1: MemorySlim,
-    memory2: MemorySlim,
-  ): Promise<void> {
-    const [stronger, weaker] = this.pickContradictionWinner(memory1, memory2);
-    const reason = this.buildContradictionReason(stronger, weaker);
-
-    await this.prisma.$transaction([
-      // Mark weaker memory as superseded and unsearchable
-      this.prisma.memory.update({
-        where: { id: weaker.id },
-        data: {
-          supersededById: stronger.id,
-          supersededAt: new Date(),
-          searchable: false,
-        },
-      }),
-      // Create INSIGHT memory documenting the resolution
-      this.prisma.memory.create({
-        data: {
-          userId: stronger.userId,
-          agentId: stronger.agentId,
-          raw: `Resolved contradiction: "${weaker.raw}" superseded by "${stronger.raw}" because ${reason}`,
-          layer: 'INSIGHT',
-          memoryType: 'LESSON',
-          source: 'SYSTEM',
-          importanceScore: Math.max(
-            stronger.importanceScore,
-            weaker.importanceScore,
-          ),
-        },
-      }),
-      // Mark candidate resolved
-      this.prisma.dedupCandidate.update({
-        where: { id: candidateId },
-        data: {
-          status: 'RESOLVED',
-          resolvedAt: new Date(),
-          reasoning: `Contradiction resolved: ${weaker.id} superseded by ${stronger.id} (${reason})`,
-        },
-      }),
-    ]);
-
-    this.logger.log(
-      `[DedupResolution] Contradiction resolved: ${weaker.id} superseded by ${stronger.id}`,
-    );
-  }
-
-  /**
-   * Pick the stronger memory in a contradiction.
-   * Newer memory wins; if timestamps are equal, higher confidence
-   * (average of importanceScore and typeConfidence) wins.
-   */
-  private pickContradictionWinner(
-    a: MemorySlim,
-    b: MemorySlim,
-  ): [stronger: MemorySlim, weaker: MemorySlim] {
-    const aTime = a.createdAt.getTime();
-    const bTime = b.createdAt.getTime();
-    if (aTime !== bTime) {
-      return aTime > bTime ? [a, b] : [b, a];
-    }
-    // Equal timestamps — compare confidence
-    const aConf = this.confidenceScore(a);
-    const bConf = this.confidenceScore(b);
-    return aConf >= bConf ? [a, b] : [b, a];
-  }
-
-  private confidenceScore(m: MemorySlim): number {
-    const tc = m.typeConfidence ?? m.importanceScore;
-    return (m.importanceScore + tc) / 2;
-  }
-
-  private buildContradictionReason(
-    stronger: MemorySlim,
-    weaker: MemorySlim,
-  ): string {
-    const strongerTime = stronger.createdAt.getTime();
-    const weakerTime = weaker.createdAt.getTime();
-    if (strongerTime !== weakerTime) {
-      return 'it is more recent';
-    }
-    return 'it has higher confidence';
   }
 
   private async markResolved(
