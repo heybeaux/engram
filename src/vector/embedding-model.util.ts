@@ -45,3 +45,11 @@ export function resolveExpectedDimensions(): number | undefined {
   const modelId = resolveEmbeddingModelId();
   return MODEL_DIMS[modelId];
 }
+
+/**
+ * Look up expected dimensions for an arbitrary modelId from the registry.
+ * Returns undefined for unknown model IDs (no guard applied).
+ */
+export function getDimensionsForModel(modelId: string): number | undefined {
+  return MODEL_DIMS[modelId];
+}

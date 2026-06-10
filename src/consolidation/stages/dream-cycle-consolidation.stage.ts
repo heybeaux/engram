@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { EmbeddingService } from '../../embedding/embedding.service';
 import { LLMService } from '../../llm/llm.service';
+import { EmbeddingWriteService } from '../../vector/embedding-write.service';
 
 export interface ConsolidationStageResult {
   clustersFound: number;
@@ -30,6 +31,7 @@ export class DreamCycleConsolidationStage {
     private readonly config: ConfigService,
     private readonly embeddingService: EmbeddingService,
     private readonly llmService: LLMService,
+    private readonly embeddingWrite: EmbeddingWriteService,
   ) {
     this.similarityThreshold = parseFloat(
       this.config.get('DREAM_CONSOLIDATION_SIMILARITY') ?? '0.82',
@@ -222,12 +224,8 @@ Write a single consolidated memory that captures all the information above.`;
         },
       });
 
-      // Store embedding via raw query
       if (embedding) {
-        await tx.$executeRaw`
-          UPDATE memories SET embedding = ${JSON.stringify(embedding)}::vector
-          WHERE id = ${newMemory.id}
-        `;
+        await this.embeddingWrite.writeLegacyInlineEmbedding(newMemory.id, embedding);
       }
 
       // Link originals to the consolidated memory and archive them

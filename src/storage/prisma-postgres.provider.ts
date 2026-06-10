@@ -10,6 +10,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmbeddingWriteService } from '../vector/embedding-write.service';
 import {
   StorageProvider,
   CreateMemoryData,
@@ -32,7 +33,10 @@ export class PrismaPostgresProvider implements StorageProvider {
   readonly name = 'prisma-postgres';
   private readonly logger = new Logger(PrismaPostgresProvider.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly embeddingWrite: EmbeddingWriteService,
+  ) {}
 
   // ── Memory CRUD ──────────────────────────────────────────────────────
 
@@ -42,14 +46,8 @@ export class PrismaPostgresProvider implements StorageProvider {
       data: prismaData as any,
     });
 
-    // Store embedding separately if provided (pgvector column)
     if (embedding) {
-      const vectorStr = `[${embedding.join(',')}]`;
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE memories SET embedding = $1::vector WHERE id = $2`,
-        vectorStr,
-        memory.id,
-      );
+      await this.embeddingWrite.writeLegacyInlineEmbedding(memory.id, embedding);
     }
 
     return memory as StoredMemory;
@@ -77,12 +75,7 @@ export class PrismaPostgresProvider implements StorageProvider {
     });
 
     if (embedding) {
-      const vectorStr = `[${embedding.join(',')}]`;
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE memories SET embedding = $1::vector WHERE id = $2`,
-        vectorStr,
-        id,
-      );
+      await this.embeddingWrite.writeLegacyInlineEmbedding(id, embedding);
     }
 
     return result as StoredMemory;
@@ -249,12 +242,7 @@ export class PrismaPostgresProvider implements StorageProvider {
           data: prismaData as any,
         });
         if (embedding) {
-          const vectorStr = `[${embedding.join(',')}]`;
-          await tx.$executeRawUnsafe(
-            `UPDATE memories SET embedding = $1::vector WHERE id = $2`,
-            vectorStr,
-            memory.id,
-          );
+          await this.embeddingWrite.writeLegacyInlineEmbedding(memory.id, embedding);
         }
         results.push(memory as StoredMemory);
       }
@@ -272,12 +260,7 @@ export class PrismaPostgresProvider implements StorageProvider {
           data: prismaData as any,
         });
         if (embedding) {
-          const vectorStr = `[${embedding.join(',')}]`;
-          await tx.$executeRawUnsafe(
-            `UPDATE memories SET embedding = $1::vector WHERE id = $2`,
-            vectorStr,
-            id,
-          );
+          await this.embeddingWrite.writeLegacyInlineEmbedding(id, embedding);
         }
         count++;
       }

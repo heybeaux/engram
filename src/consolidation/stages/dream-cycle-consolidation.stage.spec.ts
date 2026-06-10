@@ -4,6 +4,7 @@ import { DreamCycleConsolidationStage } from './dream-cycle-consolidation.stage'
 import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { EmbeddingService } from '../../embedding/embedding.service';
 import { LLMService } from '../../llm/llm.service';
+import { EmbeddingWriteService } from '../../vector/embedding-write.service';
 
 describe('DreamCycleConsolidationStage', () => {
   let stage: DreamCycleConsolidationStage;
@@ -51,6 +52,13 @@ describe('DreamCycleConsolidationStage', () => {
             chat: jest
               .fn()
               .mockResolvedValue({ content: 'Consolidated memory content' }),
+          },
+        },
+        {
+          provide: EmbeddingWriteService,
+          useValue: {
+            writeLegacyInlineEmbedding: jest.fn().mockResolvedValue(undefined),
+            writeMemoryEmbedding: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -241,6 +249,13 @@ describe('DreamCycleConsolidationStage', () => {
           },
           { provide: EmbeddingService, useValue: embeddingService },
           { provide: LLMService, useValue: llmService },
+          {
+            provide: EmbeddingWriteService,
+            useValue: {
+              writeLegacyInlineEmbedding: jest.fn().mockResolvedValue(undefined),
+              writeMemoryEmbedding: jest.fn().mockResolvedValue(undefined),
+            },
+          },
         ],
       }).compile();
 
@@ -305,6 +320,13 @@ describe('DreamCycleConsolidationStage', () => {
           },
           { provide: EmbeddingService, useValue: embeddingService },
           { provide: LLMService, useValue: llmService },
+          {
+            provide: EmbeddingWriteService,
+            useValue: {
+              writeLegacyInlineEmbedding: jest.fn().mockResolvedValue(undefined),
+              writeMemoryEmbedding: jest.fn().mockResolvedValue(undefined),
+            },
+          },
         ],
       }).compile();
 
