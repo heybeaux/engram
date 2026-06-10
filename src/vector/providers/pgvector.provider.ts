@@ -69,16 +69,29 @@ export class PgVectorProvider implements VectorProvider {
 
     const embeddingStr = this.serializeEmbedding(record.embedding, 'upsert');
 
-    // Write to inline column for backward compat
-    const updated = await this.prisma.$executeRawUnsafe(
-      `
-      UPDATE memories 
-      SET embedding = $1::vector
-      WHERE id = $2
-    `,
-      embeddingStr,
-      record.id,
-    );
+    // Legacy inline column is vector(768) — only write when dims match to avoid
+    // Postgres error 22000 with newer models (e.g. openai-small at 1536 dims).
+    const LEGACY_INLINE_DIMS = 768;
+    let updated: number;
+    if (record.embedding.length === LEGACY_INLINE_DIMS) {
+      updated = await this.prisma.$executeRawUnsafe(
+        `
+        UPDATE memories
+        SET embedding = $1::vector
+        WHERE id = $2
+      `,
+        embeddingStr,
+        record.id,
+      );
+    } else {
+      // Skip the inline UPDATE; confirm memory existence with a cheap SELECT so
+      // the memory_embeddings insert below is still gated on a real memory ID.
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ exists: number }>>(
+        `SELECT 1 AS exists FROM memories WHERE id = $1`,
+        record.id,
+      );
+      updated = rows.length;
+    }
 
     // Only write to memory_embeddings if this ID is a real memory
     // (HierarchyService passes pinecone-style IDs like "hierarchy_l0_xxx" which aren't memory IDs)

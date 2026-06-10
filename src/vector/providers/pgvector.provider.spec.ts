@@ -42,20 +42,30 @@ describe('PgVectorProvider', () => {
   });
 
   describe('upsert', () => {
-    it('should update memory with vector embedding', async () => {
+    it('768-dim vector writes inline column AND memory_embeddings', async () => {
+      // inline UPDATE returns 1 → memory exists → memory_embeddings upsert fires
+      mockPrisma.$executeRawUnsafe.mockResolvedValue(1);
+
       const embedding = makeEmbedding(BGE_DIMS);
       const record: VectorRecord = { id: 'mem-123', embedding };
 
       await provider.upsert(record);
 
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE memories'),
-        expect.stringContaining('['),
-        'mem-123',
-      );
+      // First call: inline UPDATE memories SET embedding = ...
+      const updateCall = mockPrisma.$executeRawUnsafe.mock.calls[0];
+      expect(updateCall[0]).toContain('UPDATE memories');
+      expect(updateCall[1]).toMatch(/^\[[\d.,e+-]+\]$/);
+      expect(updateCall[2]).toBe('mem-123');
+
+      // Second call: INSERT into memory_embeddings
+      const insertCall = mockPrisma.$executeRawUnsafe.mock.calls[1];
+      expect(insertCall[0]).toContain('memory_embeddings');
+      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledTimes(2);
     });
 
-    it('should format embedding as pgvector string literal', async () => {
+    it('768-dim vector formats embedding as pgvector string literal', async () => {
+      mockPrisma.$executeRawUnsafe.mockResolvedValue(1);
+
       const embedding = makeEmbedding(BGE_DIMS);
       const record: VectorRecord = { id: 'mem-456', embedding };
 
@@ -65,7 +75,7 @@ describe('PgVectorProvider', () => {
       expect(callArgs[1]).toMatch(/^\[[\d.,e+-]+\]$/);
     });
 
-    it('should handle large embeddings (1536-dim openai-small)', async () => {
+    it('1536-dim (openai-small) skips inline UPDATE, writes memory_embeddings when memory exists', async () => {
       const savedModel = process.env.EMBEDDING_MODEL;
       process.env.EMBEDDING_MODEL = 'openai-small';
 
@@ -77,16 +87,65 @@ describe('PgVectorProvider', () => {
       }).compile();
       const p2 = module2.get<PgVectorProvider>(PgVectorProvider);
 
-      const largeEmbedding = new Array(1536).fill(0).map(() => Math.random());
+      // SELECT 1 existence check returns one row → memory exists
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ exists: 1 }]);
+      mockPrisma.$executeRawUnsafe.mockResolvedValue(undefined);
+
+      const largeEmbedding = makeEmbedding(1536, 0.2);
       const record: VectorRecord = { id: 'mem-large', embedding: largeEmbedding };
 
       await p2.upsert(record);
 
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.stringContaining('['),
-        'mem-large',
+      // Should NOT call inline UPDATE
+      const updateCall = mockPrisma.$executeRawUnsafe.mock.calls.find(
+        (c: any[]) => typeof c[0] === 'string' && c[0].includes('UPDATE memories SET embedding'),
       );
+      expect(updateCall).toBeUndefined();
+
+      // Should call SELECT 1 existence check via $queryRawUnsafe
+      const existsCall = mockPrisma.$queryRawUnsafe.mock.calls.find(
+        (c: any[]) => typeof c[0] === 'string' && c[0].includes('SELECT 1') && c[0].includes('FROM memories'),
+      );
+      expect(existsCall).toBeDefined();
+      expect(existsCall[1]).toBe('mem-large');
+
+      // Should write to memory_embeddings
+      const insertCall = mockPrisma.$executeRawUnsafe.mock.calls.find(
+        (c: any[]) => typeof c[0] === 'string' && c[0].includes('memory_embeddings'),
+      );
+      expect(insertCall).toBeDefined();
+
+      if (savedModel === undefined) delete process.env.EMBEDDING_MODEL;
+      else process.env.EMBEDDING_MODEL = savedModel;
+    });
+
+    it('1536-dim skips memory_embeddings insert for non-memory IDs (hierarchy_*)', async () => {
+      const savedModel = process.env.EMBEDDING_MODEL;
+      process.env.EMBEDDING_MODEL = 'openai-small';
+
+      const module2 = await Test.createTestingModule({
+        providers: [
+          PgVectorProvider,
+          { provide: PrismaService, useValue: mockPrisma },
+        ],
+      }).compile();
+      const p2 = module2.get<PgVectorProvider>(PgVectorProvider);
+
+      // SELECT 1 returns empty — ID is not a real memory row
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
+
+      const record: VectorRecord = {
+        id: 'hierarchy_l0_abc123',
+        embedding: makeEmbedding(1536, 0.3),
+      };
+
+      await p2.upsert(record);
+
+      // No insert into memory_embeddings
+      const insertCall = mockPrisma.$executeRawUnsafe.mock.calls.find(
+        (c: any[]) => typeof c[0] === 'string' && c[0].includes('memory_embeddings'),
+      );
+      expect(insertCall).toBeUndefined();
 
       if (savedModel === undefined) delete process.env.EMBEDDING_MODEL;
       else process.env.EMBEDDING_MODEL = savedModel;
@@ -119,6 +178,9 @@ describe('PgVectorProvider', () => {
 
   describe('upsertMany', () => {
     it('should upsert multiple records sequentially', async () => {
+      // inline UPDATE returns 1 for each record (all are real memories)
+      mockPrisma.$executeRawUnsafe.mockResolvedValue(1);
+
       const records: VectorRecord[] = [
         { id: 'mem-1', embedding: makeEmbedding(BGE_DIMS, 0.1) },
         { id: 'mem-2', embedding: makeEmbedding(BGE_DIMS, 0.2) },
@@ -127,7 +189,8 @@ describe('PgVectorProvider', () => {
 
       await provider.upsertMany(records);
 
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledTimes(3);
+      // 2 calls per record (inline UPDATE + memory_embeddings INSERT) = 6
+      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledTimes(6);
     });
 
     it('should handle empty array', async () => {
