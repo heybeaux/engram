@@ -55,7 +55,7 @@ export async function recallQuestion(
     response_format: 'structured',
     chainOfNote: true,
     note: question,  // HEY-576: question field for CoN prompt interpolation
-    limit: 20,
+    limit: 50,
   };
 
   const recallRes = await fetchWithRetry(recallUrl, {
