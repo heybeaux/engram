@@ -36,6 +36,7 @@ import {
 } from './memory.types';
 import { ElasticsearchService } from '../search/elasticsearch.service';
 import { TemporalGapMarkerService } from './temporal-gap-marker.service';
+import { resolveEmbeddingModelId } from '../vector/embedding-model.util';
 
 @Injectable()
 export class MemoryWriteService {
@@ -584,10 +585,8 @@ export class MemoryWriteService {
       textLength: dto.text.length,
       sessionId: dto.context?.sessionId,
       projectId: dto.context?.projectId,
-      embeddingModel:
-        process.env.EMBEDDING_MODEL ??
-        process.env.VECTOR_SEARCH_MODEL ??
-        'unknown',
+      // Audit C1: same resolution as the pgvector search/write path
+      embeddingModel: resolveEmbeddingModelId(),
       ensembleEnabled: process.env.EMBEDDING_ENSEMBLE === 'true',
     });
 

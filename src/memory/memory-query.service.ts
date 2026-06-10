@@ -214,17 +214,24 @@ export class MemoryQueryService {
           }
         }
 
+        // Temporal C1+M1: filter on effective event time (observedAt ?? createdAt).
+        // OR-clause keeps the [userId, observedAt] index usable for the
+        // observedAt branch; memories without observedAt fall back to createdAt.
         temporalMemories = await this.prisma.memory.findMany({
           where: {
             userId: userIdFilter,
             deletedAt: null,
             supersededById: null,
             searchable: { not: false },
-            createdAt: activeCreatedAt,
+            OR: [
+              { observedAt: activeCreatedAt },
+              { observedAt: null, createdAt: activeCreatedAt },
+            ],
             ...subjectTypeFilter,
             ...visibilityFilter,
             ...metadataFilter,
             ...sessionIdFilter,
+            ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
           },
           include: { extraction: true },
           orderBy: { createdAt: 'desc' },
@@ -246,10 +253,15 @@ export class MemoryQueryService {
         // Widen the window by doubling the span each pass
         activeFilter = this.temporalParser.expandWindow(activeFilter, 2.0);
 
+        // Retrieval C2 fix: the deadline may only terminate the loop AFTER at
+        // least 2 passes have completed. Previously this guard fired right
+        // after pass 0 whenever the (default 200ms) deadline had elapsed,
+        // so expansion never ran even once.
         if (
           adaptiveEnabled &&
           temporalMemories.length < minResults &&
           expandPass <= maxExpand &&
+          expandPass >= 2 &&
           Date.now() >= expandDeadline
         ) {
           timedOut = true;
@@ -258,8 +270,7 @@ export class MemoryQueryService {
       } while (
         adaptiveEnabled &&
         temporalMemories.length < minResults &&
-        expandPass <= maxExpand &&
-        Date.now() < expandDeadline
+        expandPass <= maxExpand
       );
 
       const terminationReason = timedOut
@@ -310,8 +321,9 @@ export class MemoryQueryService {
       scoredMemories = temporalMemories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0.1;
+          // Temporal C1: score against effective event time, not ingest time
           const temporalScore = this.temporalParser.calculateTemporalRelevance(
-            memory.createdAt,
+            memory.observedAt ?? memory.createdAt,
             parsed.temporalFilter,
           );
           const importanceScore =

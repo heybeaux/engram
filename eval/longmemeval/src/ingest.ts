@@ -96,8 +96,8 @@ export async function ingestAll(
   return results;
 }
 
-/** fetch with basic retry on 429 / 5xx */
-async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 3): Promise<Response> {
+/** fetch with basic retry on 429 / network errors. Shared with recall.ts. */
+export async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 3): Promise<Response> {
   let lastError: Error | undefined;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {

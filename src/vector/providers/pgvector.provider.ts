@@ -7,6 +7,7 @@ import {
   VectorSearchOptions,
 } from '../vector.interface';
 import { HybridSearchService } from '../hybrid-search.service';
+import { resolveEmbeddingModelId } from '../embedding-model.util';
 
 /**
  * pgvector Provider
@@ -29,7 +30,8 @@ export class PgVectorProvider implements VectorProvider {
     private prisma: PrismaService,
     @Optional() private hybridSearch?: HybridSearchService,
   ) {
-    this.searchModel = process.env.VECTOR_SEARCH_MODEL || 'bge-base';
+    // Audit C1: write and search MUST resolve the model ID identically.
+    this.searchModel = resolveEmbeddingModelId();
     this.disableLegacyFallback =
       process.env.DISABLE_LEGACY_EMBEDDING_FALLBACK === 'true';
     this.hybridEnabled =
@@ -38,6 +40,14 @@ export class PgVectorProvider implements VectorProvider {
     if (this.hybridEnabled) {
       this.logger.log('[PgVector] Hybrid search enabled (ENG-26)');
     }
+  }
+
+  /**
+   * Model ID used for both memory_embeddings writes and the search JOIN.
+   * Exposed so tests can assert write/search agreement (audit C1).
+   */
+  getSearchModelId(): string {
+    return this.searchModel;
   }
 
   async upsert(record: VectorRecord): Promise<void> {
@@ -118,6 +128,10 @@ export class PgVectorProvider implements VectorProvider {
       params.push(...userIds);
       paramIndex += userIds.length;
     }
+
+    // Audit H5: exclude superseded and non-searchable memories at the SQL
+    // level so they never enter the candidate scoreMap.
+    memoryWhereClause += ` AND m.superseded_by_id IS NULL AND m.searchable IS NOT FALSE`;
 
     if (options.filter?.layers && options.filter.layers.length > 0) {
       const layerPlaceholders = options.filter.layers
@@ -267,14 +281,24 @@ export class PgVectorProvider implements VectorProvider {
       );
     }
 
-    if (
-      embedding.some(
-        (value) => typeof value !== 'number' || !Number.isFinite(value),
-      )
-    ) {
+    // Ingest H2: sparse arrays (e.g. `new Array(768)`) have holes that
+    // .some()/.every() skip, so they previously passed validation and
+    // serialized to '[,,,]' — a Postgres 22P02 error. Reject arrays whose
+    // own-key count differs from their length (holes), and validate every
+    // slot with an index-based loop that does NOT skip holes.
+    if (Object.keys(embedding).length !== embedding.length) {
       throw new Error(
-        `[PgVector] Invalid embedding for ${operation}: contains non-finite values`,
+        `[PgVector] Invalid embedding for ${operation}: sparse array with holes`,
       );
+    }
+
+    for (let i = 0; i < embedding.length; i++) {
+      const value = embedding[i];
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new Error(
+          `[PgVector] Invalid embedding for ${operation}: contains non-finite values`,
+        );
+      }
     }
 
     return `[${embedding.join(',')}]`;

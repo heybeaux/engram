@@ -2,12 +2,13 @@
  * LongMemEval dataset types.
  *
  * Based on the LongMemEval paper (ICLR 2025, xiaowu0162/longmemeval).
- * Categories: single-session-user, multi-session-user, temporal-reasoning-ability,
- *             knowledge-update, single-session-assistant
+ * Categories: single-session-user, single-session-preference, multi-session-user,
+ *             temporal-reasoning-ability, knowledge-update, single-session-assistant
  */
 
 export type LmeCategory =
   | 'single-session-user'
+  | 'single-session-preference'
   | 'multi-session-user'
   | 'temporal-reasoning-ability'
   | 'knowledge-update'
@@ -18,6 +19,12 @@ export interface RoundEntry {
   content: string;
   /** ISO timestamp for the round (present in some dataset variants) */
   timestamp?: string;
+  /**
+   * True for synthetic session-boundary markers woven into the history
+   * (e.g. "--- Session 2 (2023/05/20) ---"). Marker entries are emitted
+   * verbatim into the transcript with no role label.
+   */
+  marker?: boolean;
 }
 
 export interface LongMemEvalQuestion {
@@ -79,8 +86,8 @@ export interface RunConfig {
   anthropicApiKey: string;
   /** Reading model ID (default: claude-opus-4-7) */
   readModel: string;
-  /** Judge model ID (always claude-opus-4-7, not configurable) */
-  judgeModel: 'claude-opus-4-7';
+  /** Judge model ID (default: claude-opus-4-7, override via LONGMEMEVAL_JUDGE_MODEL) */
+  judgeModel: string;
   /** Max questions to evaluate (undefined = all) */
   limit?: number;
   /** Filter to a single category */

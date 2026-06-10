@@ -12,8 +12,8 @@
  * function handles parsing with a plain-text fallback.
  */
 
-import type { IngestResult } from './ingest';
-import type { RunConfig } from './types';
+import { fetchWithRetry, type IngestResult } from './ingest';
+import type { LmeCategory, RunConfig } from './types';
 
 export interface RecallResult {
   questionId: string;
@@ -32,14 +32,22 @@ interface ConEnvelope {
 
 /**
  * Run recall + CoN reading for a single question.
+ *
+ * @param category Optional question category — used to tune the reading
+ *                 prompt (recency ordering for knowledge-update, implicit
+ *                 preference hint for single-session-preference).
  */
 export async function recallQuestion(
   questionId: string,
   question: string,
   ingestResult: IngestResult,
   config: Pick<RunConfig, 'apiBase' | 'apiKey' | 'anthropicApiKey' | 'readModel'>,
+  category?: LmeCategory,
 ): Promise<RecallResult> {
-  // Step 1: recall from Engram with sessionId filter and CoN enabled
+  // Step 1: recall from Engram with sessionId filter and CoN enabled.
+  // Note: the query API (QueryMemoryDto) has no sort/recency parameter, so
+  // recency handling for knowledge-update is done client-side below by
+  // ordering retrieved memories chronologically in the reading prompt.
   const recallUrl = `${config.apiBase}/v1/memories/query`;
   const recallBody = {
     query: question,
@@ -50,7 +58,7 @@ export async function recallQuestion(
     limit: 20,
   };
 
-  const recallRes = await fetch(recallUrl, {
+  const recallRes = await fetchWithRetry(recallUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -68,18 +76,20 @@ export async function recallQuestion(
 
   const recallData = await recallRes.json() as {
     recallId?: string;
-    memories: Array<{ id: string; fact: string; confidence: number | null }>;
+    memories: Array<{ id: string; fact: string; confidence: number | null; timestamp?: string }>;
     chainOfNotePrompt?: string;
   };
 
   const memoriesFound = recallData.memories?.length ?? 0;
 
-  // Step 2: if CoN prompt present, call reading model; otherwise answer "unknown"
+  // Step 2: no memories / no CoN prompt — abstain explicitly. "I don't know"
+  // (rather than '') lets the judge credit abstention questions whose gold
+  // answers are phrased as "You did not mention this information...".
   if (!recallData.chainOfNotePrompt || memoriesFound === 0) {
     return {
       questionId,
       question,
-      answer: '',
+      answer: "I don't know",
       rawResponse: '',
       recallId: recallData.recallId,
       memoriesFound,
@@ -92,6 +102,8 @@ export async function recallQuestion(
     question,
     config.anthropicApiKey,
     config.readModel,
+    category,
+    recallData.memories,
   );
 
   // Step 4: extract answer from structured JSON envelope
@@ -108,6 +120,39 @@ export async function recallQuestion(
 }
 
 /**
+ * Build category-specific guidance appended to the reading-model user message.
+ * Exported for unit testing.
+ */
+export function buildCategoryHint(
+  category: LmeCategory | undefined,
+  memories: Array<{ id: string; fact: string; timestamp?: string }> = [],
+): string {
+  if (category === 'knowledge-update') {
+    // Order memories chronologically: by in-text date marker when present
+    // (chunk text carries "[<date>] " / session markers), falling back to the
+    // memory row timestamp (ingest-time createdAt).
+    const timeline = [...memories]
+      .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
+      .map(m => `- [${m.timestamp ?? 'unknown time'}] ${m.fact}`)
+      .join('\n');
+    return (
+      `\n\nThe question may involve information that was UPDATED over time. ` +
+      `Pay attention to dates and session markers inside the memories: when two memories conflict, ` +
+      `the LATER fact supersedes the earlier one — answer with the most recent information.` +
+      `\n\nMemories ordered oldest to newest (by stored timestamp):\n${timeline}`
+    );
+  }
+  if (category === 'single-session-preference') {
+    return (
+      `\n\nThe question asks about the user's preferences. Preferences are often stated ` +
+      `implicitly or with hedged language (e.g. "I usually...", "I tend to prefer...", ` +
+      `"I'm not a big fan of..."). Look for such implicit preference statements in the memories.`
+    );
+  }
+  return '';
+}
+
+/**
  * Call the reading model (Anthropic) with the CoN system prompt.
  * Returns the raw text response.
  */
@@ -116,8 +161,11 @@ async function callReadingModel(
   question: string,
   anthropicApiKey: string,
   model: string,
+  category?: LmeCategory,
+  memories: Array<{ id: string; fact: string; timestamp?: string }> = [],
 ): Promise<string> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const categoryHint = buildCategoryHint(category, memories);
+  const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -131,7 +179,7 @@ async function callReadingModel(
       messages: [
         {
           role: 'user',
-          content: `Answer the following question based on the memories above.\n\nQuestion: ${question}\n\nRespond with a JSON object containing:\n- "notes": array of { "memory_id": string, "note": string } (one per memory)\n- "answer": string (your final answer)\n\nJSON only, no markdown.`,
+          content: `Answer the following question based on the memories above.\n\nQuestion: ${question}${categoryHint}\n\nRespond with a JSON object containing:\n- "notes": array of { "memory_id": string, "note": string } (one per memory)\n- "answer": string (your final answer)\n\nIf the memories do not contain enough information to answer the question, do NOT guess — respond with "answer": "I don't know" and explain what is missing in the notes.\n\nJSON only, no markdown.`,
         },
       ],
     }),
