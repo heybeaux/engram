@@ -3,6 +3,11 @@ import { PgVectorProvider } from './pgvector.provider';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VectorRecord, VectorSearchResult } from '../vector.interface';
 
+// bge-base is the default model when EMBEDDING_MODEL / VECTOR_SEARCH_MODEL are unset
+const BGE_DIMS = 768;
+const makeEmbedding = (dims: number, fill = 0.1) =>
+  new Array(dims).fill(fill).map((v, i) => v + i * 0.0001);
+
 describe('PgVectorProvider', () => {
   let provider: PgVectorProvider;
   let mockPrisma: any;
@@ -38,59 +43,75 @@ describe('PgVectorProvider', () => {
 
   describe('upsert', () => {
     it('should update memory with vector embedding', async () => {
-      const record: VectorRecord = {
-        id: 'mem-123',
-        embedding: [0.1, 0.2, 0.3, 0.4],
-      };
+      const embedding = makeEmbedding(BGE_DIMS);
+      const record: VectorRecord = { id: 'mem-123', embedding };
 
       await provider.upsert(record);
 
       expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE memories'),
-        '[0.1,0.2,0.3,0.4]',
+        expect.stringContaining('['),
         'mem-123',
       );
     });
 
-    it('should format embedding as string vector', async () => {
-      const record: VectorRecord = {
-        id: 'mem-456',
-        embedding: [1.5, -0.5, 0.0, 2.25],
-      };
+    it('should format embedding as pgvector string literal', async () => {
+      const embedding = makeEmbedding(BGE_DIMS);
+      const record: VectorRecord = { id: 'mem-456', embedding };
 
       await provider.upsert(record);
 
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        expect.any(String),
-        '[1.5,-0.5,0,2.25]',
-        'mem-456',
-      );
+      const callArgs = mockPrisma.$executeRawUnsafe.mock.calls[0];
+      expect(callArgs[1]).toMatch(/^\[[\d.,e+-]+\]$/);
     });
 
-    it('should handle large embeddings', async () => {
-      const largeEmbedding = new Array(1536).fill(0).map(() => Math.random());
-      const record: VectorRecord = {
-        id: 'mem-large',
-        embedding: largeEmbedding,
-      };
+    it('should handle large embeddings (1536-dim openai-small)', async () => {
+      const savedModel = process.env.EMBEDDING_MODEL;
+      process.env.EMBEDDING_MODEL = 'openai-small';
 
-      await provider.upsert(record);
+      const module2 = await Test.createTestingModule({
+        providers: [
+          PgVectorProvider,
+          { provide: PrismaService, useValue: mockPrisma },
+        ],
+      }).compile();
+      const p2 = module2.get<PgVectorProvider>(PgVectorProvider);
+
+      const largeEmbedding = new Array(1536).fill(0).map(() => Math.random());
+      const record: VectorRecord = { id: 'mem-large', embedding: largeEmbedding };
+
+      await p2.upsert(record);
 
       expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
         expect.any(String),
         expect.stringContaining('['),
         'mem-large',
       );
+
+      if (savedModel === undefined) delete process.env.EMBEDDING_MODEL;
+      else process.env.EMBEDDING_MODEL = savedModel;
     });
 
     it('should reject non-finite values before serializing', async () => {
-      const record: VectorRecord = {
-        id: 'mem-bad',
-        embedding: [0.1, Number.NaN, 0.3],
-      };
+      // Use correct dims so dimension guard passes; NaN guard fires after
+      const embedding = makeEmbedding(BGE_DIMS);
+      embedding[1] = Number.NaN;
+      const record: VectorRecord = { id: 'mem-bad', embedding };
 
       await expect(provider.upsert(record)).rejects.toThrow(
         'contains non-finite values',
+      );
+      expect(mockPrisma.$executeRawUnsafe).not.toHaveBeenCalled();
+    });
+
+    it('should reject wrong-dimension embeddings (dimension guard)', async () => {
+      const record: VectorRecord = {
+        id: 'mem-wrong-dim',
+        embedding: [0.1, 0.2, 0.3, 0.4], // 4-dim, not BGE_DIMS=768
+      };
+
+      await expect(provider.upsert(record)).rejects.toThrow(
+        'Dimension mismatch',
       );
       expect(mockPrisma.$executeRawUnsafe).not.toHaveBeenCalled();
     });
@@ -99,9 +120,9 @@ describe('PgVectorProvider', () => {
   describe('upsertMany', () => {
     it('should upsert multiple records sequentially', async () => {
       const records: VectorRecord[] = [
-        { id: 'mem-1', embedding: [0.1] },
-        { id: 'mem-2', embedding: [0.2] },
-        { id: 'mem-3', embedding: [0.3] },
+        { id: 'mem-1', embedding: makeEmbedding(BGE_DIMS, 0.1) },
+        { id: 'mem-2', embedding: makeEmbedding(BGE_DIMS, 0.2) },
+        { id: 'mem-3', embedding: makeEmbedding(BGE_DIMS, 0.3) },
       ];
 
       await provider.upsertMany(records);

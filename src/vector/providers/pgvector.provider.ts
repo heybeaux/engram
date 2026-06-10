@@ -7,7 +7,10 @@ import {
   VectorSearchOptions,
 } from '../vector.interface';
 import { HybridSearchService } from '../hybrid-search.service';
-import { resolveEmbeddingModelId } from '../embedding-model.util';
+import {
+  resolveEmbeddingModelId,
+  resolveExpectedDimensions,
+} from '../embedding-model.util';
 
 /**
  * pgvector Provider
@@ -51,6 +54,19 @@ export class PgVectorProvider implements VectorProvider {
   }
 
   async upsert(record: VectorRecord): Promise<void> {
+    // Dimension guard: fail loudly if incoming vector doesn't match the
+    // expected dims for the configured model.  A silent mismatch would write
+    // a wrong-sized vector under model_id=searchModel, making every write
+    // invisible to the search JOIN (or triggering a pgvector type error).
+    const expectedDims = resolveExpectedDimensions();
+    if (expectedDims !== undefined && record.embedding.length !== expectedDims) {
+      throw new Error(
+        `[PgVector] Dimension mismatch for model '${this.searchModel}': ` +
+          `expected ${expectedDims} dims but got ${record.embedding.length}. ` +
+          `Check EMBEDDING_PROVIDER / LOCAL_EMBED_MODEL / EMBEDDING_MODEL alignment.`,
+      );
+    }
+
     const embeddingStr = this.serializeEmbedding(record.embedding, 'upsert');
 
     // Write to inline column for backward compat

@@ -18,3 +18,30 @@ export function resolveEmbeddingModelId(): string {
     'bge-base'
   );
 }
+
+/**
+ * Known expected dimensions per logical model ID.
+ * Used as a pre-insert guard so a model/dimension mismatch fails loudly
+ * instead of silently writing a wrong-sized vector (which trips pgvector's
+ * type error or, worse, silently corrupts recall results).
+ *
+ * Override with EXPECTED_EMBED_DIMENSIONS env var when using a non-standard
+ * model size (e.g. truncated OpenAI embeddings).
+ */
+const MODEL_DIMS: Record<string, number> = {
+  'openai-small': 1536,
+  'openai-large': 3072,
+  'bge-base': 768,
+  'minilm': 384,
+  'nomic': 768,
+};
+
+export function resolveExpectedDimensions(): number | undefined {
+  const envOverride = process.env.EXPECTED_EMBED_DIMENSIONS;
+  if (envOverride) {
+    const n = parseInt(envOverride, 10);
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  const modelId = resolveEmbeddingModelId();
+  return MODEL_DIMS[modelId];
+}
