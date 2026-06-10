@@ -42,7 +42,7 @@ function parseArgs(): ParsedArgs {
     outputPath: DEFAULT_OUTPUT_PATH,
     resultsDir: DEFAULT_RESULTS_DIR,
     subset: 'smoke',
-    judgeModel: 'claude-opus-4-7',
+    judgeModel: process.env.LONGMEMEVAL_JUDGE_MODEL ?? 'claude-opus-4-7',
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -114,7 +114,7 @@ function buildConfig(parsed: ParsedArgs): RunConfig {
     apiKey,
     anthropicApiKey,
     readModel,
-    judgeModel: 'claude-opus-4-7',
+    judgeModel: process.env.LONGMEMEVAL_JUDGE_MODEL ?? 'claude-opus-4-7',
     limit: parsed.limit,
     category: parsed.category,
     subset: parsed.subset ?? 'smoke',

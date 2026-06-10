@@ -165,10 +165,12 @@ export function toStructuredItem(
     fact: memory.raw,
     source_session: memory.sessionId ?? null,
     confidence: typeof memory.score === 'number' ? memory.score : null,
-    timestamp:
-      memory.createdAt instanceof Date
-        ? memory.createdAt.toISOString()
-        : new Date(memory.createdAt as any).toISOString(),
+    timestamp: (() => {
+      const effective = (memory as any).observedAt ?? memory.createdAt;
+      return effective instanceof Date
+        ? effective.toISOString()
+        : new Date(effective as any).toISOString();
+    })(),
     memory_type: memory.memoryType ?? null,
   };
 }

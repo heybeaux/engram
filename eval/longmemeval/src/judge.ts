@@ -1,11 +1,13 @@
 /**
  * LLM-based correctness judge for the LongMemEval eval harness.
  *
- * Model: claude-opus-4-7 (hard-coded — do NOT change to Sonnet or Haiku).
+ * Default model: claude-opus-4-7. Override via LONGMEMEVAL_JUDGE_MODEL env var
+ * for cheaper smoke runs (e.g. claude-sonnet-4-6).
  * Uses binary judgement: correct (semantic match) or incorrect.
  */
 
-const JUDGE_MODEL = 'claude-opus-4-7' as const;
+const JUDGE_MODEL: string =
+  process.env.LONGMEMEVAL_JUDGE_MODEL ?? 'claude-opus-4-7';
 const JUDGE_SYSTEM_PROMPT = `You are an answer correctness judge for a memory benchmark.
 
 Your task: determine whether a predicted answer is correct given the gold (expected) answer.

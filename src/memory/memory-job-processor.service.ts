@@ -62,13 +62,21 @@ export class MemoryJobProcessorService implements OnModuleInit {
     };
 
     if (accountId) {
+      // Ingest H1 fix: do NOT hold a DB connection open across the embed HTTP
+      // call.  Previously the entire extractAndEmbed (LLM extraction + embed
+      // network call + DB writes) ran inside one $transaction, pinning a pool
+      // connection for the full duration and causing pool exhaustion under bulk
+      // load.
+      //
+      // New approach: set app.current_account_id for the session (not LOCAL so
+      // it survives outside a transaction), then run extractAndEmbed outside
+      // any wrapping transaction. Each Prisma query inside the pipeline gets
+      // its own short connection from the pool.
       const sanitized = accountId.replace(/[^a-zA-Z0-9_-]/g, '');
-      await this.prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(
-          `SET LOCAL app.current_account_id = '${sanitized}'`,
-        );
-        await rlsContext.run(tx as any, run);
-      });
+      await this.prisma.$executeRawUnsafe(
+        `SET app.current_account_id = '${sanitized}'`,
+      );
+      await rlsContext.run(this.prisma as any, run);
     } else {
       await run();
     }

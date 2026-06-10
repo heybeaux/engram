@@ -18,7 +18,12 @@ export class EmbeddingRetryCron {
       const result = await this.memoryPipeline.retryFailedEmbeddings();
       if (result.retried > 0 || result.discovered > 0) {
         this.logger.log(
-          `[EmbeddingRetry] Retried ${result.retried}: ${result.succeeded} ok, ${result.failed} failed, ${result.discovered} discovered`,
+          `[EmbeddingRetry] Retried ${result.retried}: ${result.succeeded} ok, ${result.failed} failed, ${result.discovered} discovered, ${result.exhaustedRetries} exhausted`,
+        );
+      }
+      if (result.exhaustedRetries > 0) {
+        this.logger.error(
+          `[EmbeddingRetry] DEAD LETTER: ${result.exhaustedRetries} memories will never be searchable`,
         );
       }
     } catch (error) {

@@ -84,8 +84,13 @@ export class HybridSearchService {
       return results;
     } catch (error) {
       this.logger.warn(
-        `[HybridSearch] ES keyword search failed, returning empty: ${(error as Error).message}`,
+        `[HybridSearch] ES keyword search failed (hybrid_degraded=true), returning empty: ${(error as Error).message}`,
       );
+      this.logger.warn({
+        event: 'hybrid_degraded',
+        reason: 'es_error',
+        error: (error as Error).message,
+      });
       return [];
     }
   }

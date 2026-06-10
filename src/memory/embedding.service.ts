@@ -3,6 +3,10 @@ import { MemoryLayer } from '@prisma/client';
 import { LLMService } from '../llm/llm.service';
 import { VectorService } from '../vector/vector.service';
 import { EmbeddingService as EmbedFacade } from '../embedding/embedding.service';
+import {
+  assertValidEmbedding,
+  isTransientEmbeddingError,
+} from '../embedding/embedding-validation.util';
 
 export interface VectorSearchResult {
   id: string;
@@ -65,13 +69,18 @@ export class EmbeddingService {
       this.consecutiveFailures = 0;
       return result.embedding;
     } catch (error) {
-      this.consecutiveFailures++;
-      if (this.consecutiveFailures >= this.FAILURE_THRESHOLD) {
-        this.circuitOpenUntil = Date.now() + this.COOLDOWN_MS;
-        this.logger.warn(
-          `[CircuitBreaker] OPEN — ${this.consecutiveFailures} consecutive embedding failures. ` +
-            `Cooldown until ${new Date(this.circuitOpenUntil).toISOString()}`,
-        );
+      // Ingest M2 fix: transient errors (e.g. engram-embed 503 backlog) must
+      // NOT count toward the circuit-breaker threshold — they are expected
+      // under burst load and will self-heal once the queue drains.
+      if (!isTransientEmbeddingError(error)) {
+        this.consecutiveFailures++;
+        if (this.consecutiveFailures >= this.FAILURE_THRESHOLD) {
+          this.circuitOpenUntil = Date.now() + this.COOLDOWN_MS;
+          this.logger.warn(
+            `[CircuitBreaker] OPEN — ${this.consecutiveFailures} consecutive embedding failures. ` +
+              `Cooldown until ${new Date(this.circuitOpenUntil).toISOString()}`,
+          );
+        }
       }
       throw error;
     }
@@ -121,6 +130,7 @@ export class EmbeddingService {
       createdAt?: Date;
     },
   ): Promise<string> {
+    assertValidEmbedding(embedding, { context: `store ${memoryId}` });
     await this.vector.upsert({
       id: memoryId,
       embedding,
