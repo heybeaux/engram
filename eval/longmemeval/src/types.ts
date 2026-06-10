@@ -100,4 +100,6 @@ export interface RunConfig {
   resultsPath: string;
   /** True when resuming an existing JSONL file */
   resume: boolean;
+  /** Skip ingest — reuse sessions already in DB (IDs are deterministic: lme-{question_id}) */
+  skipIngest?: boolean;
 }

@@ -174,12 +174,12 @@ async function callReadingModel(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: conSystemPrompt,
       messages: [
         {
           role: 'user',
-          content: `Answer the following question based on the memories above.\n\nQuestion: ${question}${categoryHint}\n\nRespond with a JSON object containing:\n- "notes": array of { "memory_id": string, "note": string } (one per memory)\n- "answer": string (your final answer)\n\nIf the memories do not contain enough information to answer the question, do NOT guess — respond with "answer": "I don't know" and explain what is missing in the notes.\n\nJSON only, no markdown.`,
+          content: `Answer the following question based on the memories above.\n\nQuestion: ${question}${categoryHint}\n\nRespond with a JSON object. Put "answer" FIRST. Only include "notes" for memories that are relevant or partially relevant — skip irrelevant ones entirely. Keep each note brief (one sentence max).\n\n{\n  "answer": "your final answer here",\n  "notes": [{ "memory_id": "...", "note": "why relevant" }]\n}\n\nIf the memories do not contain enough information, set "answer" to "I don't know".\n\nJSON only, no markdown.`,
         },
       ],
     }),

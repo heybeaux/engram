@@ -34,6 +34,7 @@ interface ParsedArgs extends Partial<RunConfig> {
   outputPath: string;
   resultsDir: string;
   resumePath?: string;
+  skipIngest?: boolean;
 }
 
 function parseArgs(): ParsedArgs {
@@ -65,6 +66,8 @@ function parseArgs(): ParsedArgs {
       opts.resumePath = args[++i];
     } else if (arg === '--results-dir' && args[i + 1]) {
       opts.resultsDir = args[++i];
+    } else if (arg === '--skip-ingest') {
+      opts.skipIngest = true;
     }
   }
 
@@ -121,6 +124,7 @@ function buildConfig(parsed: ParsedArgs): RunConfig {
     outputPath: parsed.outputPath,
     resultsPath,
     resume,
+    skipIngest: parsed.skipIngest,
   };
 }
 
@@ -144,6 +148,7 @@ async function main() {
   console.log(`  readModel: ${config.readModel}`);
   console.log(`  apiBase:   ${config.apiBase}`);
   console.log(`  resume:    ${config.resume ? 'yes' : 'no'}`);
+  console.log(`  skipIngest: ${config.skipIngest ? 'yes (reusing existing sessions)' : 'no'}`);
   console.log('');
 
   // Load dataset
@@ -201,7 +206,17 @@ async function main() {
 
     let result: QuestionResult;
     try {
-      const ingestResult = await ingestQuestion(question, config);
+      // --skip-ingest: reconstruct IngestResult from deterministic IDs (no API call)
+      const ingestResult = config.skipIngest
+        ? {
+            questionId: question.question_id,
+            sessionId: `lme-${question.question_id}`,
+            userId: `lme-${question.question_id}`,
+            agentId: `lme-${question.question_id}`,
+            memoryIds: [],
+            chunks: 0,
+          }
+        : await ingestQuestion(question, config);
       const recallResult = await recallQuestion(
         question.question_id,
         question.question,
