@@ -37,6 +37,11 @@ export interface LongMemEvalQuestion {
   session_history: RoundEntry[];
   /** Optional: pre-split into multiple sessions (for multi-session questions) */
   sessions?: RoundEntry[][];
+  /**
+   * The date/time the question was asked (from the dataset's question_date field).
+   * Critical for temporal-reasoning questions that ask "how many X ago…".
+   */
+  question_date?: string;
 }
 
 export interface LmeDataset {

@@ -117,9 +117,13 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
   };
 
   const questions: LongMemEvalQuestion[] = (rawItems as any[]).map((item: any) => {
-    // If already in normalized format (smoke fixture), pass through
+    // If already in normalized format (smoke fixture), normalize answer and pass through
     if (Array.isArray(item.session_history)) {
-      return item as LongMemEvalQuestion;
+      const ans = item.answer ?? '';
+      return {
+        ...item,
+        answer: typeof ans === 'string' ? ans : String(ans),
+      } as LongMemEvalQuestion;
     }
     // Normalize HuggingFace format
     const questionType: string = item.question_type ?? item.category ?? 'single-session-user';
@@ -134,13 +138,17 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
       ? item.haystack_dates
       : [];
     const session_history: RoundEntry[] = buildSessionHistory(sessions, sessionDates);
+    // Normalize answer to string — integer answers crash judge's .trim()
+    const rawAnswer = item.answer ?? '';
+    const answer = typeof rawAnswer === 'string' ? rawAnswer : String(rawAnswer);
     return {
       question_id: item.question_id,
       question: item.question,
-      answer: item.answer ?? '',
+      answer,
       category,
       session_history,
       sessions: sessions.length > 1 ? sessions : undefined,
+      question_date: item.question_date ?? undefined,
     } as LongMemEvalQuestion;
   });
 

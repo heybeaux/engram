@@ -222,6 +222,8 @@ async function main() {
         question.question,
         ingestResult,
         config,
+        question.category,
+        question.question_date,
       );
       const judgeResult = await judgeAnswer(
         question.question,

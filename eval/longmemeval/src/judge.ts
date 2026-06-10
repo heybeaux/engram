@@ -43,18 +43,21 @@ export interface JudgeResult {
  */
 export async function judgeAnswer(
   question: string,
-  expected: string,
+  expected: string | number,
   predicted: string,
   apiKey: string,
 ): Promise<JudgeResult> {
+  // Normalize expected to string — integer answers in the dataset crash .trim()
+  const expectedStr = typeof expected === 'string' ? expected : String(expected);
+
   // Fast path: exact match (case-insensitive, trimmed) — skip LLM
-  if (expected.trim().toLowerCase() === predicted.trim().toLowerCase()) {
+  if (expectedStr.trim().toLowerCase() === predicted.trim().toLowerCase()) {
     return { correct: true, reasoning: 'Exact match.' };
   }
 
   // Fast path: empty prediction — incorrect unless expected is also empty
   if (!predicted.trim()) {
-    if (!expected.trim()) {
+    if (!expectedStr.trim()) {
       return { correct: true, reasoning: 'Both prediction and expected are empty.' };
     }
     return { correct: false, reasoning: 'Prediction is empty; expected a non-empty answer.' };
@@ -62,7 +65,7 @@ export async function judgeAnswer(
 
   const userMessage = `Question: ${question}
 
-Gold answer: ${expected}
+Gold answer: ${expectedStr}
 
 Predicted answer: ${predicted}
 
@@ -91,7 +94,7 @@ Is the predicted answer correct?`;
   const data = await response.json() as { content: Array<{ type: string; text: string }> };
   const raw = data.content?.[0]?.text ?? '';
 
-  return parseJudgeResponse(raw, predicted, expected);
+  return parseJudgeResponse(raw, predicted, expectedStr);
 }
 
 /** Parse the judge's JSON response with a graceful fallback. */

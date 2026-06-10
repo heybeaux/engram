@@ -33,9 +33,13 @@ interface ConEnvelope {
 /**
  * Run recall + CoN reading for a single question.
  *
- * @param category Optional question category — used to tune the reading
- *                 prompt (recency ordering for knowledge-update, implicit
- *                 preference hint for single-session-preference).
+ * @param category      Optional question category — used to tune the reading
+ *                      prompt (recency ordering for knowledge-update, implicit
+ *                      preference hint for single-session-preference, temporal
+ *                      date arithmetic for temporal-reasoning).
+ * @param question_date The date the question was asked (from dataset metadata).
+ *                      Required for temporal-reasoning questions to compute
+ *                      relative dates like "how many weeks ago…".
  */
 export async function recallQuestion(
   questionId: string,
@@ -43,6 +47,7 @@ export async function recallQuestion(
   ingestResult: IngestResult,
   config: Pick<RunConfig, 'apiBase' | 'apiKey' | 'anthropicApiKey' | 'readModel'>,
   category?: LmeCategory,
+  question_date?: string,
 ): Promise<RecallResult> {
   // Step 1: recall from Engram with sessionId filter and CoN enabled.
   // Note: the query API (QueryMemoryDto) has no sort/recency parameter, so
@@ -104,6 +109,7 @@ export async function recallQuestion(
     config.readModel,
     category,
     recallData.memories,
+    question_date,
   );
 
   // Step 4: extract answer from structured JSON envelope
@@ -122,33 +128,71 @@ export async function recallQuestion(
 /**
  * Build category-specific guidance appended to the reading-model user message.
  * Exported for unit testing.
+ *
+ * @param category      LME question category (drives prompt specialization)
+ * @param memories      Retrieved memories (used for recency timeline)
+ * @param question_date ISO/human date the question was asked — needed for
+ *                      temporal-reasoning arithmetic ("how many weeks ago…")
  */
 export function buildCategoryHint(
   category: LmeCategory | undefined,
   memories: Array<{ id: string; fact: string; timestamp?: string }> = [],
+  question_date?: string,
 ): string {
   if (category === 'knowledge-update') {
-    // Order memories chronologically: by in-text date marker when present
-    // (chunk text carries "[<date>] " / session markers), falling back to the
-    // memory row timestamp (ingest-time createdAt).
+    // Order memories chronologically so the model sees the progression clearly.
+    // In-text date markers inside `fact` take priority; `timestamp` (ingest-time
+    // createdAt) is the fallback.
     const timeline = [...memories]
       .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
       .map(m => `- [${m.timestamp ?? 'unknown time'}] ${m.fact}`)
       .join('\n');
     return (
-      `\n\nThe question may involve information that was UPDATED over time. ` +
-      `Pay attention to dates and session markers inside the memories: when two memories conflict, ` +
-      `the LATER fact supersedes the earlier one — answer with the most recent information.` +
-      `\n\nMemories ordered oldest to newest (by stored timestamp):\n${timeline}`
+      `\n\n⚠️  KNOWLEDGE-UPDATE QUESTION: The fact you need may have been updated across ` +
+      `multiple conversations. When two memories CONFLICT, the MOST RECENT one is correct — ` +
+      `always answer with the latest information, not the earliest. ` +
+      `Look for session-boundary markers (e.g. "--- Session N (date) ---") embedded in the ` +
+      `memory facts to establish which version came last.\n\n` +
+      `Memories sorted oldest → newest (by stored timestamp):\n${timeline}`
     );
   }
+
+  if (category === 'temporal-reasoning-ability') {
+    const dateContext = question_date
+      ? `The question was asked on: ${question_date}\n` +
+        `Use this as TODAY'S DATE for all relative-time calculations.`
+      : `No explicit question date available — infer "today" from the latest session ` +
+        `date visible in the memories.`;
+
+    const annotated = [...memories]
+      .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
+      .map(m => `- [date: ${m.timestamp ?? 'unknown'}] ${m.fact}`)
+      .join('\n');
+
+    return (
+      `\n\n⚠️  TEMPORAL-REASONING QUESTION: You must compute relative time (days/weeks/months ago, ` +
+      `or chronological order).\n\n` +
+      `${dateContext}\n\n` +
+      `Each memory below has its absolute date annotated. Steps:\n` +
+      `1. Identify the relevant event date(s) from the memories.\n` +
+      `2. Subtract from the question date to get the elapsed time.\n` +
+      `3. Convert to the unit the question asks for (days, weeks, months).\n` +
+      `4. State the number explicitly — do NOT say "I don't know" if the dates are present.\n\n` +
+      `Memories sorted oldest → newest:\n${annotated}`
+    );
+  }
+
   if (category === 'single-session-preference') {
     return (
-      `\n\nThe question asks about the user's preferences. Preferences are often stated ` +
-      `implicitly or with hedged language (e.g. "I usually...", "I tend to prefer...", ` +
-      `"I'm not a big fan of..."). Look for such implicit preference statements in the memories.`
+      `\n\n⚠️  PREFERENCE QUESTION: Synthesize what the user would PREFER, not just literal facts. ` +
+      `Preferences are often stated implicitly or with hedged language ` +
+      `(e.g. "I usually…", "I tend to prefer…", "I'm not a big fan of…", "I love…"). ` +
+      `Even if no memory uses the word 'prefer', infer preference from repeated choices, ` +
+      `positive/negative reactions, and stated interests. ` +
+      `Tailor your answer to those inferred preferences rather than giving generic advice.`
     );
   }
+
   return '';
 }
 
@@ -163,8 +207,9 @@ async function callReadingModel(
   model: string,
   category?: LmeCategory,
   memories: Array<{ id: string; fact: string; timestamp?: string }> = [],
+  question_date?: string,
 ): Promise<string> {
-  const categoryHint = buildCategoryHint(category, memories);
+  const categoryHint = buildCategoryHint(category, memories, question_date);
   const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
