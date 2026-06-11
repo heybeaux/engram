@@ -5,6 +5,8 @@
  * Usage:
  *   pnpm longmemeval [--limit N] [--category CATEGORY] [--subset smoke|full]
  *                    [--resume PATH] [--results-dir DIR] [--output PATH]
+ *                    [--batch-ingest] [--ingest-concurrency N]
+ *                    [--skip-ingest] [--post-ingest-wait MS]
  *
  * Env vars:
  *   ENGRAM_API_BASE          — default: http://localhost:3000
@@ -21,7 +23,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadDataset } from './loader';
-import { ingestQuestion } from './ingest';
+import { ingestQuestion, batchIngest, waitForEmbeddingDrain } from './ingest';
 import { recallQuestion } from './recall';
 import { judgeAnswer } from './judge';
 import { buildSummary, formatSummary, loadResultsFromJsonl } from './scorer';
@@ -70,6 +72,10 @@ function parseArgs(): ParsedArgs {
       opts.skipIngest = true;
     } else if (arg === '--post-ingest-wait' && args[i + 1]) {
       opts.postIngestWaitMs = parseInt(args[++i], 10);
+    } else if (arg === '--batch-ingest') {
+      opts.batchIngest = true;
+    } else if (arg === '--ingest-concurrency' && args[i + 1]) {
+      opts.ingestConcurrency = parseInt(args[++i], 10);
     }
   }
 
@@ -128,6 +134,8 @@ function buildConfig(parsed: ParsedArgs): RunConfig {
     resume,
     skipIngest: parsed.skipIngest,
     postIngestWaitMs: parsed.postIngestWaitMs ?? 8000,
+    batchIngest: parsed.batchIngest,
+    ingestConcurrency: parsed.ingestConcurrency,
   };
 }
 
@@ -152,6 +160,7 @@ async function main() {
   console.log(`  apiBase:   ${config.apiBase}`);
   console.log(`  resume:    ${config.resume ? 'yes' : 'no'}`);
   console.log(`  skipIngest: ${config.skipIngest ? 'yes (reusing existing sessions)' : 'no'}`);
+  console.log(`  batchIngest: ${config.batchIngest ? `yes (concurrency ${config.ingestConcurrency ?? 4})` : 'no'}`);
   console.log('');
 
   // Load dataset
@@ -175,6 +184,39 @@ async function main() {
     );
     console.log('');
   }
+
+  // Batch-ingest phase: push all haystacks up front, then run the query loop
+  // with no per-question embedding wait. Ingest progress is recorded in a
+  // manifest JSONL next to the results file, so a crashed run resumes without
+  // double-ingesting (which would duplicate memories).
+  if (config.batchIngest && !config.skipIngest) {
+    const toIngest = questions.filter(q => !completedIds.has(q.question_id));
+    if (toIngest.length > 0) {
+      const manifestPath = config.resultsPath.replace(/\.jsonl$/, '') + '.ingest.jsonl';
+      console.log(`Batch ingest: ${toIngest.length} questions (manifest: ${manifestPath})`);
+      const { ingested, skipped } = await batchIngest(
+        toIngest,
+        config,
+        manifestPath,
+        config.ingestConcurrency ?? 4,
+        (done, total) => {
+          if (done % 10 === 0 || done === total) {
+            console.log(`  ingested ${done}/${total}`);
+          }
+        },
+      );
+      console.log(`Batch ingest complete: ${ingested} ingested, ${skipped} already in manifest`);
+
+      // Queue is FIFO — once the last-ingested sessions are searchable, all are.
+      const probes = toIngest.slice(-3).map(q => ({ questionId: q.question_id, query: q.question }));
+      process.stdout.write('Waiting for embedding queue to drain...');
+      const drained = await waitForEmbeddingDrain(probes, config);
+      console.log(drained ? ' drained.' : ' TIMEOUT after 180s — proceeding anyway (recall may be thin for tail questions).');
+      console.log('');
+    }
+  }
+  // After batch ingest, the loop must not re-ingest or wait per question.
+  const reuseExistingSessions = config.skipIngest || config.batchIngest;
 
   // Graceful shutdown — let in-flight question finish, then exit
   let shouldStop = false;
@@ -214,8 +256,9 @@ async function main() {
 
     let result: QuestionResult;
     try {
-      // --skip-ingest: reconstruct IngestResult from deterministic IDs (no API call)
-      const ingestResult = config.skipIngest
+      // Sessions already in DB (--skip-ingest or batch-ingest phase):
+      // reconstruct IngestResult from deterministic IDs (no API call)
+      const ingestResult = reuseExistingSessions
         ? {
             questionId: question.question_id,
             sessionId: `lme-${question.question_id}`,
@@ -227,7 +270,7 @@ async function main() {
         : await ingestQuestion(question, config);
       // The embedding queue is async — vectors land 1-3s after bulk ingest
       // returns. Recalling immediately races it and recall comes back empty.
-      if (!config.skipIngest && (config.postIngestWaitMs ?? 0) > 0) {
+      if (!reuseExistingSessions && (config.postIngestWaitMs ?? 0) > 0) {
         await new Promise(r => setTimeout(r, config.postIngestWaitMs));
       }
       const recallResult = await recallQuestion(

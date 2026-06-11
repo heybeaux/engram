@@ -109,4 +109,8 @@ export interface RunConfig {
   skipIngest?: boolean;
   /** Wait after ingest before recall so the async embedding queue catches up (default 8000ms) */
   postIngestWaitMs?: number;
+  /** Ingest all questions up front (resumable manifest), then query with no per-question wait */
+  batchIngest?: boolean;
+  /** Concurrent ingest requests during the batch-ingest phase (default 4) */
+  ingestConcurrency?: number;
 }
