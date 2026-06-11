@@ -107,4 +107,6 @@ export interface RunConfig {
   resume: boolean;
   /** Skip ingest — reuse sessions already in DB (IDs are deterministic: lme-{question_id}) */
   skipIngest?: boolean;
+  /** Wait after ingest before recall so the async embedding queue catches up (default 8000ms) */
+  postIngestWaitMs?: number;
 }

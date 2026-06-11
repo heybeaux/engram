@@ -68,6 +68,8 @@ function parseArgs(): ParsedArgs {
       opts.resultsDir = args[++i];
     } else if (arg === '--skip-ingest') {
       opts.skipIngest = true;
+    } else if (arg === '--post-ingest-wait' && args[i + 1]) {
+      opts.postIngestWaitMs = parseInt(args[++i], 10);
     }
   }
 
@@ -125,6 +127,7 @@ function buildConfig(parsed: ParsedArgs): RunConfig {
     resultsPath,
     resume,
     skipIngest: parsed.skipIngest,
+    postIngestWaitMs: parsed.postIngestWaitMs ?? 8000,
   };
 }
 
@@ -222,6 +225,11 @@ async function main() {
             chunks: 0,
           }
         : await ingestQuestion(question, config);
+      // The embedding queue is async — vectors land 1-3s after bulk ingest
+      // returns. Recalling immediately races it and recall comes back empty.
+      if (!config.skipIngest && (config.postIngestWaitMs ?? 0) > 0) {
+        await new Promise(r => setTimeout(r, config.postIngestWaitMs));
+      }
       const recallResult = await recallQuestion(
         question.question_id,
         question.question,
