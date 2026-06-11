@@ -17,7 +17,9 @@ import * as path from 'path';
 import * as https from 'https';
 import type { LongMemEvalQuestion, LmeDataset, LmeCategory, RunConfig, RoundEntry } from './types';
 
-const FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'smoke-20.json');
+const FIXTURE_PATH =
+  process.env.LONGMEMEVAL_FIXTURE_PATH ??
+  path.join(__dirname, '..', 'fixtures', 'smoke-20.json');
 
 /**
  * Load dataset according to run config.

@@ -54,13 +54,17 @@ export async function recallQuestion(
   // recency handling for knowledge-update is done client-side below by
   // ordering retrieved memories chronologically in the reading prompt.
   const recallUrl = `${config.apiBase}/v1/memories/query`;
+  // Temporal questions need more candidates because events are often buried in
+  // off-topic conversations (e.g. a shopping mention inside a TV-mount discussion).
+  const recallLimit = category === 'temporal-reasoning-ability' ? 80 : 50;
+
   const recallBody = {
     query: question,
     sessionId: ingestResult.sessionId,
     response_format: 'structured',
     chainOfNote: true,
     note: question,  // HEY-576: question field for CoN prompt interpolation
-    limit: 50,
+    limit: recallLimit,
   };
 
   const recallRes = await fetchWithRetry(recallUrl, {
@@ -143,9 +147,16 @@ export function buildCategoryHint(
     // Order memories chronologically so the model sees the progression clearly.
     // In-text date markers inside `fact` take priority; `timestamp` (ingest-time
     // createdAt) is the fallback.
+    // Use in-text dates from fact text (format: [YYYY/MM/DD ...]) for ordering;
+    // the stored timestamp is the ingest wall-clock time and is unreliable for ordering.
+    const kuInTextRe = /\[(\d{4}\/\d{2}\/\d{2}[^\]]*)\]/;
+    const getKuFactDate = (m: { fact: string; timestamp?: string }): string => {
+      const match = kuInTextRe.exec(m.fact);
+      return match ? match[1] : (m.timestamp ?? '');
+    };
     const timeline = [...memories]
-      .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
-      .map(m => `- [${m.timestamp ?? 'unknown time'}] ${m.fact}`)
+      .sort((a, b) => getKuFactDate(a).localeCompare(getKuFactDate(b)))
+      .map(m => `- [${getKuFactDate(m) || 'unknown time'}] ${m.fact}`)
       .join('\n');
     return (
       `\n\n⚠️  KNOWLEDGE-UPDATE QUESTION: The fact you need may have been updated across ` +
@@ -164,20 +175,39 @@ export function buildCategoryHint(
       : `No explicit question date available — infer "today" from the latest session ` +
         `date visible in the memories.`;
 
+    // Prefer the in-text date embedded in the fact (format: [YYYY/MM/DD ...]) over
+    // the stored ingest timestamp which is always the wall-clock ingest time.
+    const inTextDateRe = /\[(\d{4}\/\d{2}\/\d{2}[^\]]*)\]/;
+    const getFactDate = (m: { fact: string; timestamp?: string }): string => {
+      const match = inTextDateRe.exec(m.fact);
+      return match ? match[1] : (m.timestamp ?? 'unknown');
+    };
+
     const annotated = [...memories]
-      .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
-      .map(m => `- [date: ${m.timestamp ?? 'unknown'}] ${m.fact}`)
+      .sort((a, b) => getFactDate(a).localeCompare(getFactDate(b)))
+      .map(m => `- [date: ${getFactDate(m)}] ${m.fact}`)
       .join('\n');
 
     return (
       `\n\n⚠️  TEMPORAL-REASONING QUESTION: You must compute relative time (days/weeks/months ago, ` +
       `or chronological order).\n\n` +
       `${dateContext}\n\n` +
-      `Each memory below has its absolute date annotated. Steps:\n` +
-      `1. Identify the relevant event date(s) from the memories.\n` +
-      `2. Subtract from the question date to get the elapsed time.\n` +
-      `3. Convert to the unit the question asks for (days, weeks, months).\n` +
-      `4. State the number explicitly — do NOT say "I don't know" if the dates are present.\n\n` +
+      `CRITICAL DATE-ARITHMETIC RULES:\n` +
+      `• If a memory says "yesterday I did X" and the session date is D, the event date is D-1.\n` +
+      `• Days elapsed = question_date minus event_date (exclusive counting: "21 days ago" means ` +
+      `exactly 21 calendar days before today, not 22).\n` +
+      `• Weeks = floor(days / 7), rounding down; 13-14 days → 2 weeks.\n` +
+      `• Months = count of calendar months between two dates; 5 weeks ≈ 1 month.\n` +
+      `  Round to nearest whole month (e.g. 62 days ≈ 2 months, 154 days ≈ 5 months).\n` +
+      `• MULTI-EVENT questions (e.g. "two events in a row on consecutive days"): scan ALL memories, ` +
+      `identify pairs of events occurring on adjacent calendar days, use the date of the LATER event.\n` +
+      `• Do NOT say "I don't know" if dates are visible in the memories — compute from what's there.\n\n` +
+      `STEP-BY-STEP PROCESS:\n` +
+      `1. Find ALL memories relevant to the question (events, activities, purchases, visits).\n` +
+      `2. Determine each event's absolute date (use session date + "yesterday/today" offsets if needed).\n` +
+      `3. For multi-event questions, check if any two events are on consecutive calendar days.\n` +
+      `4. Compute elapsed time from the relevant event date to TODAY (question date above).\n` +
+      `5. State the final number explicitly in the unit the question asks for.\n\n` +
       `Memories sorted oldest → newest:\n${annotated}`
     );
   }
