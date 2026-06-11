@@ -246,8 +246,17 @@ export class MemoryQueryRankingService {
         const hasScores = ranked.some((r) => r.score > 0);
         if (!hasScores) return applyFallbackBlend(memories);
 
+        // Normalize reranker scores to [0, 1] before blending.
+        // RRF ensemble scores are tiny (~0.008–0.033); without normalization
+        // importanceScore * 0.15 dominates and makes ranking query-independent.
+        const maxScore = Math.max(...ranked.map((r) => r.score));
+        const normalizedRanked =
+          maxScore > 0
+            ? ranked.map((r) => ({ ...r, score: r.score / maxScore }))
+            : ranked;
+
         // Post-reranker final blend: rerankerScore * 0.85 + importanceScore * 0.15 + sentiment penalty
-        const reranked = ranked
+        const reranked = normalizedRanked
           .map((r) => {
             const mem = candidates[r.index];
             const importanceScore =
