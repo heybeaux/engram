@@ -150,13 +150,13 @@ describe('SentimentService', () => {
 
     it('returns 0.15 for positive query vs negative memory', () => {
       expect(SentimentService.sentimentPenalty('positive', 'negative')).toBe(
-        0.05,
+        0.15,
       );
     });
 
     it('returns 0.15 for negative query vs positive memory', () => {
       expect(SentimentService.sentimentPenalty('negative', 'positive')).toBe(
-        0.05,
+        0.15,
       );
     });
 
@@ -188,14 +188,14 @@ describe('SentimentService', () => {
     it('penalizes positive memory for negative query', () => {
       const query = 'when I felt stressed or overwhelmed';
       const joyMemory = 'Today was perfect. Kids were laughing, sun was out.';
-      expect(SentimentService.scorePenalty(query, joyMemory)).toBe(0.05);
+      expect(SentimentService.scorePenalty(query, joyMemory)).toBe(0.15);
     });
 
     it('penalizes negative memory for positive query', () => {
       const query = 'What makes me happy?';
       const stressMemory =
         "Completely overwhelmed. Can't focus. Too many things pulling at me.";
-      expect(SentimentService.scorePenalty(query, stressMemory)).toBe(0.05);
+      expect(SentimentService.scorePenalty(query, stressMemory)).toBe(0.15);
     });
 
     it('does not penalize matching polarity', () => {
@@ -229,14 +229,14 @@ describe('SentimentService', () => {
     it('penalizes alice_joy_001 for grief query', () => {
       const query = 'times I felt sad or grieving';
       const joyMemory = 'Today was perfect. Kids were laughing, sun was out.';
-      expect(SentimentService.scorePenalty(query, joyMemory)).toBe(0.05);
+      expect(SentimentService.scorePenalty(query, joyMemory)).toBe(0.15);
     });
 
     it('penalizes alice_stress_001 for happy query', () => {
       const query = 'My proudest moments';
       const stressMemory =
         "Completely overwhelmed. Can't focus. Too many things pulling at me.";
-      expect(SentimentService.scorePenalty(query, stressMemory)).toBe(0.05);
+      expect(SentimentService.scorePenalty(query, stressMemory)).toBe(0.15);
     });
 
     it('does not penalize alice_pride_001 for proud query', () => {
@@ -250,7 +250,7 @@ describe('SentimentService', () => {
       const query = 'Times I was frustrated';
       const prideMemory =
         'Just got promoted. Years of hard work paying off. This is my proudest professional moment.';
-      expect(SentimentService.scorePenalty(query, prideMemory)).toBe(0.05);
+      expect(SentimentService.scorePenalty(query, prideMemory)).toBe(0.15);
     });
 
     it('returns 1.0 for empty query', () => {

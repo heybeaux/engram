@@ -55,6 +55,7 @@ export class DreamCycleImportanceRescoreStage {
           usedCount: true,
           createdAt: true,
           layer: true,
+          searchable: true,
         },
         take: this.batchSize,
         orderBy: { id: 'asc' },
@@ -75,8 +76,10 @@ export class DreamCycleImportanceRescoreStage {
           memory.layer,
         );
 
-        // Clamp to [0, 1]
-        const clamped = Math.max(0, Math.min(1, newScore));
+        // Clamp to [0, 1]; searchable memories get a 0.20 floor to prevent
+        // decay from accidentally triggering the archival stage threshold (0.15)
+        const floor = memory.searchable !== false ? 0.20 : 0;
+        const clamped = Math.max(floor, Math.min(1, newScore));
         const change = Math.abs(clamped - (memory.importanceScore ?? 0.5));
 
         if (change < 0.001) {

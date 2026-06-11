@@ -9,7 +9,7 @@
  *
  * Two-tier penalty system:
  * - 0.15× for opposite-polarity memories (joy memory for grief query)
- * - 0.90× for neutral memories when the query has strong sentiment
+ * - 0.75× for neutral memories when the query has strong sentiment
  *   (daily-gen noise like "Morning routine: cleared my inbox" competes
  *    with specific emotional memories; this mild penalty tips the balance)
  */
@@ -146,7 +146,7 @@ export class SentimentService {
 
     // Neutral memory on an emotional query: mild suppression
     // Keeps same-polarity emotional memories ranked above general noise.
-    if (memoryPolarity === 'neutral') return 0.90;
+    if (memoryPolarity === 'neutral') return 0.75;
 
     // Same polarity: no penalty
     return 1.0;
