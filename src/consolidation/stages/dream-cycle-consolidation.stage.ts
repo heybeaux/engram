@@ -210,7 +210,7 @@ Write a single consolidated memory that captures all the information above.`;
 
     // Create consolidated memory and archive originals in a transaction
     await this.prisma.$transaction(async (tx) => {
-      // Create the new consolidated memory
+      // Create the new consolidated memory; searchable is set after embedding is written
       const newMemory = await tx.memory.create({
         data: {
           userId,
@@ -226,9 +226,15 @@ Write a single consolidated memory that captures all the information above.`;
 
       if (embedding) {
         await this.embeddingWrite.writeLegacyInlineEmbedding(newMemory.id, embedding);
+        // Mark searchable now that embedding exists
+        await tx.memory.update({
+          where: { id: newMemory.id },
+          data: { searchable: true },
+        });
       }
 
-      // Link originals to the consolidated memory and archive them
+      // Link originals to the consolidated memory and archive them.
+      // Set supersededById so resolveSuperseded() can follow the chain in benchmarks.
       const originalIds = cluster.map((m) => m.id);
       await tx.memory.updateMany({
         where: { id: { in: originalIds }, userId },
@@ -236,6 +242,7 @@ Write a single consolidated memory that captures all the information above.`;
           consolidatedInto: newMemory.id,
           consolidated: true,
           tier: 'ARCHIVED',
+          supersededById: newMemory.id,
         },
       });
     });
