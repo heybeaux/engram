@@ -192,6 +192,11 @@ async function main() {
   // Run evaluation, streaming results to JSONL
   let done = priorResults.length;
   const totalToRun = questions.length;
+  // Infra errors (API outage, credit limit) must NOT be recorded as wrong
+  // answers — skip the append so --resume retries them. Abort on a streak,
+  // which almost always means a systemic outage rather than a flaky question.
+  const MAX_CONSECUTIVE_ERRORS = 3;
+  let consecutiveErrors = 0;
 
   for (const question of questions) {
     if (completedIds.has(question.question_id)) {
@@ -245,20 +250,20 @@ async function main() {
       };
       const mark = judgeResult.correct ? '✓' : '✗';
       console.log(` ${mark} (${latencyMs}ms)`);
+      consecutiveErrors = 0;
     } catch (err) {
-      const latencyMs = Date.now() - start;
       console.log(` ERROR: ${(err as Error).message}`);
-      result = {
-        questionId: question.question_id,
-        question: question.question,
-        expected: question.answer,
-        predicted: '',
-        correct: false,
-        category: question.category,
-        latencyMs,
-        judgeReasoning: `Error: ${(err as Error).message}`,
-        timestamp: new Date().toISOString(),
-      };
+      consecutiveErrors++;
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        console.error('');
+        console.error(
+          `Aborting after ${consecutiveErrors} consecutive errors — likely an API/credit outage, not flaky questions.`,
+        );
+        console.error(`Completed so far: ${done}/${totalToRun}. Errored questions were NOT recorded and will be retried.`);
+        console.error(`Resume with: pnpm longmemeval --subset ${config.subset} --resume ${config.resultsPath}`);
+        process.exit(1);
+      }
+      continue;
     }
 
     // Durable append BEFORE bumping counters or considering stop
