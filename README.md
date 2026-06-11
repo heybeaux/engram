@@ -177,6 +177,43 @@ npm install @engram/client
   <em>Memory Browser — Semantic search, layer filtering, importance scores</em>
 </p>
 
+## LongMemEval Benchmark
+
+Engram is evaluated against [LongMemEval](https://github.com/xiaowu0162/LongMemEval), the standard benchmark for long-term conversational memory (500 questions across multi-session chat histories).
+
+### Latest Results (June 2026)
+
+**78.1% overall accuracy (388/497)** on the full 500-question set, end-to-end through Engram's ingest → recall → answer pipeline.
+
+| Category | Accuracy |
+|----------|:--------:|
+| Single-session-user | 95.7% (67/70) |
+| Single-session-preference | 90.0% (27/30) |
+| Single-session-assistant | 80.4% (45/56) |
+| Knowledge-update | 76.0% (57/75) |
+| Temporal-reasoning | 72.9% (97/133) |
+| Multi-session-user | 71.4% (95/133) |
+
+### Run Progression
+
+| Run | Accuracy | Key Changes |
+|-----|:--------:|-------------|
+| Run 1 | 53.2% | Baseline pipeline |
+| Run 2 | 64.0% | Recall + prompt fixes |
+| Run 3 | **78.1%** | Embedding-dimension guard, recency-aware recall, question-date injection, in-text date extraction, temporal arithmetic rules, preference framing |
+
+Biggest gains came in temporal reasoning (32.3% → 72.9%) and multi-session recall (42.1% → 71.4%).
+
+### Running LongMemEval
+
+```bash
+cd eval/longmemeval
+set -a; source .env.local; set +a
+pnpm longmemeval --subset full              # Full 500-question run
+pnpm longmemeval --subset full --batch-ingest --ingest-concurrency 4  # Faster ingest
+pnpm longmemeval --subset full --resume results/full-<ts>.jsonl       # Resume a crashed run
+```
+
 ## Recall Benchmark
 
 Engram includes a comprehensive recall benchmark suite that tests semantic retrieval quality across 81 queries in 7 categories. Every PR runs the benchmark in CI with real embeddings (bge-base-en-v1.5) and ensemble reranking.
