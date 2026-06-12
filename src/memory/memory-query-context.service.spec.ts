@@ -271,7 +271,11 @@ describe('MemoryQueryContextService', () => {
         (c: any[]) => c[0]?.where?.layer === MemoryLayer.SESSION,
       );
       expect(sessionCall).toBeDefined();
-      expect(sessionCall![0].where).toMatchObject({ sessionId: 'sess-abc' });
+      expect(sessionCall![0].where).toMatchObject({
+        session: {
+          OR: [{ id: 'sess-abc' }, { externalId: 'sess-abc' }],
+        },
+      });
     });
 
     it('does not add sessionId to SESSION where clause when omitted', async () => {

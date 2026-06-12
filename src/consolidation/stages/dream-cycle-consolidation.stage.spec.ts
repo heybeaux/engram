@@ -162,6 +162,7 @@ describe('DreamCycleConsolidationStage', () => {
         const tx = {
           memory: {
             create: jest.fn().mockResolvedValue(newMemory),
+            update: jest.fn().mockResolvedValue({}),
             updateMany: jest.fn().mockResolvedValue({ count: 3 }),
           },
           $executeRaw: jest.fn(),
@@ -192,6 +193,7 @@ describe('DreamCycleConsolidationStage', () => {
         const tx = {
           memory: {
             create: jest.fn().mockResolvedValue({ id: 'new-1' }),
+            update: jest.fn().mockResolvedValue({}),
             updateMany: jest.fn().mockImplementation((args) => {
               capturedUpdateMany = args;
               return { count: 3 };
@@ -228,6 +230,7 @@ describe('DreamCycleConsolidationStage', () => {
         const tx = {
           memory: {
             create: jest.fn().mockResolvedValue({ id: `new-${Math.random()}` }),
+            update: jest.fn().mockResolvedValue({}),
             updateMany: jest.fn().mockResolvedValue({ count: 3 }),
           },
           $executeRaw: jest.fn(),
