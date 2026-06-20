@@ -57,7 +57,11 @@ export class WakingCycleService {
     private readonly proactiveNotification?: ProactiveNotificationService,
     @Optional() private readonly insightFeedback?: InsightFeedbackService,
     @Optional() private readonly embeddingService?: EmbeddingService,
-  ) {}
+  ) {
+    this.logger.log(
+      `Waking Cycle configured: enabled=${AwarenessConfig.enabled} schedule="${AwarenessConfig.schedule}"`,
+    );
+  }
 
   /**
    * Scheduled entry point. Runs a cycle for each account.

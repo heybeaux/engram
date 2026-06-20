@@ -4,15 +4,21 @@
  * All values are controlled via environment variables so operators can tune
  * behaviour without code changes. Defaults are conservative.
  */
+export const DEFAULT_AWARENESS_SCHEDULE = '0 0 8,12,16,20 * * *';
+
 export const AwarenessConfig = {
   /** Master feature flag — when false the module is a no-op. */
   enabled: process.env.AWARENESS_ENABLED === 'true',
 
   /**
    * Cron expression for the Waking Cycle scheduler.
-   * Default: every 4 hours during waking hours (08:00–23:00).
+   * Default: every 4 hours during waking hours.
+   *
+   * Nest/cron uses six fields: second minute hour day month weekday.
+   * A value like "0 star-slash-4 8-23 * * *" means every 4 minutes,
+   * not every 4 hours.
    */
-  schedule: process.env.AWARENESS_SCHEDULE || '0 */4 8-23 * * *',
+  schedule: process.env.AWARENESS_SCHEDULE || DEFAULT_AWARENESS_SCHEDULE,
 
   // ── Resource budgets (per cycle) ──────────────────────────────────────
   maxDbQueries: int('AWARENESS_MAX_DB_QUERIES', 50),
