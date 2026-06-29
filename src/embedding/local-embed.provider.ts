@@ -4,6 +4,7 @@ import {
   EmbeddingProvider,
   EmbedOptions,
 } from './embedding-provider.interface';
+import { TransientEmbeddingError } from './embedding-validation.util';
 
 /**
  * Local Embedding Provider
@@ -76,6 +77,14 @@ export class LocalEmbedProvider implements EmbeddingProvider {
 
     if (!response.ok) {
       const error = await response.text();
+      // Ingest M2 fix: 503 is a transient backlog signal from engram-embed, not
+      // a hard failure. Throw TransientEmbeddingError so the circuit breaker
+      // does NOT count it toward consecutive-failure thresholds.
+      if (response.status === 503) {
+        throw new TransientEmbeddingError(
+          `Local embedding service backlog (503): ${error}`,
+        );
+      }
       throw new Error(
         `Local embedding API error: ${response.status} - ${error}`,
       );

@@ -300,5 +300,42 @@ describe('MemoryQueryRankingService', () => {
       const result = await svc.applyReranking(memories, 'query', 10);
       expect(result).toHaveLength(1);
     });
+
+    it('normalizes RRF scores so semantic relevance beats high importance on irrelevant memories', async () => {
+      // Simulate 2-model RRF reranker: scores are tiny (~0.008–0.033).
+      // Without normalization, importanceScore * 0.15 dominates and a high-importance
+      // irrelevant memory outranks a low-importance semantically relevant one.
+      const rfRank1 = 2 / (60 + 1); // ≈ 0.033 (top-ranked by cross-encoder)
+      const rrfRank3 = 2 / (60 + 3); // ≈ 0.032 (third-ranked by cross-encoder)
+
+      const mockRerankService = {
+        // semantic_memory ranked #1 (most relevant), high_importance ranked #3
+        rerank: jest.fn().mockResolvedValue([
+          { index: 0, score: rfRank1 }, // semantic_memory — relevant, low importance
+          { index: 2, score: 2 / (60 + 2) }, // filler
+          { index: 1, score: rrfRank3 }, // high_importance — irrelevant but high importance
+        ]),
+      } as unknown as RerankService;
+
+      const svc = new MemoryQueryRankingService(
+        prisma,
+        embedding,
+        recallWeightService,
+        mockRerankService,
+      );
+
+      const memories: MemoryWithScore[] = [
+        { id: 'semantic', raw: 'I feel happy when I see my cat', score: 0.8, importanceScore: 0.6 } as any,
+        { id: 'high_importance', raw: 'CRITICAL: Never deploy on Fridays', score: 0.3, importanceScore: 0.95 } as any,
+        { id: 'filler', raw: 'Had coffee this morning', score: 0.5, importanceScore: 0.3 } as any,
+      ];
+
+      const result = await svc.applyReranking(memories, 'what makes me happy?', 5);
+
+      // After normalization, semantic_memory (rank 1) should beat high_importance (rank 3)
+      const semanticIdx = result.findIndex((m) => m.id === 'semantic');
+      const importanceIdx = result.findIndex((m) => m.id === 'high_importance');
+      expect(semanticIdx).toBeLessThan(importanceIdx);
+    });
   });
 });

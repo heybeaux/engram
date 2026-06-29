@@ -84,6 +84,8 @@ describe('MemoryJobProcessorService', () => {
 
     await processor.processJob(job);
 
-    expect(mockPrisma.$transaction).toHaveBeenCalled();
+    expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining('SET app.current_account_id'),
+    );
   });
 });

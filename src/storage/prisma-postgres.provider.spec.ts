@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaPostgresProvider } from './prisma-postgres.provider';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmbeddingWriteService } from '../vector/embedding-write.service';
 
 const mockPrisma = {
   memory: {
@@ -22,6 +23,11 @@ const mockPrisma = {
   $transaction: jest.fn(),
 };
 
+const mockEmbeddingWrite = {
+  writeLegacyInlineEmbedding: jest.fn().mockResolvedValue(undefined),
+  writeMemoryEmbedding: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('PrismaPostgresProvider', () => {
   let provider: PrismaPostgresProvider;
 
@@ -32,6 +38,7 @@ describe('PrismaPostgresProvider', () => {
       providers: [
         PrismaPostgresProvider,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: EmbeddingWriteService, useValue: mockEmbeddingWrite },
       ],
     }).compile();
 
@@ -80,10 +87,9 @@ describe('PrismaPostgresProvider', () => {
       expect(mockPrisma.memory.create).toHaveBeenCalledWith({
         data: { userId: 'u1', raw: 'hello', layer: 'IDENTITY' },
       });
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        'UPDATE memories SET embedding = $1::vector WHERE id = $2',
-        '[0.1,0.2]',
+      expect(mockEmbeddingWrite.writeLegacyInlineEmbedding).toHaveBeenCalledWith(
         'm1',
+        [0.1, 0.2],
       );
     });
   });
@@ -139,10 +145,9 @@ describe('PrismaPostgresProvider', () => {
         raw: 'updated',
         embedding: [0.3, 0.4],
       });
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        'UPDATE memories SET embedding = $1::vector WHERE id = $2',
-        '[0.3,0.4]',
+      expect(mockEmbeddingWrite.writeLegacyInlineEmbedding).toHaveBeenCalledWith(
         'm1',
+        [0.3, 0.4],
       );
     });
   });

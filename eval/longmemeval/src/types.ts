@@ -2,12 +2,13 @@
  * LongMemEval dataset types.
  *
  * Based on the LongMemEval paper (ICLR 2025, xiaowu0162/longmemeval).
- * Categories: single-session-user, multi-session-user, temporal-reasoning-ability,
- *             knowledge-update, single-session-assistant
+ * Categories: single-session-user, single-session-preference, multi-session-user,
+ *             temporal-reasoning-ability, knowledge-update, single-session-assistant
  */
 
 export type LmeCategory =
   | 'single-session-user'
+  | 'single-session-preference'
   | 'multi-session-user'
   | 'temporal-reasoning-ability'
   | 'knowledge-update'
@@ -18,6 +19,12 @@ export interface RoundEntry {
   content: string;
   /** ISO timestamp for the round (present in some dataset variants) */
   timestamp?: string;
+  /**
+   * True for synthetic session-boundary markers woven into the history
+   * (e.g. "--- Session 2 (2023/05/20) ---"). Marker entries are emitted
+   * verbatim into the transcript with no role label.
+   */
+  marker?: boolean;
 }
 
 export interface LongMemEvalQuestion {
@@ -30,6 +37,11 @@ export interface LongMemEvalQuestion {
   session_history: RoundEntry[];
   /** Optional: pre-split into multiple sessions (for multi-session questions) */
   sessions?: RoundEntry[][];
+  /**
+   * The date/time the question was asked (from the dataset's question_date field).
+   * Critical for temporal-reasoning questions that ask "how many X ago…".
+   */
+  question_date?: string;
 }
 
 export interface LmeDataset {
@@ -79,8 +91,8 @@ export interface RunConfig {
   anthropicApiKey: string;
   /** Reading model ID (default: claude-opus-4-7) */
   readModel: string;
-  /** Judge model ID (always claude-opus-4-7, not configurable) */
-  judgeModel: 'claude-opus-4-7';
+  /** Judge model ID (default: claude-opus-4-7, override via LONGMEMEVAL_JUDGE_MODEL) */
+  judgeModel: string;
   /** Max questions to evaluate (undefined = all) */
   limit?: number;
   /** Filter to a single category */
@@ -93,4 +105,12 @@ export interface RunConfig {
   resultsPath: string;
   /** True when resuming an existing JSONL file */
   resume: boolean;
+  /** Skip ingest — reuse sessions already in DB (IDs are deterministic: lme-{question_id}) */
+  skipIngest?: boolean;
+  /** Wait after ingest before recall so the async embedding queue catches up (default 8000ms) */
+  postIngestWaitMs?: number;
+  /** Ingest all questions up front (resumable manifest), then query with no per-question wait */
+  batchIngest?: boolean;
+  /** Concurrent ingest requests during the batch-ingest phase (default 4) */
+  ingestConcurrency?: number;
 }

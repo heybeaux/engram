@@ -134,8 +134,8 @@ The Waking Cycle runs during active hours. It must not compete with user-facing 
 # Feature flag
 AWARENESS_ENABLED=true
 
-# Schedule (cron expression, default every 4 hours during waking hours)
-AWARENESS_SCHEDULE=0 */4 8-23 * * *
+# Schedule (six-field cron expression, default every 4 hours during waking hours)
+AWARENESS_SCHEDULE=0 0 8,12,16,20 * * *
 
 # Resource budgets
 AWARENESS_MAX_DB_QUERIES=50

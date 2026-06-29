@@ -187,8 +187,10 @@ export class MemoryQueryController {
     @Body() dto: FindContradictionsDto,
     @Req() req: any,
     @Query('agentId') agentId?: string,
+    @Query('scope') scope?: string,
   ): Promise<FindContradictionsResult> {
-    const accountUserIds = await this.resolveAccountUserIds(req, agentId);
+    const accountUserIds =
+      scope === 'account' ? await this.resolveAccountUserIds(req, agentId) : null;
     return this.memoryService.findContradictions(accountUserIds || userId, dto);
   }
 
@@ -210,10 +212,12 @@ export class MemoryQueryController {
     @Req() req: any,
     @Res({ passthrough: true }) res: Response,
     @Query('agentId') agentId?: string,
+    @Query('scope') scope?: string,
   ): Promise<QueryResult> {
     res.set('Deprecation', 'true');
     res.set('Link', '</v1/memories/query>; rel="successor-version"');
-    const accountUserIds = await this.resolveAccountUserIds(req, agentId);
+    const accountUserIds =
+      scope === 'account' ? await this.resolveAccountUserIds(req, agentId) : null;
     return this.memoryService.recall(accountUserIds || userId, dto);
   }
 
@@ -235,10 +239,12 @@ export class MemoryQueryController {
     @Req() req: any,
     @Res({ passthrough: true }) res: Response,
     @Query('agentId') agentId?: string,
+    @Query('scope') scope?: string,
   ): Promise<QueryResult> {
     res.set('Deprecation', 'true');
     res.set('Link', '</v1/memories/query>; rel="successor-version"');
-    const accountUserIds = await this.resolveAccountUserIds(req, agentId);
+    const accountUserIds =
+      scope === 'account' ? await this.resolveAccountUserIds(req, agentId) : null;
     return this.memoryService.recall(accountUserIds || userId, dto);
   }
 
@@ -260,10 +266,12 @@ export class MemoryQueryController {
     @Req() req: any,
     @Res({ passthrough: true }) res: Response,
     @Query('agentId') agentId?: string,
+    @Query('scope') scope?: string,
   ): Promise<QueryResult> {
     res.set('Deprecation', 'true');
     res.set('Link', '</v1/memories/query>; rel="successor-version"');
-    const accountUserIds = await this.resolveAccountUserIds(req, agentId);
+    const accountUserIds =
+      scope === 'account' ? await this.resolveAccountUserIds(req, agentId) : null;
     return this.memoryService.recall(accountUserIds || userId, dto);
   }
 

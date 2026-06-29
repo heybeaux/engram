@@ -224,10 +224,17 @@ export class DreamCycleService {
         // Phase 0 scalability: run users in parallel with concurrency limit
         // DREAM_CYCLE_CONCURRENCY env var controls batch size (default: 5)
         // Does not affect per-user processing logic — recall scores unaffected.
-        const concurrency = parseInt(
+        const parsedConcurrency = parseInt(
           this.config.get<string>('DREAM_CYCLE_CONCURRENCY', '5'),
           10,
         );
+        // Guard against NaN/<1 (e.g. missing or malformed env var). A
+        // non-positive batch size would make the splice loop below spin
+        // forever without draining the queue.
+        const concurrency =
+          Number.isFinite(parsedConcurrency) && parsedConcurrency >= 1
+            ? parsedConcurrency
+            : 5;
         const userQueue = [...users];
         const runUser = async (user: { id: string }) => {
           this.log(

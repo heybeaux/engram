@@ -129,15 +129,17 @@ export class MemoryQueryRankingService {
         embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
         isDuplicateOf: null,
         importanceScore: { gte: 0.6 },
-        createdAt: { gt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+        // No hard date cap: embedding similarity is the sole relevance gate.
+        // A 14-day cutoff permanently hides historical INSIGHTs from LongMemEval queries.
       };
 
-      // Find recent, high-confidence INSIGHT memories
+      // Find high-importance INSIGHT memories — wider pool so relevance filter
+      // has enough candidates (was top-5 which was far too narrow).
       const insights = await this.prisma.memory.findMany({
         where,
         include: { extraction: true },
         orderBy: { importanceScore: 'desc' },
-        take: 5,
+        take: 25,
       });
 
       if (insights.length === 0) return existingResults;
@@ -245,10 +247,12 @@ export class MemoryQueryRankingService {
       return Promise.resolve(applyFallbackBlend(memories));
     }
 
-    // Strip RLS canary prefix (RLS_CANARY_ALICE_B1: …) and bare counter prefix (107: …)
-    // so the cross-encoder sees clean semantic content
+    // Strip RLS canary prefix (RLS_CANARY_ALICE_B1: …) and numeric counter
+    // prefix (e.g. "107: ") so the cross-encoder sees clean semantic content.
+    // The second replace is intentionally limited to digit-only prefixes —
+    // a broader /^\w+:\s+/ would strip real memory content like "Note: ..." or "URL: ...".
     const stripCanary = (raw: string): string =>
-      raw.replace(/^RLS_CANARY_[A-Z0-9_]+\d*:\s*/i, '').replace(/^\w+:\s+/, ''); // strip any remaining "TOKEN: " prefix
+      raw.replace(/^RLS_CANARY_[A-Z0-9_]+\d*:\s*/i, '').replace(/^\d+:\s+/, '');
 
     const candidates = memories;
     const texts = candidates.map((m) => stripCanary(m.raw));
@@ -260,8 +264,17 @@ export class MemoryQueryRankingService {
         const hasScores = ranked.some((r) => r.score > 0);
         if (!hasScores) return applyFallbackBlend(memories);
 
+        // Normalize reranker scores to [0, 1] before blending.
+        // RRF ensemble scores are tiny (~0.008–0.033); without normalization
+        // importanceScore * 0.15 dominates and makes ranking query-independent.
+        const maxScore = Math.max(...ranked.map((r) => r.score));
+        const normalizedRanked =
+          maxScore > 0
+            ? ranked.map((r) => ({ ...r, score: r.score / maxScore }))
+            : ranked;
+
         // Post-reranker final blend: rerankerScore * 0.85 + importanceScore * 0.15 + sentiment penalty
-        const reranked = ranked
+        const reranked = normalizedRanked
           .map((r) => {
             const mem = candidates[r.index];
             const importanceScore =

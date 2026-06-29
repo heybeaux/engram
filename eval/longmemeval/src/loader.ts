@@ -17,7 +17,9 @@ import * as path from 'path';
 import * as https from 'https';
 import type { LongMemEvalQuestion, LmeDataset, LmeCategory, RunConfig, RoundEntry } from './types';
 
-const FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'smoke-20.json');
+const FIXTURE_PATH =
+  process.env.LONGMEMEVAL_FIXTURE_PATH ??
+  path.join(__dirname, '..', 'fixtures', 'smoke-20.json');
 
 /**
  * Load dataset according to run config.
@@ -108,7 +110,7 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
   const CATEGORY_MAP: Record<string, LmeCategory> = {
     'single-session-user': 'single-session-user',
     'single-session-assistant': 'single-session-assistant',
-    'single-session-preference': 'single-session-user', // treat as single-session-user
+    'single-session-preference': 'single-session-preference',
     'multi-session': 'multi-session-user',
     'multi-session-user': 'multi-session-user',
     'temporal-reasoning': 'temporal-reasoning-ability',
@@ -117,25 +119,38 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
   };
 
   const questions: LongMemEvalQuestion[] = (rawItems as any[]).map((item: any) => {
-    // If already in normalized format (smoke fixture), pass through
+    // If already in normalized format (smoke fixture), normalize answer and pass through
     if (Array.isArray(item.session_history)) {
-      return item as LongMemEvalQuestion;
+      const ans = item.answer ?? '';
+      return {
+        ...item,
+        answer: typeof ans === 'string' ? ans : String(ans),
+      } as LongMemEvalQuestion;
     }
     // Normalize HuggingFace format
     const questionType: string = item.question_type ?? item.category ?? 'single-session-user';
     const category: LmeCategory = CATEGORY_MAP[questionType] ?? 'single-session-user';
-    // Flatten all haystack_sessions into a single session_history
+    // Combine haystack_sessions into a single session_history, weaving in
+    // session-boundary markers (with session-level dates when available) so
+    // multi-session structure and temporal anchors survive flat ingestion.
     const sessions: RoundEntry[][] = Array.isArray(item.haystack_sessions)
       ? item.haystack_sessions
       : [];
-    const session_history: RoundEntry[] = sessions.flat();
+    const sessionDates: string[] = Array.isArray(item.haystack_dates)
+      ? item.haystack_dates
+      : [];
+    const session_history: RoundEntry[] = buildSessionHistory(sessions, sessionDates);
+    // Normalize answer to string — integer answers crash judge's .trim()
+    const rawAnswer = item.answer ?? '';
+    const answer = typeof rawAnswer === 'string' ? rawAnswer : String(rawAnswer);
     return {
       question_id: item.question_id,
       question: item.question,
-      answer: item.answer ?? '',
+      answer,
       category,
       session_history,
       sessions: sessions.length > 1 ? sessions : undefined,
+      question_date: item.question_date ?? undefined,
     } as LongMemEvalQuestion;
   });
 
@@ -170,14 +185,63 @@ export function validateQuestions(questions: LongMemEvalQuestion[]): void {
 }
 
 /**
+ * Combine per-session round arrays into a single history, inserting a
+ * synthetic session-boundary marker before each session.
+ *
+ * Markers are inserted when there is more than one session (multi-session
+ * questions) OR when a session-level date is available (temporal anchor for
+ * temporal-reasoning questions). Single undated sessions stay marker-free.
+ *
+ * When a session-level date is available it is also propagated onto each
+ * round that lacks its own timestamp. This matters because ROUND chunking
+ * stores chunks individually and the recall API's memory `timestamp` is
+ * ingest-time createdAt (identical for every chunk of a question) — the
+ * in-text date is the only conversation-time signal retrieval can surface.
+ */
+export function buildSessionHistory(
+  sessions: RoundEntry[][],
+  sessionDates: string[] = [],
+): RoundEntry[] {
+  const history: RoundEntry[] = [];
+  for (let i = 0; i < sessions.length; i++) {
+    const date = sessionDates[i];
+    if (sessions.length > 1 || date) {
+      history.push({
+        role: 'system',
+        content: `--- Session ${i + 1}${date ? ` (${date})` : ''} ---`,
+        marker: true,
+      });
+    }
+    for (const round of sessions[i]) {
+      history.push(
+        date && !round.timestamp ? { ...round, timestamp: date } : round,
+      );
+    }
+  }
+  return history;
+}
+
+/**
  * Format a session history into a text transcript for bulkTextImport.
  * Uses "User: / Assistant:" format that chunkByRound() recognises.
+ *
+ * Round timestamps (when present) are written immediately after the speaker
+ * label — `User: [<timestamp>] <content>` — so temporal facts survive
+ * ingestion. The timestamp must come AFTER the label: chunkByRound() splits
+ * on /^(user|assistant)\s*:/ at line start, so a leading "[ts] " prefix
+ * would prevent round splitting and merge the whole transcript into one chunk.
+ *
+ * Session-boundary markers are emitted verbatim with no label.
  */
 export function historyToTranscript(rounds: LongMemEvalQuestion['session_history']): string {
   return rounds
     .map(r => {
+      if (r.marker) {
+        return r.content;
+      }
       const label = r.role === 'user' ? 'User' : r.role === 'assistant' ? 'Assistant' : 'System';
-      return `${label}: ${r.content}`;
+      const stamp = r.timestamp ? `[${r.timestamp}] ` : '';
+      return `${label}: ${stamp}${r.content}`;
     })
     .join('\n\n');
 }

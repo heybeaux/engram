@@ -372,34 +372,45 @@ export class MemoryPipelineService {
     succeeded: number;
     failed: number;
     discovered: number;
+    exhaustedRetries: number;
   }> {
-    // 1. Discover memories without embeddings from DB (up to 100)
-    const unembedded = await this.prisma.memory.findMany({
-      where: {
-        OR: [
-          { embeddingId: null },
-          { embeddingStatus: 'FAILED' },
-          { embeddingStatus: 'PENDING' },
-        ],
-        deletedAt: null,
-      },
-      select: { id: true, userId: true, raw: true },
-      take: 100,
-      orderBy: { createdAt: 'desc' },
-    });
-
+    // 1. Discover memories without embeddings from DB.
+    // Loop in pages until no new records are found so bulk ingest failures
+    // don't get capped at the first 100 rows (ingest C2 fix).
     let discovered = 0;
-    for (const mem of unembedded) {
-      if (!this.embeddingRetryQueue.has(mem.id)) {
-        this.embeddingRetryQueue.set(mem.id, {
-          memoryId: mem.id,
-          userId: mem.userId,
-          raw: mem.raw,
-          attempts: 0,
-          lastAttempt: new Date(0),
-        });
-        discovered++;
+    let page = 0;
+    const PAGE_SIZE = 100;
+    while (true) {
+      const unembedded = await this.prisma.memory.findMany({
+        where: {
+          OR: [
+            { embeddingId: null },
+            { embeddingStatus: 'FAILED' },
+            { embeddingStatus: 'PENDING' },
+          ],
+          deletedAt: null,
+        },
+        select: { id: true, userId: true, raw: true },
+        take: PAGE_SIZE,
+        skip: page * PAGE_SIZE,
+        orderBy: { createdAt: 'desc' },
+      });
+      let newInPage = 0;
+      for (const mem of unembedded) {
+        if (!this.embeddingRetryQueue.has(mem.id)) {
+          this.embeddingRetryQueue.set(mem.id, {
+            memoryId: mem.id,
+            userId: mem.userId,
+            raw: mem.raw,
+            attempts: 0,
+            lastAttempt: new Date(0),
+          });
+          discovered++;
+          newInPage++;
+        }
       }
+      if (unembedded.length < PAGE_SIZE || newInPage === 0) break;
+      page++;
     }
 
     let retried = 0;
@@ -407,9 +418,11 @@ export class MemoryPipelineService {
     let failed = 0;
 
     const entries = Array.from(this.embeddingRetryQueue.values());
+    let exhaustedRetries = 0;
     for (const entry of entries) {
       if (entry.attempts >= MemoryPipelineService.MAX_RETRY_ATTEMPTS) {
-        continue; // Skip exhausted entries
+        exhaustedRetries++;
+        continue;
       }
 
       retried++;
@@ -425,10 +438,19 @@ export class MemoryPipelineService {
       }
     }
 
+    if (exhaustedRetries > 0) {
+      this.logger.error({
+        event: 'embedding_retry.dead_letter',
+        exhaustedRetries,
+        maxRetryAttempts: MemoryPipelineService.MAX_RETRY_ATTEMPTS,
+        message: `${exhaustedRetries} memories have exhausted all embedding retry attempts and will never be searchable`,
+      });
+    }
+
     this.logger.log(
-      `[Retry] Embedding retry complete: ${succeeded}/${retried} succeeded, ${discovered} discovered from DB`,
+      `[Retry] Embedding retry complete: ${succeeded}/${retried} succeeded, ${discovered} discovered from DB, ${exhaustedRetries} exhausted`,
     );
-    return { retried, succeeded, failed, discovered };
+    return { retried, succeeded, failed, discovered, exhaustedRetries };
   }
 
   /**

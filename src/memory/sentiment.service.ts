@@ -127,7 +127,7 @@ export class SentimentService {
    * Returns a score multiplier (0–1) based on polarity mismatch.
    *
    * - 1.0  → no penalty (same polarity, or neutral query)
-   * - 0.75 → mild penalty: emotional query but neutral memory
+   * - 0.90 → mild penalty: emotional query but neutral memory
    *          (prevents generic daily-routine memories from occupying top-5
    *           slots ahead of specific emotional memories)
    * - 0.15 → strong penalty: opposite polarity
@@ -142,7 +142,7 @@ export class SentimentService {
 
     // Opposite polarity: strong suppression
     if (memoryPolarity !== 'neutral' && queryPolarity !== memoryPolarity)
-      return 0.05;
+      return 0.15;
 
     // Neutral memory on an emotional query: mild suppression
     // Keeps same-polarity emotional memories ranked above general noise.

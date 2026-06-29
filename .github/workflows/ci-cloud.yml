@@ -318,12 +318,19 @@ jobs:
         run: |
           if [[ "${{ needs.static.result }}" != "success" || \
                 "${{ needs.build.result }}" != "success" || \
-                ("${{ needs.test-memory.result }}" != "success" && "${{ needs.test-memory.result }}" != "cancelled") || \
-                ("${{ needs.test-core.result }}" != "success" && "${{ needs.test-core.result }}" != "cancelled") || \
-                ("${{ needs.test-intelligence.result }}" != "success" && "${{ needs.test-intelligence.result }}" != "cancelled") || \
-                ("${{ needs.test-cloud.result }}" != "success" && "${{ needs.test-cloud.result }}" != "cancelled") || \
-                ("${{ needs.test-features.result }}" != "success" && "${{ needs.test-features.result }}" != "cancelled") ]]; then
+                "${{ needs.test-memory.result }}" != "success" || \
+                "${{ needs.test-core.result }}" != "success" || \
+                "${{ needs.test-intelligence.result }}" != "success" || \
+                "${{ needs.test-cloud.result }}" != "success" || \
+                "${{ needs.test-features.result }}" != "success" ]]; then
             echo "One or more jobs failed"
+            echo "static=${{ needs.static.result }}"
+            echo "build=${{ needs.build.result }}"
+            echo "test-memory=${{ needs.test-memory.result }}"
+            echo "test-core=${{ needs.test-core.result }}"
+            echo "test-intelligence=${{ needs.test-intelligence.result }}"
+            echo "test-cloud=${{ needs.test-cloud.result }}"
+            echo "test-features=${{ needs.test-features.result }}"
             exit 1
           fi
           echo "All jobs passed ✅"

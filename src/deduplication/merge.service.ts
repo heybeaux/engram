@@ -37,6 +37,7 @@ type MergeableMemory = Pick<
   | 'memoryType'
   | 'importanceScore'
   | 'createdAt'
+  | 'observedAt'
   | 'retrievalCount'
   | 'lastRetrievedAt'
   | 'usedCount'
@@ -104,6 +105,7 @@ export class MergeService {
         memoryType: true,
         importanceScore: true,
         createdAt: true,
+        observedAt: true,
         retrievalCount: true,
         lastRetrievedAt: true,
         usedCount: true,
@@ -157,13 +159,13 @@ export class MergeService {
   }
 
   /**
-   * Keep the most recently created memory
+   * Keep the most recently created memory, preferring observedAt (event time)
+   * over createdAt (ingest time) so bulk historical imports sort correctly.
    */
   private mergeKeepNewest(memories: MergeableMemory[]): MergeResult {
-    const sorted = [...memories].sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+    const effectiveTime = (m: MergeableMemory) =>
+      new Date(m.observedAt ?? m.createdAt).getTime();
+    const sorted = [...memories].sort((a, b) => effectiveTime(b) - effectiveTime(a));
 
     const survivor = sorted[0];
     const absorbed = sorted.slice(1);

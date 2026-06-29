@@ -3,6 +3,10 @@ import { MemoryLayer } from '@prisma/client';
 import { LLMService } from '../llm/llm.service';
 import { VectorService } from '../vector/vector.service';
 import { EmbeddingService as EmbedFacade } from '../embedding/embedding.service';
+import {
+  assertValidEmbedding,
+  isTransientEmbeddingError,
+} from '../embedding/embedding-validation.util';
 
 export interface VectorSearchResult {
   id: string;
@@ -36,7 +40,14 @@ export class EmbeddingService {
   ) {}
 
   /**
-   * Generate embedding for text using configured LLM provider.
+   * Generate embedding for text using the configured embedding provider.
+   * Prefers the EmbedFacade (embedding/embedding.service.ts) directly so
+   * write-path model selection is identical to the recall path.  The legacy
+   * LLMService.embed() path is kept as a last-resort fallback: its
+   * LocalProvider hardcodes 'bge-base-en-v1.5' regardless of LOCAL_EMBED_MODEL,
+   * so letting it run first causes 384-dim minilm vectors to be written under
+   * the wrong model slot when the server is loaded with minilm.
+   *
    * Includes circuit breaker: after FAILURE_THRESHOLD consecutive failures,
    * rejects immediately for COOLDOWN_MS to avoid hammering a down service.
    */
@@ -54,8 +65,20 @@ export class EmbeddingService {
     }
 
     try {
-      const result = await this.llm.embed(text);
-      this.dimensions = result.dimensions;
+      let embedding: number[];
+
+      // Write path: prefer EmbedFacade (same provider selection as recall path)
+      // to guarantee write and recall embeddings come from the same model.
+      if (this.embedFacade) {
+        embedding = await this.embedFacade.embedOne(text);
+      } else {
+        // Fallback: LLMService.embed() — model may diverge from recall path
+        // if EMBEDDING_PROVIDER is not registered in LLMService's provider map.
+        const result = await this.llm.embed(text);
+        embedding = result.embedding;
+      }
+
+      this.dimensions = embedding.length;
       // Reset on success
       if (this.consecutiveFailures > 0) {
         this.logger.log(
@@ -63,15 +86,20 @@ export class EmbeddingService {
         );
       }
       this.consecutiveFailures = 0;
-      return result.embedding;
+      return embedding;
     } catch (error) {
-      this.consecutiveFailures++;
-      if (this.consecutiveFailures >= this.FAILURE_THRESHOLD) {
-        this.circuitOpenUntil = Date.now() + this.COOLDOWN_MS;
-        this.logger.warn(
-          `[CircuitBreaker] OPEN — ${this.consecutiveFailures} consecutive embedding failures. ` +
-            `Cooldown until ${new Date(this.circuitOpenUntil).toISOString()}`,
-        );
+      // Ingest M2 fix: transient errors (e.g. engram-embed 503 backlog) must
+      // NOT count toward the circuit-breaker threshold — they are expected
+      // under burst load and will self-heal once the queue drains.
+      if (!isTransientEmbeddingError(error)) {
+        this.consecutiveFailures++;
+        if (this.consecutiveFailures >= this.FAILURE_THRESHOLD) {
+          this.circuitOpenUntil = Date.now() + this.COOLDOWN_MS;
+          this.logger.warn(
+            `[CircuitBreaker] OPEN — ${this.consecutiveFailures} consecutive embedding failures. ` +
+              `Cooldown until ${new Date(this.circuitOpenUntil).toISOString()}`,
+          );
+        }
       }
       throw error;
     }
@@ -121,6 +149,7 @@ export class EmbeddingService {
       createdAt?: Date;
     },
   ): Promise<string> {
+    assertValidEmbedding(embedding, { context: `store ${memoryId}` });
     await this.vector.upsert({
       id: memoryId,
       embedding,

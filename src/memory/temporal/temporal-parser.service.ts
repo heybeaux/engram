@@ -16,6 +16,8 @@ export interface TemporalFilter {
 export interface ParsedQuery {
   semanticQuery: string; // Query with temporal parts stripped (for embedding search)
   temporalFilter: TemporalFilter | null; // Time range filter (if temporal intent detected)
+  /** True when the query asks for the FIRST / EARLIEST occurrence (e.g. "when did I first...") */
+  firstMentionIntent?: boolean;
 }
 
 interface TemporalPattern {
@@ -44,11 +46,17 @@ export class TemporalParserService {
    * @param timezone - IANA timezone string (e.g., 'America/Vancouver')
    * @returns ParsedQuery with semantic query + optional temporal filter
    */
+  // Regex that detects "first/earliest/initially/originally" occurrence queries.
+  private static readonly FIRST_MENTION_RE =
+    /\b(first|earliest|originally|initially|first\s+time)\b/i;
+
   parse(
     query: string,
     now: Date = new Date(),
     timezone: string = 'UTC',
   ): ParsedQuery {
+    const firstMentionIntent = TemporalParserService.FIRST_MENTION_RE.test(query);
+
     // Try fast pattern matching
     const result = this.patternMatch(query, now);
     if (result) {
@@ -57,12 +65,13 @@ export class TemporalParserService {
         start: result.temporalFilter?.start.toISOString(),
         end: result.temporalFilter?.end.toISOString(),
         semanticQuery: result.semanticQuery,
+        firstMentionIntent,
       });
-      return result;
+      return { ...result, firstMentionIntent };
     }
 
     // No temporal intent detected
-    return { semanticQuery: query, temporalFilter: null };
+    return { semanticQuery: query, temporalFilter: null, firstMentionIntent };
   }
 
   /**

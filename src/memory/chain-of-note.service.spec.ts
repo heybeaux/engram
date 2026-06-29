@@ -79,14 +79,14 @@ describe('CHAIN_OF_NOTE_TEMPLATE', () => {
     }
   });
 
-  it('caps at 10 memories to avoid token blowout', () => {
-    const memories = Array.from({ length: 15 }, (_, i) =>
+  it('caps at 50 memories (HEY-578: recall widened to 50)', () => {
+    const memories = Array.from({ length: 55 }, (_, i) =>
       makeMemory(`m-${i}`, `fact ${i}`),
     );
     const prompt = CHAIN_OF_NOTE_TEMPLATE(memories, 'q');
-    // Only first 10 should appear
-    expect(prompt).toContain('"id": "m-9"');
-    expect(prompt).not.toContain('"id": "m-10"');
+    // All first 50 should appear; beyond 50 should not
+    expect(prompt).toContain('"id": "m-49"');
+    expect(prompt).not.toContain('"id": "m-50"');
   });
 
   it('snapshot — prompt shape is stable', () => {

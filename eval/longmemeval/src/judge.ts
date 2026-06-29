@@ -1,11 +1,13 @@
 /**
  * LLM-based correctness judge for the LongMemEval eval harness.
  *
- * Model: claude-opus-4-7 (hard-coded — do NOT change to Sonnet or Haiku).
+ * Default model: claude-opus-4-7. Override via LONGMEMEVAL_JUDGE_MODEL env var
+ * for cheaper smoke runs (e.g. claude-sonnet-4-6).
  * Uses binary judgement: correct (semantic match) or incorrect.
  */
 
-const JUDGE_MODEL = 'claude-opus-4-7' as const;
+const JUDGE_MODEL: string =
+  process.env.LONGMEMEVAL_JUDGE_MODEL ?? 'claude-opus-4-7';
 const JUDGE_SYSTEM_PROMPT = `You are an answer correctness judge for a memory benchmark.
 
 Your task: determine whether a predicted answer is correct given the gold (expected) answer.
@@ -41,18 +43,21 @@ export interface JudgeResult {
  */
 export async function judgeAnswer(
   question: string,
-  expected: string,
+  expected: string | number,
   predicted: string,
   apiKey: string,
 ): Promise<JudgeResult> {
+  // Normalize expected to string — integer answers in the dataset crash .trim()
+  const expectedStr = typeof expected === 'string' ? expected : String(expected);
+
   // Fast path: exact match (case-insensitive, trimmed) — skip LLM
-  if (expected.trim().toLowerCase() === predicted.trim().toLowerCase()) {
+  if (expectedStr.trim().toLowerCase() === predicted.trim().toLowerCase()) {
     return { correct: true, reasoning: 'Exact match.' };
   }
 
   // Fast path: empty prediction — incorrect unless expected is also empty
   if (!predicted.trim()) {
-    if (!expected.trim()) {
+    if (!expectedStr.trim()) {
       return { correct: true, reasoning: 'Both prediction and expected are empty.' };
     }
     return { correct: false, reasoning: 'Prediction is empty; expected a non-empty answer.' };
@@ -60,7 +65,7 @@ export async function judgeAnswer(
 
   const userMessage = `Question: ${question}
 
-Gold answer: ${expected}
+Gold answer: ${expectedStr}
 
 Predicted answer: ${predicted}
 
@@ -89,7 +94,7 @@ Is the predicted answer correct?`;
   const data = await response.json() as { content: Array<{ type: string; text: string }> };
   const raw = data.content?.[0]?.text ?? '';
 
-  return parseJudgeResponse(raw, predicted, expected);
+  return parseJudgeResponse(raw, predicted, expectedStr);
 }
 
 /** Parse the judge's JSON response with a graceful fallback. */

@@ -916,7 +916,7 @@ describe('MemoryQueryService', () => {
       expect(insightCall).toBeDefined();
       expect(insightCall.where).toMatchObject({
         layer: 'INSIGHT',
-        sessionId: 'session-X',
+        session: { OR: [{ id: 'session-X' }, { externalId: 'session-X' }] },
         visibility: { in: ['TEAM'] },
         agentId: 'agent-7',
       });
@@ -972,10 +972,24 @@ describe('MemoryQueryService', () => {
       expect(service.buildSessionIdFilter({} as any)).toEqual({});
     });
 
-    it('returns sessionId clause when provided', () => {
+    it('matches internal id OR external id via session relation when provided', () => {
       expect(
         service.buildSessionIdFilter({ sessionId: 'sess-xyz' } as any),
-      ).toEqual({ sessionId: 'sess-xyz' });
+      ).toEqual({
+        session: {
+          OR: [{ id: 'sess-xyz' }, { externalId: 'sess-xyz' }],
+        },
+      });
+    });
+
+    it('matches external session ids (e.g. LongMemEval "lme-..." ids)', () => {
+      const filter = service.buildSessionIdFilter({
+        sessionId: 'lme-e47becba',
+      } as any);
+      expect(filter.session.OR).toContainEqual({
+        externalId: 'lme-e47becba',
+      });
+      expect(filter.session.OR).toContainEqual({ id: 'lme-e47becba' });
     });
   });
 
@@ -991,7 +1005,9 @@ describe('MemoryQueryService', () => {
 
       expect(prisma.memory.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ sessionId: 'session-X' }),
+          where: expect.objectContaining({
+            session: { OR: [{ id: 'session-X' }, { externalId: 'session-X' }] },
+          }),
         }),
       );
     });
@@ -1010,18 +1026,18 @@ describe('MemoryQueryService', () => {
         sessionId: 'session-X',
       } as any);
 
-      // Every candidate-fetching findMany call must carry sessionId=session-X
+      // Every candidate-fetching findMany call must carry session filter for session-X
       const candidateCalls = (
         prisma.memory.findMany as jest.Mock
       ).mock.calls.filter(
         (c: any[]) =>
-          c[0]?.where?.id !== undefined || c[0]?.where?.sessionId !== undefined,
+          c[0]?.where?.id !== undefined || c[0]?.where?.session !== undefined,
       );
       expect(candidateCalls.length).toBeGreaterThan(0);
       const firstCandidateCall = (prisma.memory.findMany as jest.Mock).mock
         .calls[0];
       expect(firstCandidateCall[0].where).toMatchObject({
-        sessionId: 'session-X',
+        session: { OR: [{ id: 'session-X' }, { externalId: 'session-X' }] },
       });
     });
 
@@ -1041,9 +1057,11 @@ describe('MemoryQueryService', () => {
       const searchCall = (embedding.search as jest.Mock).mock.calls[0];
       expect(searchCall[0]).toBe('tenant-A');
 
-      // sessionId reaches prisma.memory.findMany (session filter)
+      // sessionId reaches prisma.memory.findMany (session filter via relation)
       const call = (prisma.memory.findMany as jest.Mock).mock.calls[0][0];
-      expect(call.where).toMatchObject({ sessionId: 'session-X' });
+      expect(call.where).toMatchObject({
+        session: { OR: [{ id: 'session-X' }, { externalId: 'session-X' }] },
+      });
     });
 
     it('no regression: omitting sessionId leaves no sessionId key in where clause', async () => {

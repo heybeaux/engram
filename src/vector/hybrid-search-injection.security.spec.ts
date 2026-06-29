@@ -1,24 +1,27 @@
 /**
  * GIN-42: SQL Injection Prevention Tests for HybridSearchService
  *
- * Verifies that:
- * 1. The `limit` value interpolated into the LIMIT clause is always a safe integer
- * 2. The SQL query string passed to $queryRawUnsafe never contains user-controlled
- *    injection fragments from the limit field
- * 3. Query text ($1) is always passed as a bound parameter, never interpolated
+ * HybridSearchService now delegates keyword search to ElasticsearchService
+ * rather than constructing raw SQL. These tests verify that user-controlled
+ * values are passed as structured arguments to the search adapter, not
+ * interpolated into SQL, and that the adapter-facing limit is normalized.
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { HybridSearchService } from './hybrid-search.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ElasticsearchService } from '../search/elasticsearch.service';
 
 describe('HybridSearchService — SQL injection prevention (GIN-42)', () => {
   let service: HybridSearchService;
   let prisma: jest.Mocked<PrismaService>;
-  let capturedSql: string;
-  let capturedParams: any[];
+  let elasticsearch: { keywordSearch: jest.Mock };
 
   beforeEach(async () => {
+    elasticsearch = {
+      keywordSearch: jest.fn().mockResolvedValue([]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HybridSearchService,
@@ -34,41 +37,29 @@ describe('HybridSearchService — SQL injection prevention (GIN-42)', () => {
             get: jest.fn().mockImplementation((key: string, def: string) => def),
           },
         },
+        { provide: ElasticsearchService, useValue: elasticsearch },
       ],
     }).compile();
 
     service = module.get<HybridSearchService>(HybridSearchService);
     prisma = module.get(PrismaService);
-
-    // Capture what gets sent to the database
-    (prisma.$queryRawUnsafe as jest.Mock).mockImplementation(
-      (sql: string, ...params: any[]) => {
-        capturedSql = sql;
-        capturedParams = params;
-        return Promise.resolve([]);
-      },
-    );
-
-    capturedSql = '';
-    capturedParams = [];
   });
 
   // ---------------------------------------------------------------------------
   // LIMIT clause integrity
   // ---------------------------------------------------------------------------
-  describe('LIMIT clause sanitization', () => {
-    it('uses a plain integer in the LIMIT clause for a normal limit', async () => {
+  describe('limit sanitization', () => {
+    it('passes a plain integer limit for a normal limit', async () => {
       await service.textSearch('test query', {
         userId: 'user-1',
         limit: 10,
       });
 
-      // LIMIT value in SQL must be a plain non-negative integer
-      expect(capturedSql).toMatch(/LIMIT\s+\d+/);
-      const match = capturedSql.match(/LIMIT\s+(\d+)/);
-      expect(match).not.toBeNull();
-      const limitValue = parseInt(match![1], 10);
-      expect(limitValue).toBe(10);
+      expect(elasticsearch.keywordSearch).toHaveBeenCalledWith(
+        'test query',
+        expect.any(Object),
+        10,
+      );
     });
 
     it('clamps fractional limit to an integer (Math.trunc)', async () => {
@@ -77,12 +68,11 @@ describe('HybridSearchService — SQL injection prevention (GIN-42)', () => {
         limit: 9.99,
       });
 
-      const match = capturedSql.match(/LIMIT\s+(\d+)/g);
-      expect(match).not.toBeNull();
-      // All LIMIT occurrences should be plain integers — no decimal points
-      for (const clause of match!) {
-        expect(clause).toMatch(/^LIMIT\s+\d+$/);
-      }
+      expect(elasticsearch.keywordSearch).toHaveBeenCalledWith(
+        'test query',
+        expect.any(Object),
+        9,
+      );
     });
 
     it('does not allow negative limit — clamped to minimum of 1', async () => {
@@ -91,10 +81,11 @@ describe('HybridSearchService — SQL injection prevention (GIN-42)', () => {
         limit: -5,
       });
 
-      const match = capturedSql.match(/LIMIT\s+(\d+)/);
-      expect(match).not.toBeNull();
-      const limitValue = parseInt(match![1], 10);
-      expect(limitValue).toBeGreaterThanOrEqual(1);
+      expect(elasticsearch.keywordSearch).toHaveBeenCalledWith(
+        'test query',
+        expect.any(Object),
+        1,
+      );
     });
 
     it('does not allow zero limit — clamped to minimum of 1', async () => {
@@ -103,15 +94,29 @@ describe('HybridSearchService — SQL injection prevention (GIN-42)', () => {
         limit: 0,
       });
 
-      const match = capturedSql.match(/LIMIT\s+(\d+)/);
-      expect(match).not.toBeNull();
-      const limitValue = parseInt(match![1], 10);
-      expect(limitValue).toBeGreaterThanOrEqual(1);
+      expect(elasticsearch.keywordSearch).toHaveBeenCalledWith(
+        'test query',
+        expect.any(Object),
+        1,
+      );
+    });
+
+    it('does not pass non-finite limits to the search adapter', async () => {
+      await service.textSearch('test query', {
+        userId: 'user-1',
+        limit: Number.POSITIVE_INFINITY,
+      });
+
+      expect(elasticsearch.keywordSearch).toHaveBeenCalledWith(
+        'test query',
+        expect.any(Object),
+        50,
+      );
     });
   });
 
   // ---------------------------------------------------------------------------
-  // Query text is always a bound parameter ($1), never interpolated
+  // Query text is passed as data to Elasticsearch, never interpolated into SQL
   // ---------------------------------------------------------------------------
   describe('query text parameterization', () => {
     const injectionPayloads = [
@@ -123,37 +128,28 @@ describe('HybridSearchService — SQL injection prevention (GIN-42)', () => {
     ];
 
     it.each(injectionPayloads)(
-      'passes injection string %j as a bound parameter, not interpolated into SQL',
+      'passes injection string %j as an adapter argument, not SQL',
       async (payload) => {
         await service.textSearch(payload, {
           userId: 'user-1',
           limit: 10,
         });
 
-        // The raw SQL string should NOT contain the injection payload
-        expect(capturedSql).not.toContain(payload);
-
-        // But the payload SHOULD appear as a bound parameter
-        expect(capturedParams[0]).toBe(payload);
+        expect(elasticsearch.keywordSearch).toHaveBeenCalledWith(
+          payload,
+          expect.objectContaining({ userId: ['user-1'] }),
+          10,
+        );
+        expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
       },
     );
-
-    it('uses $1 placeholder for query text in the SQL string', async () => {
-      await service.textSearch('test injection: ; DROP TABLE --', {
-        userId: 'user-1',
-        limit: 10,
-      });
-
-      // Query text is referenced as $1 in the SQL
-      expect(capturedSql).toContain('$1');
-    });
   });
 
   // ---------------------------------------------------------------------------
-  // User ID is always a bound parameter, never interpolated
+  // User ID is passed as structured filter data, never interpolated into SQL
   // ---------------------------------------------------------------------------
   describe('userId parameterization', () => {
-    it('passes userId as a bound parameter, not interpolated into SQL', async () => {
+    it('passes userId as structured filter data, not SQL', async () => {
       const maliciousUserId = "user'; DROP TABLE memories; --";
 
       await service.textSearch('normal query', {
@@ -161,11 +157,28 @@ describe('HybridSearchService — SQL injection prevention (GIN-42)', () => {
         limit: 10,
       });
 
-      // The SQL string must not contain the raw userId
-      expect(capturedSql).not.toContain(maliciousUserId);
+      expect(elasticsearch.keywordSearch).toHaveBeenCalledWith(
+        'normal query',
+        expect.objectContaining({ userId: [maliciousUserId] }),
+        10,
+      );
+      expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
+    });
 
-      // userId should be in the params array
-      expect(capturedParams).toContain(maliciousUserId);
+    it('passes multiple userIds as structured filter data', async () => {
+      const userIds = ['user-1', "user'; DROP TABLE memories; --"];
+
+      await service.textSearch('normal query', {
+        userId: userIds,
+        limit: 10,
+      });
+
+      expect(elasticsearch.keywordSearch).toHaveBeenCalledWith(
+        'normal query',
+        expect.objectContaining({ userId: userIds }),
+        10,
+      );
+      expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
     });
   });
 });

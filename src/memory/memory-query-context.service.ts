@@ -92,7 +92,14 @@ export class MemoryQueryContextService {
         searchable: { not: false },
         userHidden: false,
         createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-        ...(dto.sessionId ? { sessionId: dto.sessionId } : {}),
+        // HEY-578: dto.sessionId may be an external ID; match via relation
+        ...(dto.sessionId
+          ? {
+              session: {
+                OR: [{ id: dto.sessionId }, { externalId: dto.sessionId }],
+              },
+            }
+          : {}),
       },
       orderBy: [
         { effectiveScore: 'desc' },

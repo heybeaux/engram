@@ -3,6 +3,7 @@ import { VectorService } from './vector.service';
 import { PgVectorProvider } from './providers/pgvector.provider';
 import { PineconeProvider } from './providers/pinecone.provider';
 import { HybridSearchService } from './hybrid-search.service';
+import { EmbeddingWriteService } from './embedding-write.service';
 
 @Global()
 @Module({
@@ -11,7 +12,8 @@ import { HybridSearchService } from './hybrid-search.service';
     PgVectorProvider,
     PineconeProvider,
     HybridSearchService,
+    EmbeddingWriteService,
   ],
-  exports: [VectorService, HybridSearchService],
+  exports: [VectorService, HybridSearchService, EmbeddingWriteService],
 })
 export class VectorModule {}

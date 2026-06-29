@@ -57,36 +57,52 @@ describe('EmbeddingService', () => {
   });
 
   describe('generate', () => {
-    it('should generate embedding using LLM service', async () => {
-      mockLlmService.embed.mockResolvedValue({
-        embedding: mockEmbedding,
-        dimensions: 1536,
-        model: 'text-embedding-3-small',
-        // tokensUsed: 10,
-      });
+    it('should generate embedding using EmbedFacade (write path uses same provider as recall)', async () => {
+      mockEmbedFacade.embedOne.mockResolvedValue(mockEmbedding);
 
       const result = await service.generate('test text');
 
-      expect(mockLlmService.embed).toHaveBeenCalledWith('test text');
+      expect(mockEmbedFacade.embedOne).toHaveBeenCalledWith('test text');
+      expect(mockLlmService.embed).not.toHaveBeenCalled();
       expect(result).toEqual(mockEmbedding);
       expect(result.length).toBe(1536);
     });
 
     it('should update dimensions after generation', async () => {
-      mockLlmService.embed.mockResolvedValue({
-        embedding: new Array(768).fill(0),
-        dimensions: 768,
-        model: 'some-model',
-        // tokensUsed: 5,
-      });
+      const embedding768 = new Array(768).fill(0);
+      mockEmbedFacade.embedOne.mockResolvedValue(embedding768);
 
       await service.generate('test');
 
       expect(service.getDimensions()).toBe(768);
     });
 
-    it('should propagate errors from LLM service', async () => {
-      mockLlmService.embed.mockRejectedValue(new Error('Embedding failed'));
+    it('should fall back to LLM service when EmbedFacade is unavailable', async () => {
+      // Build a service instance without the facade injected
+      const moduleNoFacade = await Test.createTestingModule({
+        providers: [
+          EmbeddingService,
+          { provide: LLMService, useValue: mockLlmService },
+          { provide: VectorService, useValue: mockVectorService },
+          // EmbedFacade intentionally omitted
+        ],
+      }).compile();
+      const serviceNoFacade = moduleNoFacade.get<EmbeddingService>(EmbeddingService);
+
+      mockLlmService.embed.mockResolvedValue({
+        embedding: mockEmbedding,
+        dimensions: 1536,
+        model: 'text-embedding-3-small',
+      });
+
+      const result = await serviceNoFacade.generate('test text');
+
+      expect(mockLlmService.embed).toHaveBeenCalledWith('test text');
+      expect(result).toEqual(mockEmbedding);
+    });
+
+    it('should propagate errors from EmbedFacade', async () => {
+      mockEmbedFacade.embedOne.mockRejectedValue(new Error('Embedding failed'));
 
       await expect(service.generate('test')).rejects.toThrow(
         'Embedding failed',
@@ -112,26 +128,23 @@ describe('EmbeddingService', () => {
       mockEmbedFacade.embedOneWithOptions.mockRejectedValue(
         new Error('timeout'),
       );
-      mockLlmService.embed.mockResolvedValue({
-        embedding: mockEmbedding,
-        dimensions: 1536,
-        model: 'text-embedding-3-small',
-      });
+      // generate() now uses embedOne (facade) not llm.embed
+      mockEmbedFacade.embedOne.mockResolvedValue(mockEmbedding);
 
       const result = await service.generateForRecall('fallback test');
 
       expect(result).toEqual(mockEmbedding);
-      expect(mockLlmService.embed).toHaveBeenCalledWith('fallback test');
+      expect(mockEmbedFacade.embedOne).toHaveBeenCalledWith('fallback test');
     });
 
     it('should reset circuit breaker on successful recall embed', async () => {
-      // Trip the circuit breaker with failures via generate()
-      mockLlmService.embed.mockRejectedValue(new Error('down'));
+      // Trip the circuit breaker with failures via generate() — facade fails
+      mockEmbedFacade.embedOne.mockRejectedValue(new Error('down'));
       for (let i = 0; i < 5; i++) {
         await service.generate('fail').catch(() => {});
       }
 
-      // Now recall succeeds via facade
+      // Now recall succeeds via facade (embedOneWithOptions)
       const recallEmbedding = new Array(768).fill(0.1);
       mockEmbedFacade.embedOneWithOptions.mockResolvedValue(recallEmbedding);
 
@@ -139,11 +152,7 @@ describe('EmbeddingService', () => {
       expect(result).toEqual(recallEmbedding);
 
       // Circuit breaker should be reset — generate should work again
-      mockLlmService.embed.mockResolvedValue({
-        embedding: mockEmbedding,
-        dimensions: 1536,
-        model: 'test',
-      });
+      mockEmbedFacade.embedOne.mockResolvedValue(mockEmbedding);
       const normalResult = await service.generate('normal');
       expect(normalResult).toEqual(mockEmbedding);
     });

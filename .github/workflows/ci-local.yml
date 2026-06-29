@@ -143,12 +143,13 @@ jobs:
     steps:
       - name: Check all jobs succeeded
         run: |
-          # Accept cancelled for test job — tests passed but jest hung during cleanup (known issue)
-          TEST_OK="${{ needs.test.result }}"
           if [[ "${{ needs.static.result }}" != "success" || \
                 "${{ needs.build.result }}" != "success" || \
-                ("$TEST_OK" != "success" && "$TEST_OK" != "cancelled") ]]; then
+                "${{ needs.test.result }}" != "success" ]]; then
             echo "One or more jobs failed"
+            echo "static=${{ needs.static.result }}"
+            echo "build=${{ needs.build.result }}"
+            echo "test=${{ needs.test.result }}"
             exit 1
           fi
           echo "All jobs passed ✅"

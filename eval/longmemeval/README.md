@@ -61,6 +61,7 @@ Behavior:
 | `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key for judge + reading model |
 | `ENGRAM_API_BASE` | No | `http://localhost:3000` | Engram API base URL |
 | `LONGMEMEVAL_READ_MODEL` | No | `claude-opus-4-7` | Reading model (CoN step) |
+| `LONGMEMEVAL_FIXTURE_PATH` | No | `fixtures/smoke-20.json` | Override smoke fixture path (e.g. `fixtures/stratified-50-normalized.json` for the 50-question stratified eval set) |
 | `HUGGINGFACE_TOKEN` | Only for `--subset full` | — | HuggingFace token to download full dataset |
 
 ## Architecture

@@ -7,6 +7,10 @@ import {
   VectorSearchOptions,
 } from '../vector.interface';
 import { HybridSearchService } from '../hybrid-search.service';
+import {
+  resolveEmbeddingModelId,
+  resolveExpectedDimensions,
+} from '../embedding-model.util';
 
 /**
  * pgvector Provider
@@ -29,7 +33,8 @@ export class PgVectorProvider implements VectorProvider {
     private prisma: PrismaService,
     @Optional() private hybridSearch?: HybridSearchService,
   ) {
-    this.searchModel = process.env.VECTOR_SEARCH_MODEL || 'bge-base';
+    // Audit C1: write and search MUST resolve the model ID identically.
+    this.searchModel = resolveEmbeddingModelId();
     this.disableLegacyFallback =
       process.env.DISABLE_LEGACY_EMBEDDING_FALLBACK === 'true';
     this.hybridEnabled =
@@ -40,19 +45,53 @@ export class PgVectorProvider implements VectorProvider {
     }
   }
 
+  /**
+   * Model ID used for both memory_embeddings writes and the search JOIN.
+   * Exposed so tests can assert write/search agreement (audit C1).
+   */
+  getSearchModelId(): string {
+    return this.searchModel;
+  }
+
   async upsert(record: VectorRecord): Promise<void> {
+    // Dimension guard: fail loudly if incoming vector doesn't match the
+    // expected dims for the configured model.  A silent mismatch would write
+    // a wrong-sized vector under model_id=searchModel, making every write
+    // invisible to the search JOIN (or triggering a pgvector type error).
+    const expectedDims = resolveExpectedDimensions();
+    if (expectedDims !== undefined && record.embedding.length !== expectedDims) {
+      throw new Error(
+        `[PgVector] Dimension mismatch for model '${this.searchModel}': ` +
+          `expected ${expectedDims} dims but got ${record.embedding.length}. ` +
+          `Check EMBEDDING_PROVIDER / LOCAL_EMBED_MODEL / EMBEDDING_MODEL alignment.`,
+      );
+    }
+
     const embeddingStr = this.serializeEmbedding(record.embedding, 'upsert');
 
-    // Write to inline column for backward compat
-    const updated = await this.prisma.$executeRawUnsafe(
-      `
-      UPDATE memories 
-      SET embedding = $1::vector
-      WHERE id = $2
-    `,
-      embeddingStr,
-      record.id,
-    );
+    // Legacy inline column is vector(768) — only write when dims match to avoid
+    // Postgres error 22000 with newer models (e.g. openai-small at 1536 dims).
+    const LEGACY_INLINE_DIMS = 768;
+    let updated: number;
+    if (record.embedding.length === LEGACY_INLINE_DIMS) {
+      updated = await this.prisma.$executeRawUnsafe(
+        `
+        UPDATE memories
+        SET embedding = $1::vector
+        WHERE id = $2
+      `,
+        embeddingStr,
+        record.id,
+      );
+    } else {
+      // Skip the inline UPDATE; confirm memory existence with a cheap SELECT so
+      // the memory_embeddings insert below is still gated on a real memory ID.
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ exists: number }>>(
+        `SELECT 1 AS exists FROM memories WHERE id = $1`,
+        record.id,
+      );
+      updated = rows.length;
+    }
 
     // Only write to memory_embeddings if this ID is a real memory
     // (HierarchyService passes pinecone-style IDs like "hierarchy_l0_xxx" which aren't memory IDs)
@@ -118,6 +157,10 @@ export class PgVectorProvider implements VectorProvider {
       params.push(...userIds);
       paramIndex += userIds.length;
     }
+
+    // Audit H5: exclude superseded and non-searchable memories at the SQL
+    // level so they never enter the candidate scoreMap.
+    memoryWhereClause += ` AND m.superseded_by_id IS NULL AND m.searchable IS NOT FALSE`;
 
     if (options.filter?.layers && options.filter.layers.length > 0) {
       const layerPlaceholders = options.filter.layers
@@ -272,14 +315,24 @@ export class PgVectorProvider implements VectorProvider {
       );
     }
 
-    if (
-      embedding.some(
-        (value) => typeof value !== 'number' || !Number.isFinite(value),
-      )
-    ) {
+    // Ingest H2: sparse arrays (e.g. `new Array(768)`) have holes that
+    // .some()/.every() skip, so they previously passed validation and
+    // serialized to '[,,,]' — a Postgres 22P02 error. Reject arrays whose
+    // own-key count differs from their length (holes), and validate every
+    // slot with an index-based loop that does NOT skip holes.
+    if (Object.keys(embedding).length !== embedding.length) {
       throw new Error(
-        `[PgVector] Invalid embedding for ${operation}: contains non-finite values`,
+        `[PgVector] Invalid embedding for ${operation}: sparse array with holes`,
       );
+    }
+
+    for (let i = 0; i < embedding.length; i++) {
+      const value = embedding[i];
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new Error(
+          `[PgVector] Invalid embedding for ${operation}: contains non-finite values`,
+        );
+      }
     }
 
     return `[${embedding.join(',')}]`;
