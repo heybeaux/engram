@@ -62,6 +62,7 @@ export class MemoryDedupService {
     userId: string,
     text: string,
     threshold: number = DEDUP_SIMILARITY_THRESHOLD,
+    excludeMemoryId?: string,
   ): Promise<DedupResult> {
     // Use a PostgreSQL SAVEPOINT so that any DB-level failure inside the dedup
     // check does not abort the caller's RLS transaction (HEY-433).
@@ -80,22 +81,42 @@ export class MemoryDedupService {
 
     try {
       const embedding = await this.embedding.generate(text);
-      const similar = await this.embedding.search(userId, embedding, 5);
+      // When dedup runs after the new memory has already been embedded, vector
+      // search can legitimately return the candidate itself at score=1.0. Pull
+      // one extra result when an exclusion is supplied so filtering out self does
+      // not reduce the effective candidate pool.
+      const similar = await this.embedding.search(
+        userId,
+        embedding,
+        excludeMemoryId ? 6 : 5,
+      );
 
-      const bestMatch = similar.length > 0 ? similar[0] : null;
-      if (!bestMatch) {
-        if (txClient) {
-          await (txClient as any).$executeRawUnsafe(
-            `RELEASE SAVEPOINT ${savepointName}`,
-          );
+      let bestMatch: (typeof similar)[number] | null = null;
+      let existingMemory: Memory | null = null;
+
+      for (const match of similar) {
+        // Never let a post-embed dedup pass match the candidate memory itself.
+        // A self-match would mark the row DUPLICATE of itself, making fresh
+        // memories effectively non-recallable.
+        if (excludeMemoryId && match.id === excludeMemoryId) {
+          this.logger.debug(`[Dedup] Ignoring self-match memory=${match.id}`);
+          continue;
         }
-        return { action: 'create' };
+
+        const candidate = await this.prisma.memory.findUnique({
+          where: { id: match.id },
+        });
+
+        if (!candidate || candidate.deletedAt) {
+          continue;
+        }
+
+        bestMatch = match;
+        existingMemory = candidate;
+        break;
       }
 
-      const existingMemory = await this.prisma.memory.findUnique({
-        where: { id: bestMatch.id },
-      });
-      if (!existingMemory || existingMemory.deletedAt) {
+      if (!bestMatch || !existingMemory) {
         if (txClient) {
           await (txClient as any).$executeRawUnsafe(
             `RELEASE SAVEPOINT ${savepointName}`,

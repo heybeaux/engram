@@ -200,6 +200,7 @@ export class EmbeddingQueueProcessor extends WorkerHost {
         userId,
         raw,
         dedupThreshold,
+        memoryId,
       );
 
       if (dedupResult.action === 'create' || !dedupResult.existingMemory) {
@@ -208,6 +209,13 @@ export class EmbeddingQueueProcessor extends WorkerHost {
       }
 
       const existingId = dedupResult.existingMemory.id;
+
+      if (existingId === memoryId) {
+        this.logger.warn(
+          `[Dedup] Ignoring self-duplicate result for memory ${memoryId}`,
+        );
+        return;
+      }
 
       if (dedupResult.action === 'merged') {
         this.logger.log(
