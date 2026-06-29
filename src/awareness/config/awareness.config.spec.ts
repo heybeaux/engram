@@ -1,5 +1,3 @@
-import { CronTime } from 'cron';
-
 describe('AwarenessConfig', () => {
   const originalEnv = process.env.AWARENESS_SCHEDULE;
 
@@ -18,7 +16,8 @@ describe('AwarenessConfig', () => {
     const { DEFAULT_AWARENESS_SCHEDULE, AwarenessConfig } = require('./awareness.config');
 
     expect(AwarenessConfig.schedule).toBe(DEFAULT_AWARENESS_SCHEDULE);
-    expect(nextRunHours(AwarenessConfig.schedule)).toEqual([8, 12, 16, 20]);
+    expect(configuredHours(AwarenessConfig.schedule)).toEqual([8, 12, 16, 20]);
+    expect(configuredMinutes(AwarenessConfig.schedule)).toEqual([0]);
   });
 
   it('still allows operators to override the schedule by env var', () => {
@@ -30,13 +29,17 @@ describe('AwarenessConfig', () => {
   });
 });
 
-function nextRunHours(schedule: string): number[] {
-  const cron = new CronTime(schedule);
-  let cursor = new Date('2026-06-20T07:59:59-07:00');
+function configuredMinutes(schedule: string): number[] {
+  return parseCronField(schedule, 1);
+}
 
-  return Array.from({ length: 4 }, () => {
-    const next = cron.getNextDateFrom(cursor).toJSDate();
-    cursor = new Date(next.getTime() + 1000);
-    return next.getHours();
-  });
+function configuredHours(schedule: string): number[] {
+  return parseCronField(schedule, 2);
+}
+
+function parseCronField(schedule: string, fieldIndex: number): number[] {
+  return schedule
+    .split(/\s+/)
+    [fieldIndex].split(',')
+    .map((value) => Number(value));
 }
