@@ -145,6 +145,7 @@ export class MemoryQueryService {
     const temporalRangeFilter = this.buildTemporalRangeFilter(dto);
 
     let scoredMemories: MemoryWithScore[];
+    const keywordRescueMap = new Map<string, MemoryWithScore>();
 
     if (hasTemporalIntent) {
       // TEMPORAL PATH — HEY-575: Adaptive window expansion
@@ -351,6 +352,7 @@ export class MemoryQueryService {
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       const memoryIds = vectorResults.map((r) => r.id);
+      const keywordRescueIds = new Set<string>();
 
       // BM25/tsvector hybrid: safety net for exact-keyword queries
       // Skip inline FTS when in pool-only mode (poolIds set, no userId) — pool JOIN is the auth boundary.
@@ -396,12 +398,13 @@ export class MemoryQueryService {
         let ftsAdded = 0;
         for (const row of ftsResults) {
           ftsResultIds.add(row.id);
+          keywordRescueIds.add(row.id);
           if (!scoreMap.has(row.id)) {
-            scoreMap.set(row.id, 0.75);
+            scoreMap.set(row.id, 1.25);
             memoryIds.push(row.id);
             ftsAdded++;
           } else {
-            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.75));
+            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.25));
           }
         }
         if (ftsAdded > 0) {
@@ -452,12 +455,13 @@ export class MemoryQueryService {
               let ilikeAdded = 0;
               for (const row of ilikeResults) {
                 ftsResultIds.add(row.id);
+                keywordRescueIds.add(row.id);
                 if (!scoreMap.has(row.id)) {
-                  scoreMap.set(row.id, 0.7);
+                  scoreMap.set(row.id, 1.1);
                   memoryIds.push(row.id);
                   ilikeAdded++;
                 } else {
-                  scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.7));
+                  scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.1));
                 }
               }
               if (ilikeAdded > 0) {
@@ -498,7 +502,11 @@ export class MemoryQueryService {
       const sorted = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
-          return { ...memory, score: semanticScore } as MemoryWithScore;
+          return {
+            ...memory,
+            score: semanticScore,
+            __keywordRescued: keywordRescueIds.has(memory.id),
+          } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
@@ -506,6 +514,10 @@ export class MemoryQueryService {
 
       const topIds = new Set(sorted.map((m) => m.id));
       const memoryMap = new Map(sorted.map((m) => [m.id, m]));
+      for (const id of keywordRescueIds) {
+        const mem = memoryMap.get(id);
+        if (mem) keywordRescueMap.set(id, mem);
+      }
       const forcedFts: MemoryWithScore[] = [];
       for (const id of ftsResultIds) {
         if (!topIds.has(id)) {
@@ -575,6 +587,20 @@ export class MemoryQueryService {
       rerankQuery,
       limit,
     );
+
+    // Exact keyword/ILIKE rescued memories are deterministic high-signal hits.
+    // Keep them sticky after reranking so the cross-encoder cannot drop fresh
+    // exact-match writes from the final top-N.
+    const missingKeywordHits = [...keywordRescueMap.entries()]
+      .filter(([id]) => !scoredMemories.some((m) => m.id === id))
+      .map(([, mem]) =>
+        ({ ...mem, score: Math.max(mem.score ?? 0, 1.1) } as MemoryWithScore),
+      );
+    if (missingKeywordHits.length > 0) {
+      scoredMemories = [...missingKeywordHits, ...scoredMemories]
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, limit);
+    }
 
     // v1.7: Agent-scoped filter
     if (dto.filterAgentId) {
