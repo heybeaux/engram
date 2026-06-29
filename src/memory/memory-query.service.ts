@@ -353,17 +353,23 @@ export class MemoryQueryService {
       const memoryIds = vectorResults.map((r) => r.id);
 
       // BM25/tsvector hybrid: safety net for exact-keyword queries
-      // Skip inline FTS when in pool-only mode (poolIds set, no userId) — pool JOIN is the auth boundary
+      // Skip inline FTS when in pool-only mode (poolIds set, no userId) — pool JOIN is the auth boundary.
+      // When account auth resolves to multiple user ids, search all resolved users instead of collapsing
+      // to the first user; fresh writes may belong to any of them.
       const ftsResultIds = new Set<string>();
       const skipFts = poolIds && poolIds.length > 0 && !singleUserId;
+      const resolvedUserIds = Array.isArray(userId)
+        ? userId
+        : singleUserId
+          ? [singleUserId]
+          : [];
       try {
-        // ENG-109: When no userId, omit user_id filter to search all account memories
         const ftsResults = skipFts
           ? []
-          : singleUserId
+          : resolvedUserIds.length > 0
             ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                 `SELECT id FROM memories
-               WHERE user_id = $1
+               WHERE user_id = ANY($1::text[])
                  AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
@@ -372,7 +378,7 @@ export class MemoryQueryService {
                  AND is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
                LIMIT 100`,
-                singleUserId ?? 'default',
+                resolvedUserIds,
                 searchQuery,
               )
             : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
@@ -412,16 +418,16 @@ export class MemoryQueryService {
             .filter((w) => w.length >= 4);
           if (words.length > 0) {
             try {
-              // ENG-109: Adjust parameter indices when no userId
-              const paramOffset = singleUserId ? 2 : 1;
+              const hasResolvedUsers = resolvedUserIds.length > 0;
+              const paramOffset = hasResolvedUsers ? 2 : 1;
               const ilikeConditions = words
                 .map((_, i) => `LOWER(raw) LIKE $${i + paramOffset}`)
                 .join(' OR ');
               const ilikeParams = words.map((w) => `%${w}%`);
-              const ilikeResults = singleUserId
+              const ilikeResults = hasResolvedUsers
                 ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                     `SELECT id FROM memories
-                     WHERE user_id = $1
+                     WHERE user_id = ANY($1::text[])
                        AND (${ilikeConditions})
                        AND deleted_at IS NULL
                        AND superseded_by_id IS NULL
@@ -429,7 +435,7 @@ export class MemoryQueryService {
                        AND embedding_status != 'DUPLICATE'
                        AND is_duplicate_of IS NULL
                      LIMIT 20`,
-                    singleUserId ?? 'default',
+                    resolvedUserIds,
                     ...ilikeParams,
                   )
                 : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
