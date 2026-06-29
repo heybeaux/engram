@@ -10,7 +10,7 @@
  *
  * Thresholds:
  *  - Isolation score = 100% (zero tolerance for cross-tenant leaks)
- *  - Precision@5 >= 80% (higher than pre-DC 70% — cleaner corpus improves retrieval)
+ *  - Precision@5 >= 95%
  *  - No must_top5 query has 0 hits
  *
  * If the dream cycle fails or times out, precision thresholds are skipped (soft failure).
@@ -29,6 +29,7 @@ import type { GoldQuery } from '../fixtures/types';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { EmbeddingService as EmbeddingGeneratorService } from '../../src/embedding/embedding.service';
 import {
+  PRECISION_AT_5_THRESHOLD,
   scoreQuery,
   buildReport,
   formatReport,
@@ -258,7 +259,7 @@ describe('Recall Benchmark (Post-Dream-Cycle)', () => {
       expect(isolationFailures).toHaveLength(0);
     });
 
-    it('should meet post-dream-cycle precision thresholds (Precision@5 >= 80%)', () => {
+    it('should meet post-dream-cycle precision thresholds (Precision@5 >= 95%)', () => {
       if (allScores.length === 0) {
         console.warn('No scores to check thresholds against');
         return;
@@ -292,8 +293,10 @@ describe('Recall Benchmark (Post-Dream-Cycle)', () => {
       const { sha, branch } = getGitInfo();
       const report = buildReport(allScores, sha, branch);
 
-      // Post-dream-cycle threshold: 80% (cleaner corpus enables higher bar)
-      expect(report.overallPrecisionAt5).toBeGreaterThanOrEqual(0.8);
+      // Post-dream-cycle threshold: 95% (keeps production recall quality honest)
+      expect(report.overallPrecisionAt5).toBeGreaterThanOrEqual(
+        PRECISION_AT_5_THRESHOLD,
+      );
 
       // Log any zero-hit queries (aspirational — P@5 threshold is the hard gate).
       const zeroHitQueries = allScores.filter(
