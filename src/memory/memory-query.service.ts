@@ -26,7 +26,7 @@ import {
   MultiQueryMetadataDto,
   ResultExplanationDto,
 } from '../multi-query/dto/multi-query.dto';
-import { Memory, MemoryLayer, SubjectType } from '@prisma/client';
+import { EmbeddingStatus, Memory, MemoryLayer, SubjectType } from '@prisma/client';
 import {
   MemoryWithExtraction,
   MemoryWithScore,
@@ -220,6 +220,8 @@ export class MemoryQueryService {
             deletedAt: null,
             supersededById: null,
             searchable: { not: false },
+            embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+            isDuplicateOf: null,
             createdAt: activeCreatedAt,
             ...subjectTypeFilter,
             ...visibilityFilter,
@@ -366,6 +368,8 @@ export class MemoryQueryService {
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
+                 AND embedding_status != 'DUPLICATE'
+                 AND is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
                LIMIT 100`,
                 singleUserId ?? 'default',
@@ -377,6 +381,8 @@ export class MemoryQueryService {
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
+                 AND embedding_status != 'DUPLICATE'
+                 AND is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
                LIMIT 100`,
                 searchQuery,
@@ -420,6 +426,8 @@ export class MemoryQueryService {
                        AND deleted_at IS NULL
                        AND superseded_by_id IS NULL
                        AND searchable IS NOT FALSE
+                       AND embedding_status != 'DUPLICATE'
+                       AND is_duplicate_of IS NULL
                      LIMIT 20`,
                     singleUserId ?? 'default',
                     ...ilikeParams,
@@ -430,6 +438,8 @@ export class MemoryQueryService {
                        AND deleted_at IS NULL
                        AND superseded_by_id IS NULL
                        AND searchable IS NOT FALSE
+                       AND embedding_status != 'DUPLICATE'
+                       AND is_duplicate_of IS NULL
                      LIMIT 20`,
                     ...ilikeParams,
                   );
@@ -468,6 +478,8 @@ export class MemoryQueryService {
           deletedAt: null,
           supersededById: null,
           searchable: { not: false },
+          embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+          isDuplicateOf: null,
           ...subjectTypeFilter,
           ...visibilityFilter,
           ...metadataFilter,
@@ -576,11 +588,12 @@ export class MemoryQueryService {
       scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     }
 
-    let result: MemoryWithScore[] = scoredMemories;
+    let result: MemoryWithScore[] = this.filterRecallSurvivors(scoredMemories);
     if (dto.includeChains) {
       result = ((await this.memoryFailureService?.attachChains(
-        scoredMemories,
-      )) ?? scoredMemories) as MemoryWithScore[];
+        result,
+      )) ?? result) as MemoryWithScore[];
+      result = this.filterRecallSurvivors(result);
     }
 
     const resultIds = result.map((m) => m.id);
@@ -630,6 +643,8 @@ export class MemoryQueryService {
         );
       }
     }
+
+    result = this.filterRecallSurvivors(result);
 
     const latencyMs = Date.now() - startTime;
 
@@ -713,6 +728,8 @@ export class MemoryQueryService {
         deletedAt: null,
         supersededById: null,
         searchable: { not: false },
+        embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+        isDuplicateOf: null,
         ...subjectTypeFilter,
         ...visibilityFilterMQ,
         ...metadataFilterMQ,
@@ -737,11 +754,12 @@ export class MemoryQueryService {
       })
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
-    let result: MemoryWithScore[] = scoredMemories;
+    let result: MemoryWithScore[] = this.filterRecallSurvivors(scoredMemories);
     if (dto.includeChains) {
       result = ((await this.memoryFailureService?.attachChains(
-        scoredMemories,
-      )) ?? scoredMemories) as MemoryWithScore[];
+        result,
+      )) ?? result) as MemoryWithScore[];
+      result = this.filterRecallSurvivors(result);
     }
 
     const resultIds = result.map((m) => m.id);
@@ -805,6 +823,8 @@ export class MemoryQueryService {
       }
     }
 
+    result = this.filterRecallSurvivors(result);
+
     const latencyMsMq = Date.now() - startTime;
 
     // Fire-and-forget query log for re-ranker training (multi-query path)
@@ -832,6 +852,19 @@ export class MemoryQueryService {
       explanations,
       ...(anticipatoryMeta2 ? { anticipatoryMeta: anticipatoryMeta2 } : {}),
     };
+  }
+
+  private filterRecallSurvivors<T extends MemoryWithScore>(memories: T[]): T[] {
+    return memories.filter((memory) => {
+      const embeddingStatus = (memory as any).embeddingStatus;
+      return (
+        embeddingStatus !== EmbeddingStatus.DUPLICATE &&
+        (memory as any).isDuplicateOf == null &&
+        (memory as any).supersededById == null &&
+        (memory as any).deletedAt == null &&
+        (memory as any).searchable !== false
+      );
+    });
   }
 
   /**
@@ -895,6 +928,8 @@ export class MemoryQueryService {
       deletedAt: null,
       supersededById: null,
       searchable: { not: false },
+      embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+      isDuplicateOf: null,
       importanceScore: { gte: 0.6 },
       createdAt,
       ...subjectTypeFilter,

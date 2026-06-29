@@ -1,7 +1,7 @@
 import { Injectable, Optional, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
-import { Memory, MemoryLayer } from '@prisma/client';
+import { EmbeddingStatus, Memory, MemoryLayer } from '@prisma/client';
 import { MemoryWithScore } from './memory.types';
 import { RecallWeightService } from './recall-weight.service';
 import { RerankService } from '../embedding/rerank.service';
@@ -24,6 +24,16 @@ export class MemoryQueryRankingService {
     @Optional() private rerankService?: RerankService,
     @Optional() private graphRecallService?: GraphRecallService,
   ) {}
+
+  private isRecallSurvivor(memory: Partial<Memory>): boolean {
+    return (
+      (memory as any).embeddingStatus !== EmbeddingStatus.DUPLICATE &&
+      (memory as any).isDuplicateOf == null &&
+      (memory as any).supersededById == null &&
+      (memory as any).deletedAt == null &&
+      (memory as any).searchable !== false
+    );
+  }
 
   /**
    * Importance-based noise penalty.
@@ -75,6 +85,8 @@ export class MemoryQueryRankingService {
 
     const existingIds = new Set(scoredMemories.map((m) => m.id));
     for (const gm of graphMemories) {
+      if (!this.isRecallSurvivor(gm)) continue;
+
       if (existingIds.has(gm.id)) {
         // Boost memories that appear in both vector and graph results
         const idx = scoredMemories.findIndex((m) => m.id === gm.id);
@@ -112,6 +124,10 @@ export class MemoryQueryRankingService {
         userId: { in: userIds },
         layer: 'INSIGHT',
         deletedAt: null,
+        supersededById: null,
+        searchable: { not: false },
+        embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+        isDuplicateOf: null,
         importanceScore: { gte: 0.6 },
         createdAt: { gt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
       };
@@ -152,6 +168,8 @@ export class MemoryQueryRankingService {
       const existingIds = new Set(existingResults.map((r) => r.id));
 
       for (const insight of insights) {
+        if (!this.isRecallSurvivor(insight as any)) continue;
+
         // Skip if already in results
         if (existingIds.has(insight.id)) continue;
 
