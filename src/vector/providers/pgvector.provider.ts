@@ -134,6 +134,11 @@ export class PgVectorProvider implements VectorProvider {
       paramIndex++;
     }
 
+    // Exclude non-survivor memories at the SQL level so stale duplicates do
+    // not pollute vector candidates or bury freshly-written memories.
+    memoryWhereClause +=
+      ` AND m.superseded_by_id IS NULL AND m.searchable IS NOT FALSE AND m.embedding_status != 'DUPLICATE'`;
+
     // Pool filtering: JOIN on memory_pool_memberships to restrict results
     let poolJoinClause = '';
     if (options.filter?.poolIds && options.filter.poolIds.length > 0) {
