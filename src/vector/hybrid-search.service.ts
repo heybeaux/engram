@@ -65,7 +65,7 @@ export class HybridSearchService {
     const userIds = Array.isArray(options.userId)
       ? options.userId
       : [options.userId];
-    const limit = options.limit || 50;
+    const limit = this.normalizeLimit(options.limit);
 
     try {
       const results = await this.elasticsearchService.keywordSearch(
@@ -215,6 +215,12 @@ export class HybridSearchService {
       vectorWeight: Math.max(0.2, adjustedVectorWeight),
       textWeight: Math.min(0.8, adjustedTextWeight),
     };
+  }
+
+  private normalizeLimit(limit: number | undefined): number {
+    if (limit === undefined) return 50;
+    if (!Number.isFinite(limit)) return 50;
+    return Math.max(1, Math.trunc(limit));
   }
 
   getConfig(): HybridSearchConfig {
