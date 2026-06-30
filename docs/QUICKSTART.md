@@ -37,7 +37,7 @@ curl -X POST http://localhost:3001/v1/auth/register \
 The response includes a one-time `apiKey` that starts with `eng_...`. Save it locally for the following examples:
 
 ```bash
-export ENGRAM_API_KEY="eng_replace_with_the_key_from_register"
+export ENGRAM_API_KEY="<api-key-from-register-response>"
 ```
 
 If you are using the dashboard setup wizard instead, it creates the same kind of agent API key for your account.
