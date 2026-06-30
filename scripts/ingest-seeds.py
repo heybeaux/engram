@@ -1,10 +1,16 @@
-import json, requests, time, sys
+import json, os, requests, time, sys
 
-API_URL = "http://localhost:3001"
+API_URL = os.environ.get("ENGRAM_API_URL", "http://localhost:3001")
+API_KEY = os.environ.get("ENGRAM_API_KEY")
+USER_ID = os.environ.get("ENGRAM_USER_ID", "user_123")
+
+if not API_KEY:
+    raise SystemExit("Set ENGRAM_API_KEY before running this script")
+
 HEADERS = {
     "Content-Type": "application/json",
-    "X-AM-API-Key": "engram_gv9r6c4vesomlekojvkne",
-    "X-AM-User-ID": "Beaux"
+    "X-AM-API-Key": API_KEY,
+    "X-AM-User-ID": USER_ID
 }
 
 with open("/Users/clawdbot/projects/agent-memory/engram/scripts/seed-memories.json") as f:

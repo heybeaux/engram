@@ -61,6 +61,8 @@ jobs:
         run: npx prisma generate
       - name: Check for local workspace files
         run: ./scripts/check-no-workspace-files.sh
+      - name: Check for hardcoded secrets
+        run: ./scripts/check-no-hardcoded-secrets.sh
       - name: Type check
         run: npx tsc --noEmit
       - name: Lint

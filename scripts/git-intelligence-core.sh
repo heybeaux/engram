@@ -5,8 +5,8 @@
 set -euo pipefail
 
 ENGRAM_URL="http://localhost:3001/v1/memories"
-API_KEY="engram_gv9r6c4vesomlekojvkne"
-USER_ID="Beaux"
+API_KEY="${ENGRAM_API_KEY:?Set ENGRAM_API_KEY before running this script}"
+USER_ID="${ENGRAM_USER_ID:-user_123}"
 REPORT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/reports/git-intelligence"
 REPORT_FILE="$REPORT_DIR/$(date +%Y-%m-%d).md"
 

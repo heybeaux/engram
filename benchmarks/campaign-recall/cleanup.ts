@@ -7,9 +7,14 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const ENGRAM_BASE = 'http://localhost:3001';
-const API_KEY = 'engram_gv9r6c4vesomlekojvkne';
-const USER_ID = 'Beaux';
+const ENGRAM_BASE = process.env.ENGRAM_BASE ?? 'http://localhost:3001';
+const API_KEY = process.env.ENGRAM_API_KEY ?? '';
+const USER_ID = process.env.ENGRAM_USER_ID ?? 'user_123';
+
+if (!API_KEY) {
+  console.error('Set ENGRAM_API_KEY before running this benchmark helper.');
+  process.exit(1);
+}
 const DATA_FILE = path.join(__dirname, '../benchmark-data.json');
 const DELAY_MS = 100;
 
