@@ -1081,9 +1081,9 @@ export class MemoryQueryService {
   private isIdentityProfileQuery(query: string): boolean {
     const normalized = query.toLowerCase();
     return (
-      /who\s+am\s+i/.test(normalized) ||
-      /what\s+do\s+i\s+do/.test(normalized) ||
-      /what\s+am\s+i\s+building/.test(normalized)
+      /who\s+am\s+i/.test(normalized) ||
+      /what\s+do\s+i\s+do/.test(normalized) ||
+      /what\s+am\s+i\s+building/.test(normalized)
     );
   }
 
