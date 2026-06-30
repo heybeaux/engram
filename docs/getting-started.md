@@ -16,14 +16,14 @@ Run Engram on your own machine. All local features are unlocked with no plan lim
 ### Installation
 
 ```bash
-git clone https://github.com/heybeaux/engram && cd engram
+git clone https://github.com/heybeaux/engram.git && cd engram
 cp .env.example .env
 docker compose up -d
 ```
 
 ### First Run: Setup Wizard
 
-If you're running [engram-dashboard](https://github.com/heybeaux/engram-dashboard) separately, open it at `http://localhost:3000`. On first run (no accounts in the database), the setup wizard appears instead of the login screen:
+The Compose stack starts the API on `http://localhost:3001`. The dashboard UI lives in [heybeaux/engram-dashboard](https://github.com/heybeaux/engram-dashboard); if you run it separately at `http://localhost:3000`, the setup wizard appears on first run (no accounts in the database):
 
 1. **Create admin account** — enter your email, password, and name
 2. **Choose mode:**

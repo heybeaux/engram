@@ -13,7 +13,7 @@ graph TB
         Main[NestJS Application]
         Auth[Auth Guards<br/>API Key / JWT / Instance Key]
         RateLimit[Rate Limiter<br/>Token Bucket]
-        Swagger[Swagger / OpenAPI<br/>/api/docs]
+        Swagger[Swagger / OpenAPI<br/>/api-docs]
     end
 
     subgraph Core Modules

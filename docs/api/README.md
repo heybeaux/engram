@@ -4,7 +4,7 @@ Engram API v1 — Memory infrastructure for AI agents.
 
 **Base URL:** `http://localhost:3001` (self-hosted) or `https://api.openengram.ai` (cloud)
 
-**Interactive Docs:** `{base_url}/api/docs` (Swagger UI)
+**Interactive Docs:** `{base_url}/api-docs` (Swagger UI)
 
 ## Authentication
 

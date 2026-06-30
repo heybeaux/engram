@@ -1,6 +1,6 @@
 # Engram Quickstart
 
-Get Engram running in one command.
+Get the self-hosted Engram API running locally with Docker Compose.
 
 ## Prerequisites
 
@@ -9,11 +9,12 @@ Get Engram running in one command.
 ## Setup
 
 ```bash
-git clone https://github.com/heybeaux/engram && cd engram
+git clone https://github.com/heybeaux/engram.git && cd engram
 cp .env.example .env
-# Edit .env if you want to set an API key or use OpenAI embeddings
 docker compose up -d
 ```
+
+The API listens on `http://localhost:3001`. The dashboard UI is a separate app in [heybeaux/engram-dashboard](https://github.com/heybeaux/engram-dashboard); run it alongside this API if you want the browser setup wizard.
 
 ## Verify
 
@@ -21,11 +22,34 @@ docker compose up -d
 curl http://localhost:3001/v1/health
 ```
 
+Interactive Swagger/OpenAPI docs are available at `http://localhost:3001/api-docs`.
+
+## Create a Local API Key
+
+Protected endpoints require a DB-backed agent API key. For a fresh self-hosted instance, register the first account and copy the `apiKey` value from the response:
+
+```bash
+curl -X POST http://localhost:3001/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"change-me-now","name":"Demo User"}'
+```
+
+The response includes a one-time `apiKey` that starts with `eng_...`. Save it locally for the following examples:
+
+```bash
+export ENGRAM_API_KEY="eng_replace_with_the_key_from_register"
+```
+
+If you are using the dashboard setup wizard instead, it creates the same kind of agent API key for your account.
+
+> Local development alternative: set `TRUST_LOCAL_NETWORK=true` in `.env` before `docker compose up -d` to allow local/LAN requests without `X-AM-API-Key`. Only do this on trusted local networks; never behind a public reverse proxy.
+
 ## Create a Memory
 
 ```bash
 curl -X POST http://localhost:3001/v1/memories \
   -H "Content-Type: application/json" \
+  -H "X-AM-API-Key: $ENGRAM_API_KEY" \
   -H "X-AM-User-ID: demo" \
   -d '{"raw": "The user prefers dark mode"}'
 ```
@@ -35,17 +59,16 @@ curl -X POST http://localhost:3001/v1/memories \
 ```bash
 curl -X POST http://localhost:3001/v1/memories/search \
   -H "Content-Type: application/json" \
+  -H "X-AM-API-Key: $ENGRAM_API_KEY" \
   -H "X-AM-User-ID: demo" \
   -d '{"query": "UI preferences", "limit": 5}'
 ```
 
 ## Embedding Options
 
-By default, Engram is configured for the local `engram-embed` service. To use it, uncomment the `engram-embed` service in `docker-compose.yml`.
+The default Compose stack sets `EMBEDDING_PROVIDER=local`. Run the local embedding service separately, or set these in `.env` to use OpenAI embeddings instead:
 
-Alternatively, set these in `.env` to use OpenAI:
-
-```
+```env
 EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=***
 ```

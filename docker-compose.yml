@@ -39,6 +39,7 @@ services:
       EDITION: local
       EMBEDDING_PROVIDER: local
       ELASTICSEARCH_URL: http://elasticsearch:9200
+      TRUST_LOCAL_NETWORK: ${TRUST_LOCAL_NETWORK:-false}
       PORT: 3001
     ports:
       - "3001:3001"
