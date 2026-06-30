@@ -5,7 +5,7 @@
   <p align="center">
     <a href="https://github.com/heybeaux/engram/actions/workflows/ci-local.yml"><img src="https://img.shields.io/github/actions/workflow/status/heybeaux/engram/ci-local.yml?branch=staging&label=local%20ci&style=flat-square" alt="Local CI"></a>
     <a href="https://github.com/heybeaux/engram/actions/workflows/ci-cloud.yml"><img src="https://img.shields.io/github/actions/workflow/status/heybeaux/engram/ci-cloud.yml?branch=staging&label=cloud%20ci&style=flat-square" alt="Cloud CI"></a>
-    <a href="https://github.com/heybeaux/engram/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License"></a>
+    <a href="https://github.com/heybeaux/engram/blob/staging/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square" alt="License"></a>
     <a href="https://www.npmjs.com/package/@engram/api"><img src="https://img.shields.io/npm/v/@engram/api?style=flat-square&label=npm" alt="npm"></a>
     <a href="https://github.com/heybeaux/engram"><img src="https://img.shields.io/github/stars/heybeaux/engram?style=flat-square" alt="Stars"></a>
   </p>
@@ -15,7 +15,7 @@
     <a href="https://github.com/heybeaux/engram-dashboard">Dashboard</a> •
     <a href="https://github.com/heybeaux/engram-embed">Local Embeddings</a> •
     <a href="https://github.com/heybeaux/engram-client">TypeScript SDK</a> •
-    <a href="https://github.com/heybeaux/engram/blob/main/docs/API.md">API Docs</a>
+    <a href="https://github.com/heybeaux/engram/blob/staging/docs/API.md">API Docs</a>
   </p>
 </p>
 
@@ -53,9 +53,11 @@ cp .env.example .env
 docker compose up -d
 ```
 
-API at `localhost:3001` · Dashboard at `localhost:3000`
+API at `localhost:3001`
 
-On first run, the **setup wizard** walks you through creating an admin account and choosing your mode (local-only or linked to OpenEngram Cloud). No manual config needed — just open the dashboard.
+On first run, the **setup wizard** walks you through creating an admin account and choosing your mode (local-only or linked to OpenEngram Cloud). No manual config needed.
+
+> **Dashboard:** The self-hosted dashboard (`engram-dashboard`) is a separate repo. Run it independently if you want the UI — see [engram-dashboard](https://github.com/heybeaux/engram-dashboard).
 
 ### Cloud
 
@@ -101,7 +103,7 @@ Self-hosting is fully supported today with no feature limits.
 - [API Reference](./docs/API.md) — Full endpoint documentation
 - [Deployment Architecture](./docs/architecture-deployment.md) — Mode detection, feature gating, cloud link, sync
 - [Configuration](./docs/CONFIGURATION.md) — All environment variables and deployment modes
-- [Swagger UI](http://localhost:3001/v1/docs) — Interactive API explorer (when running locally)
+- [Swagger UI](http://localhost:3001/api-docs) — Interactive API explorer (when running locally)
 - [Online Docs](https://openengram.ai/docs) — Hosted documentation
 
 ## Self-Hosting

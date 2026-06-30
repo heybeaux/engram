@@ -14,7 +14,7 @@ Memory infrastructure for AI agents that actually works.
 The fastest way to get running:
 
 ```bash
-git clone https://github.com/openengram/engram.git
+git clone https://github.com/heybeaux/engram.git
 cd engram
 docker compose up
 ```
@@ -24,7 +24,7 @@ This starts PostgreSQL (with pgvector) and the Engram API on `http://localhost:3
 ## Manual Installation
 
 ```bash
-git clone https://github.com/openengram/engram.git
+git clone https://github.com/heybeaux/engram.git
 cd engram
 pnpm install
 ```
@@ -64,7 +64,7 @@ pnpm start:dev    # Development (hot reload)
 pnpm start:prod   # Production (requires pnpm build first)
 ```
 
-The API is available at `http://localhost:3001`. Interactive docs at `http://localhost:3001/api/docs`.
+The API is available at `http://localhost:3001`. Interactive docs at `http://localhost:3001/api-docs`.
 
 ## Create Your First Agent
 

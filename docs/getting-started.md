@@ -23,7 +23,7 @@ docker compose up -d
 
 ### First Run: Setup Wizard
 
-Open the dashboard at `http://localhost:3000`. On first run (no accounts in the database), the setup wizard appears instead of the login screen:
+If you're running [engram-dashboard](https://github.com/heybeaux/engram-dashboard) separately, open it at `http://localhost:3000`. On first run (no accounts in the database), the setup wizard appears instead of the login screen:
 
 1. **Create admin account** — enter your email, password, and name
 2. **Choose mode:**
