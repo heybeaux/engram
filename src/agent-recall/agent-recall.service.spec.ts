@@ -333,6 +333,48 @@ describe('AgentRecallService', () => {
       );
     });
 
+    it('should extract a person name from natural-language recall queries', async () => {
+      mockPrisma.entityProfile.findFirst
+        .mockResolvedValueOnce(null) // full "who is alice" candidate
+        .mockResolvedValueOnce(baseProfile); // extracted "alice" candidate
+      mockPrisma.entityProfileMemory.findMany.mockResolvedValue([]);
+      mockPrisma.entityProfile.findUnique.mockResolvedValue({
+        ...baseProfile,
+        entityId: null,
+      });
+      mockPrisma.graphEntity.findFirst.mockResolvedValue(null);
+
+      const result = await service.recallEntity(ACCOUNT_ID, 'Who is Alice?');
+
+      expect(result).not.toBeNull();
+      expect(mockPrisma.entityProfile.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ normalizedName: 'alice' }),
+        }),
+      );
+    });
+
+    it('should ignore common profile-search suffixes when matching profiles', async () => {
+      mockPrisma.entityProfile.findFirst
+        .mockResolvedValueOnce(null) // full "alice profile" candidate
+        .mockResolvedValueOnce(baseProfile); // extracted "alice" candidate
+      mockPrisma.entityProfileMemory.findMany.mockResolvedValue([]);
+      mockPrisma.entityProfile.findUnique.mockResolvedValue({
+        ...baseProfile,
+        entityId: null,
+      });
+      mockPrisma.graphEntity.findFirst.mockResolvedValue(null);
+
+      const result = await service.recallEntity(ACCOUNT_ID, 'Alice profile');
+
+      expect(result).not.toBeNull();
+      expect(mockPrisma.entityProfile.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ normalizedName: 'alice' }),
+        }),
+      );
+    });
+
     it('should try alias match when exact fails', async () => {
       // First call (exact) returns null; subsequent calls for alias return match
       mockPrisma.entityProfile.findFirst

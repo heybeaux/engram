@@ -231,7 +231,7 @@ describe('PgVectorProvider', () => {
 
       const query = mockPrisma.$queryRawUnsafe.mock.calls.find(
         (c: any[]) =>
-          typeof c[0] === 'string' && c[0].includes('memory_embeddings'),
+          typeof c[0] === 'string' && c[0].includes('JOIN memory_embeddings'),
       );
       expect(query).toBeDefined();
       expect(query[0]).not.toContain('UNION ALL');
@@ -412,6 +412,24 @@ describe('PgVectorProvider', () => {
         'bge-base',
         'user-123',
       );
+    });
+
+    it('should exclude non-survivor memories from recall candidates', async () => {
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([]);
+
+      await provider.search([0.1], { userId: 'user-123' });
+
+      const sql = mockPrisma.$queryRawUnsafe.mock.calls.find(
+        (c: any[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('SELECT') &&
+          c[0].includes('m.id') &&
+          c[0].includes('JOIN memory_embeddings'),
+      )?.[0];
+
+      expect(sql).toContain('m.superseded_by_id IS NULL');
+      expect(sql).toContain('m.searchable IS NOT FALSE');
+      expect(sql).toContain("m.embedding_status != 'DUPLICATE'");
     });
 
     it('should filter by tags with array containment (ENG-42)', async () => {

@@ -6,7 +6,7 @@
  *
  * Thresholds:
  *  - Isolation score = 100% (zero tolerance for cross-tenant leaks)
- *  - Precision@5 >= 70%
+ *  - Precision@5 >= 95%
  *  - No must_top5 query has 0 hits
  */
 
@@ -22,6 +22,7 @@ import type { GoldQuery } from '../fixtures/types';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { EmbeddingService as EmbeddingGeneratorService } from '../../src/embedding/embedding.service';
 import {
+  PRECISION_AT_5_THRESHOLD,
   scoreQuery,
   buildReport,
   formatReport,
@@ -180,8 +181,10 @@ describe('Recall Benchmark', () => {
         process.env.BENCHMARK_REAL_EMBEDDINGS === 'true';
 
       if (usingRealEmbeddings) {
-        // Precision@5 >= 70%
-        expect(report.overallPrecisionAt5).toBeGreaterThanOrEqual(0.7);
+        // Precision@5 >= 95%
+        expect(report.overallPrecisionAt5).toBeGreaterThanOrEqual(
+          PRECISION_AT_5_THRESHOLD,
+        );
 
         // Log any must_top5 queries with 0 hits (aspirational — not a hard gate).
         // P@5 threshold above already captures overall quality.

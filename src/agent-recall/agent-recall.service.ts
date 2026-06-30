@@ -118,43 +118,53 @@ export class AgentRecallService {
    * Multi-strategy entity matching (exact → alias → fuzzy → semantic).
    */
   private async matchProfile(userIds: string[], entityName: string) {
-    const normalized = entityName.toLowerCase().trim();
+    const candidates = this.entityNameCandidates(entityName);
 
-    // 1. Exact normalizedName match
-    const exact = await this.prisma.entityProfile.findFirst({
-      where: {
-        userId: { in: userIds },
-        normalizedName: normalized,
-        deletedAt: null,
-      },
-      include: { attributes: true },
-    });
-    if (exact) {
-      this.logger.debug(`Exact match for "${entityName}": ${exact.id}`);
-      return exact;
-    }
-
-    // 2. Alias match (case-insensitive — try normalized, then original case)
-    for (const aliasVariant of [normalized, entityName]) {
-      const aliasMatch = await this.prisma.entityProfile.findFirst({
+    // 1. Exact normalizedName match. Try extracted name candidates first so
+    // UI-style queries such as "Who is Alice?" or "Alice profile" resolve the
+    // existing profile instead of treating the whole query as a name.
+    for (const candidate of candidates) {
+      const exact = await this.prisma.entityProfile.findFirst({
         where: {
           userId: { in: userIds },
+          normalizedName: candidate.normalized,
           deletedAt: null,
-          aliases: { has: aliasVariant },
         },
         include: { attributes: true },
       });
-      if (aliasMatch) {
-        this.logger.debug(`Alias match for "${entityName}": ${aliasMatch.id}`);
-        return aliasMatch;
+      if (exact) {
+        this.logger.debug(`Exact match for "${entityName}": ${exact.id}`);
+        return exact;
+      }
+    }
+
+    // 2. Alias match (case-insensitive — try normalized, title/original case)
+    for (const candidate of candidates) {
+      for (const aliasVariant of candidate.aliasVariants) {
+        const aliasMatch = await this.prisma.entityProfile.findFirst({
+          where: {
+            userId: { in: userIds },
+            deletedAt: null,
+            aliases: { has: aliasVariant },
+          },
+          include: { attributes: true },
+        });
+        if (aliasMatch) {
+          this.logger.debug(
+            `Alias match for "${entityName}": ${aliasMatch.id}`,
+          );
+          return aliasMatch;
+        }
       }
     }
 
     // 3. Fuzzy match via pg_trgm similarity()
-    const fuzzy = await this.fuzzyMatch(userIds, normalized);
-    if (fuzzy) {
-      this.logger.debug(`Fuzzy match for "${entityName}": ${fuzzy.id}`);
-      return fuzzy;
+    for (const candidate of candidates) {
+      const fuzzy = await this.fuzzyMatch(userIds, candidate.normalized);
+      if (fuzzy) {
+        this.logger.debug(`Fuzzy match for "${entityName}": ${fuzzy.id}`);
+        return fuzzy;
+      }
     }
 
     // 4. Semantic embedding match (pgvector cosine distance)
@@ -166,6 +176,77 @@ export class AgentRecallService {
 
     this.logger.debug(`No match for "${entityName}"`);
     return null;
+  }
+
+  /**
+   * Build likely entity-name candidates from direct names and common UI search
+   * phrasing. This keeps profile recall useful when callers pass natural
+   * language search strings instead of a bare canonical name.
+   */
+  private entityNameCandidates(entityName: string): Array<{
+    raw: string;
+    normalized: string;
+    aliasVariants: string[];
+  }> {
+    const input = entityName.trim();
+    const normalizedInput = this.normalizeCandidate(input);
+    const candidates = new Map<string, string>();
+
+    const add = (value: string) => {
+      const normalized = this.normalizeCandidate(value);
+      if (normalized.length >= 2 && !candidates.has(normalized)) {
+        candidates.set(normalized, value.trim());
+      }
+    };
+
+    add(input);
+
+    const withoutQuestionPrefix = input.replace(
+      /^(?:who|what|where)\s+(?:is|are|was|were)\s+/i,
+      '',
+    );
+    add(withoutQuestionPrefix);
+
+    const withoutPossessivePrefix = input.replace(
+      /^(?:tell me about|show me|find|search for|lookup|look up|recall)\s+/i,
+      '',
+    );
+    add(withoutPossessivePrefix);
+
+    const withoutProfileSuffix = input.replace(
+      /\b(?:profile|profiles|memories|memory|person|people|details|info|information)\b/gi,
+      ' ',
+    );
+    add(withoutProfileSuffix);
+
+    const phraseMatch = input.match(
+      /(?:who|what|where)\s+(?:is|are|was|were)\s+(.+?)\??$/i,
+    );
+    if (phraseMatch) add(phraseMatch[1]);
+
+    return Array.from(candidates.entries()).map(([normalized, raw]) => ({
+      raw,
+      normalized,
+      aliasVariants: Array.from(
+        new Set([normalized, raw, this.titleCase(normalized)]),
+      ),
+    }));
+  }
+
+  private normalizeCandidate(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[?!.:,;]+$/g, '')
+      .replace(
+        /\b(?:profile|profiles|memories|memory|person|people|details|info|information)\b/g,
+        ' ',
+      )
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private titleCase(value: string): string {
+    return value.replace(/\b\w/g, (char) => char.toUpperCase());
   }
 
   /**

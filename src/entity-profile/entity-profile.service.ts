@@ -119,12 +119,35 @@ export class EntityProfileService {
     };
 
     if (search) {
-      const lowerSearch = search.toLowerCase();
+      const normalizedSearch = this.normalizeSearch(search);
+      const aliasVariants = this.searchAliasVariants(search);
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
-        { normalizedName: { contains: lowerSearch } },
-        { aliases: { has: search } },
+        { normalizedName: { contains: normalizedSearch } },
+        { aliases: { hasSome: aliasVariants } },
         { description: { contains: search, mode: 'insensitive' } },
+        { tags: { hasSome: aliasVariants } },
+        {
+          attributes: {
+            some: {
+              OR: [
+                { key: { contains: search, mode: 'insensitive' } },
+                { value: { contains: search, mode: 'insensitive' } },
+                { category: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+        {
+          memories: {
+            some: {
+              memory: {
+                deletedAt: null,
+                raw: { contains: search, mode: 'insensitive' },
+              },
+            },
+          },
+        },
       ];
     }
 
@@ -149,6 +172,17 @@ export class EntityProfileService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  private normalizeSearch(search: string): string {
+    return search.toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  private searchAliasVariants(search: string): string[] {
+    const normalized = this.normalizeSearch(search);
+    const trimmed = search.trim();
+    const title = normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+    return Array.from(new Set([trimmed, normalized, title]));
   }
 
   async getById(accountId: string, id: string) {

@@ -181,13 +181,31 @@ describe('HealthMetricsService', () => {
     expect(report.metrics).toHaveLength(5);
   });
 
+  it('getDreamCycleSla() reads completed stage runs', async () => {
+    mockPrisma.$queryRaw
+      .mockResolvedValueOnce([{ pct: 97.5 }])
+      .mockResolvedValueOnce([{ pct: 3.2 }])
+      .mockResolvedValueOnce([{ pct: 28.4 }])
+      .mockResolvedValueOnce([
+        { stage: 'pending', minutes_since_ok: 12.2 },
+        { stage: 'identity', minutes_since_ok: 31.7 },
+      ]);
+    const report = await service.compute();
+    expect(
+      report.metrics.find((m) => m.key === 'dream_cycle_sla')?.value,
+    ).toMatchObject({
+      minutesSinceLastComplete: 32,
+      stages: { pending: 12, identity: 32 },
+    });
+  });
+
   it('getDreamCycleSla() handles missing table gracefully', async () => {
     mockPrisma.$queryRaw
       .mockResolvedValueOnce([{ pct: 97.5 }])
       .mockResolvedValueOnce([{ pct: 3.2 }])
       .mockResolvedValueOnce([{ pct: 28.4 }])
       .mockRejectedValueOnce(
-        new Error('relation "dream_cycle_runs" does not exist'),
+        new Error('relation "dream_cycle_stage_runs" does not exist'),
       );
     const report = await service.compute();
     expect(

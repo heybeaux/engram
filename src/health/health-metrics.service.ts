@@ -27,7 +27,9 @@ export class HealthMetricsService {
 
   compute(): Promise<MemoryHealthReport> {
     if (this.inFlightCompute) {
-      this.logger.debug('compute() already in flight — sharing existing promise');
+      this.logger.debug(
+        'compute() already in flight — sharing existing promise',
+      );
       return this.inFlightCompute;
     }
     this.inFlightCompute = this.computeUncached().finally(() => {
@@ -224,7 +226,9 @@ export class HealthMetricsService {
         Array<{ stage: string; minutes_since_ok: number | null }>
       >`
         SELECT stage, EXTRACT(epoch FROM (NOW() - MAX(finished_at))) / 60 AS minutes_since_ok
-        FROM dream_cycle_runs WHERE status = 'COMPLETED' GROUP BY stage
+        FROM dream_cycle_stage_runs
+        WHERE status = 'COMPLETED' AND finished_at IS NOT NULL
+        GROUP BY stage
       `;
       const stages = Object.fromEntries(
         result.map((r) => [

@@ -108,7 +108,9 @@ jobs:
 
       - name: Run benchmark
         id: benchmark
+        shell: bash
         run: |
+          set -o pipefail
           pnpm benchmark 2>&1 | tee benchmark-output.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
@@ -143,7 +145,7 @@ jobs:
               ? output.slice(reportStart, reportEnd > reportStart ? reportEnd : undefined)
               : 'Report not found in output';
 
-            const passed = output.includes('PASSED');
+            const passed = output.includes('ALL THRESHOLDS PASSED') && !output.includes('THRESHOLDS NOT MET') && !output.includes('Benchmark FAILED');
             const emoji = passed ? '✅' : '❌';
 
             const body = `## ${emoji} Recall Benchmark Results
@@ -197,7 +199,11 @@ jobs:
             echo "::error::Benchmark output file not found — benchmark step likely failed"
             exit 1
           fi
-          if grep -q "THRESHOLDS NOT MET" benchmark-output.txt; then
+          if ! grep -q "ALL THRESHOLDS PASSED" benchmark-output.txt; then
+            echo "::error::Benchmark did not report ALL THRESHOLDS PASSED"
+            exit 1
+          fi
+          if grep -Eq "THRESHOLDS NOT MET|Benchmark FAILED" benchmark-output.txt; then
             echo "::error::Benchmark thresholds not met"
             exit 1
           fi

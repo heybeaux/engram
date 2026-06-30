@@ -159,6 +159,7 @@ describe('EmbeddingQueueProcessor', () => {
         'user-456',
         'Test content',
         undefined, // SESSION layer uses default threshold
+        'mem-123',
       );
     });
 
@@ -174,6 +175,7 @@ describe('EmbeddingQueueProcessor', () => {
         'user-456',
         'Test content',
         0.92, // INSIGHT_DEDUP_THRESHOLD
+        'mem-123',
       );
     });
 
@@ -238,6 +240,24 @@ describe('EmbeddingQueueProcessor', () => {
       await processor.process(makeJob({ runDedup: true }));
 
       // Should NOT call update with DUPLICATE status
+      expect(mockPrisma.memory.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ embeddingStatus: 'DUPLICATE' }),
+        }),
+      );
+    });
+
+    it('should ignore self-duplicate results defensively', async () => {
+      (mockDedupService.findDuplicateV2 as jest.Mock).mockResolvedValue({
+        action: 'merged',
+        existingMemory: { id: 'mem-123', raw: 'Test content' },
+        similarityScore: 1,
+      });
+
+      await processor.process(makeJob({ runDedup: true }));
+
+      expect(mockDedupService.autoMergeMemory).not.toHaveBeenCalled();
+      expect(mockDedupService.reinforceMemory).not.toHaveBeenCalled();
       expect(mockPrisma.memory.update).not.toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ embeddingStatus: 'DUPLICATE' }),

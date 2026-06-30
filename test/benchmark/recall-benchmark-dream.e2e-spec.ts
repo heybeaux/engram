@@ -10,11 +10,12 @@
  *
  * Thresholds:
  *  - Isolation score = 100% (zero tolerance for cross-tenant leaks)
- *  - Precision@5 >= 80% (higher than pre-DC 70% — cleaner corpus improves retrieval)
+ *  - Precision@5 >= 95%
+ *  - No Dream Cycle stage returns internal errors
  *  - No must_top5 query has 0 hits
  *
- * If the dream cycle fails or times out, precision thresholds are skipped (soft failure).
- * The pre-DC benchmark (recall-benchmark.e2e-spec.ts) remains the primary gate.
+ * Dream Cycle failures are hard failures. A post-dream green check must mean both
+ * consolidation completed cleanly and recall quality stayed above the threshold.
  */
 
 import { INestApplication } from '@nestjs/common';
@@ -28,7 +29,10 @@ import { QUERIES_BY_CATEGORY } from '../fixtures';
 import type { GoldQuery } from '../fixtures/types';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { EmbeddingService as EmbeddingGeneratorService } from '../../src/embedding/embedding.service';
+import { LLMService } from '../../src/llm/llm.service';
+import type { LLMMessage } from '../../src/llm/llm.interface';
 import {
+  PRECISION_AT_5_THRESHOLD,
   scoreQuery,
   buildReport,
   formatReport,
@@ -40,9 +44,48 @@ import { generateCorpusEmbeddings } from '../helpers/generate-embeddings';
 // Generous timeout — corpus seeding + embeddings + dream cycle per user + 80+ queries
 jest.setTimeout(600_000);
 
-// Whether all dream cycles completed successfully; guarded by module scope
-// (all tests in this file run in the same Jest worker process).
-let dreamCycleSucceeded = false;
+const benchmarkLlm = {
+  chat: jest.fn(async (messages: LLMMessage[]) => {
+    const prompt = messages.map((m) => m.content).join('\n');
+    const isIdentity = prompt.includes('structured identity profile');
+    return {
+      content: isIdentity
+        ? JSON.stringify({
+            capabilities: [],
+            preferences: {},
+            trustScores: {},
+            behavioralTraits: [],
+          })
+        : 'Consolidated benchmark memory.',
+      model: 'benchmark-deterministic-llm',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    };
+  }),
+  json: jest.fn(async (_messages: LLMMessage[]) => ({
+    summary: 'Benchmark pattern',
+    confidence: 0.7,
+    indexText:
+      'Benchmark day — notable memories were consolidated. [benchmark]',
+    summaryText: 'Benchmark memories were consolidated deterministically.',
+    standardText: 'Benchmark memories were consolidated deterministically.',
+    events: [],
+    decisions: [],
+    chapter: 'Benchmark',
+    significance: 1,
+    people: [],
+    mood: 'neutral',
+    shouldMerge: false,
+    reason: 'Conservative deterministic benchmark fallback.',
+  })),
+  embed: jest.fn(async () => ({
+    embedding: Array.from({ length: 768 }, () => 0),
+    model: 'benchmark-deterministic-embedding',
+    dimensions: 768,
+  })),
+  getProvider: jest.fn(),
+  listProviders: jest.fn(() => ['benchmark']),
+  listEmbeddingProviders: jest.fn(() => []),
+};
 
 /**
  * Follow the supersededById chain (max 3 hops) to find the current valid IDs.
@@ -80,10 +123,18 @@ describe('Recall Benchmark (Post-Dream-Cycle)', () => {
   let prisma: PrismaService;
   let corpus: SeedCorpusResult;
   let userMap: Map<string, SeededUser>;
+  let originalDefaultUserId: string | undefined;
 
   beforeAll(async () => {
-    // Use real embedding service (no CachedEmbeddingService override)
-    const testApp = await createTestApp(false);
+    originalDefaultUserId = process.env.DEFAULT_USER_ID;
+    delete process.env.DEFAULT_USER_ID;
+
+    // Use real embedding service (no CachedEmbeddingService override), but keep
+    // Dream Cycle LLM calls deterministic so CI does not depend on provider keys.
+    const testApp = await createTestApp({
+      overrideEmbedding: false,
+      overrideProviders: [{ provide: LLMService, useValue: benchmarkLlm }],
+    });
     app = testApp.app;
     prisma = testApp.prisma;
 
@@ -95,52 +146,70 @@ describe('Recall Benchmark (Post-Dream-Cycle)', () => {
     const embeddingGenerator = app.get(EmbeddingGeneratorService);
     await generateCorpusEmbeddings(prisma, embeddingGenerator, corpus);
 
-    // Run the dream cycle for each test user
-    let allSucceeded = true;
-    for (const user of corpus.seededUsers) {
-      console.log(
-        `[Dream Cycle] Starting consolidation for user: ${user.name}`,
-      );
-      try {
-        const headers = asUser(user.apiKey, user.userId);
-        const res = await request(app.getHttpServer())
-          .post('/v1/consolidation/dream-cycle')
-          .set(headers)
-          .send({ userId: user.userId })
-          .timeout(300_000); // 5 min per user — dream cycle can be slow
+    // Run Dream Cycle once for the full seeded corpus. The endpoint has a
+    // global mutex, so calling it once per fixture user creates false lock
+    // contention; the service's auto-discovery path processes all active users
+    // under one top-level run without nested lock acquisition.
+    console.log('[Dream Cycle] Starting consolidation for seeded corpus');
+    const benchmarkUser = corpus.seededUsers[0];
+    const headers = asUser(benchmarkUser.apiKey, benchmarkUser.userId);
+    const res = await request(app.getHttpServer())
+      .post('/v1/consolidation/dream-cycle')
+      .set(headers)
+      .send({})
+      .timeout(300_000); // Dream cycle can be slow with all fixture users
 
-        if (res.status !== 200 && res.status !== 201) {
-          console.warn(
-            `[Dream Cycle] Warning: HTTP ${res.status} for user ${user.name}: ${JSON.stringify(res.body)}`,
-          );
-          allSucceeded = false;
-        } else {
-          const result = res.body as {
-            status: string;
-            duplicatesMerged: number;
-            memoriesArchived: number;
-          };
-          console.log(
-            `[Dream Cycle] Complete for ${user.name}: status=${result.status}, merged=${result.duplicatesMerged}, archived=${result.memoriesArchived}`,
-          );
-        }
-      } catch (error) {
-        console.warn(
-          `[Dream Cycle] Warning: failed for user ${user.name}: ${(error as Error).message}`,
-        );
-        allSucceeded = false;
-      }
+    const dreamCycleFailures: string[] = [];
+    if (res.status !== 200 && res.status !== 201) {
+      dreamCycleFailures.push(
+        `HTTP ${res.status}: ${JSON.stringify(res.body)}`,
+      );
     }
 
-    dreamCycleSucceeded = allSucceeded;
-    if (!dreamCycleSucceeded) {
-      console.warn(
-        '[Dream Cycle] One or more users did not complete — precision thresholds will be skipped',
+    const result = res.body as {
+      status?: string;
+      duplicatesMerged?: number;
+      memoriesArchived?: number;
+      errors?: string[];
+      usersProcessed?: number;
+    };
+    const responseErrors = Array.isArray(result.errors) ? result.errors : [];
+
+    console.log(
+      `[Dream Cycle] Complete: status=${result.status}, usersProcessed=${result.usersProcessed}, merged=${result.duplicatesMerged}, archived=${result.memoriesArchived}, errors=${responseErrors.length}`,
+    );
+
+    if (result.status !== 'COMPLETED') {
+      dreamCycleFailures.push(`status=${result.status ?? 'UNKNOWN'}`);
+    }
+    if (
+      typeof result.usersProcessed === 'number' &&
+      result.usersProcessed < corpus.seededUsers.length
+    ) {
+      dreamCycleFailures.push(
+        `usersProcessed=${result.usersProcessed}, expected at least ${corpus.seededUsers.length}`,
+      );
+    }
+    if (responseErrors.length > 0) {
+      dreamCycleFailures.push(`response errors: ${responseErrors.join('; ')}`);
+    }
+
+    if (dreamCycleFailures.length > 0) {
+      throw new Error(
+        `Dream Cycle failed during post-dream benchmark setup:\n${dreamCycleFailures
+          .map((failure) => `- ${failure}`)
+          .join('\n')}`,
       );
     }
   });
 
   afterAll(async () => {
+    if (originalDefaultUserId === undefined) {
+      delete process.env.DEFAULT_USER_ID;
+    } else {
+      process.env.DEFAULT_USER_ID = originalDefaultUserId;
+    }
+
     if (corpus?.cleanup) {
       await corpus.cleanup();
     }
@@ -258,19 +327,9 @@ describe('Recall Benchmark (Post-Dream-Cycle)', () => {
       expect(isolationFailures).toHaveLength(0);
     });
 
-    it('should meet post-dream-cycle precision thresholds (Precision@5 >= 80%)', () => {
+    it('should meet post-dream-cycle precision thresholds (Precision@5 >= 95%)', () => {
       if (allScores.length === 0) {
         console.warn('No scores to check thresholds against');
-        return;
-      }
-
-      // If the dream cycle did not complete, skip precision enforcement.
-      // The pre-DC benchmark is the primary gate; this suite tests the bonus
-      // quality improvement from consolidation.
-      if (!dreamCycleSucceeded) {
-        console.warn(
-          '[Dream Cycle] Setup incomplete — skipping precision threshold enforcement',
-        );
         return;
       }
 
@@ -292,8 +351,10 @@ describe('Recall Benchmark (Post-Dream-Cycle)', () => {
       const { sha, branch } = getGitInfo();
       const report = buildReport(allScores, sha, branch);
 
-      // Post-dream-cycle threshold: 80% (cleaner corpus enables higher bar)
-      expect(report.overallPrecisionAt5).toBeGreaterThanOrEqual(0.8);
+      // Post-dream-cycle threshold: 95% (keeps production recall quality honest)
+      expect(report.overallPrecisionAt5).toBeGreaterThanOrEqual(
+        PRECISION_AT_5_THRESHOLD,
+      );
 
       // Log any zero-hit queries (aspirational — P@5 threshold is the hard gate).
       const zeroHitQueries = allScores.filter(

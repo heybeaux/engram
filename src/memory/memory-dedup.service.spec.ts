@@ -68,6 +68,77 @@ describe('MemoryDedupService', () => {
       expect(result.similarityScore).toBe(0.95);
     });
 
+    it('should ignore the excluded candidate memory when vector search returns self', async () => {
+      mockEmbedding.search.mockResolvedValue([{ id: 'mem-new', score: 1 }]);
+
+      const result = await service.findDuplicateV2(
+        'user1',
+        'test text',
+        DEDUP_AUTO_MERGE_THRESHOLD,
+        'mem-new',
+      );
+
+      expect(result).toEqual({ action: 'create' });
+      expect(mockPrisma.memory.findUnique).not.toHaveBeenCalled();
+      expect(mockEmbedding.search).toHaveBeenCalledWith(
+        'user1',
+        [0.1, 0.2, 0.3],
+        6,
+      );
+    });
+
+    it('should skip self and use the next valid duplicate candidate', async () => {
+      const existingMemory = { ...mockMemory, id: 'mem-existing' };
+      mockEmbedding.search.mockResolvedValue([
+        { id: 'mem-new', score: 1 },
+        { id: 'mem-existing', score: 0.96 },
+      ]);
+      mockPrisma.memory.findUnique.mockResolvedValue(existingMemory);
+
+      const result = await service.findDuplicateV2(
+        'user1',
+        'test text',
+        DEDUP_AUTO_MERGE_THRESHOLD,
+        'mem-new',
+      );
+
+      expect(result.action).toBe('merged');
+      expect(result.existingMemory).toEqual(existingMemory);
+      expect(result.similarityScore).toBe(0.96);
+      expect(mockPrisma.memory.findUnique).toHaveBeenCalledWith({
+        where: { id: 'mem-existing' },
+      });
+    });
+
+    it('should keep scanning past missing or soft-deleted candidates', async () => {
+      const existingMemory = { ...mockMemory, id: 'mem-valid' };
+      mockEmbedding.search.mockResolvedValue([
+        { id: 'mem-new', score: 1 },
+        { id: 'mem-missing', score: 0.99 },
+        { id: 'mem-deleted', score: 0.98 },
+        { id: 'mem-valid', score: 0.97 },
+      ]);
+      mockPrisma.memory.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...mockMemory,
+          id: 'mem-deleted',
+          deletedAt: new Date(),
+        })
+        .mockResolvedValueOnce(existingMemory);
+
+      const result = await service.findDuplicateV2(
+        'user1',
+        'test text',
+        DEDUP_AUTO_MERGE_THRESHOLD,
+        'mem-new',
+      );
+
+      expect(result.action).toBe('merged');
+      expect(result.existingMemory).toEqual(existingMemory);
+      expect(result.similarityScore).toBe(0.97);
+    });
+
     it('should return reinforced when score >= reinforce threshold but < auto-merge', async () => {
       mockEmbedding.search.mockResolvedValue([{ id: 'mem-1', score: 0.88 }]);
       mockPrisma.memory.findUnique.mockResolvedValue(mockMemory);

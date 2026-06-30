@@ -7,6 +7,8 @@
 
 import type { GoldQuery } from '../fixtures/types';
 
+export const PRECISION_AT_5_THRESHOLD = 0.95;
+
 export interface QueryScore {
   queryId: string;
   category: string;
@@ -204,7 +206,7 @@ export function checkThresholds(scores: QueryScore[]): boolean {
 
   return (
     isolationScore >= 1.0 && // Zero tolerance for isolation failures
-    precisionAt5 >= 0.7 // At least 70% precision
+    precisionAt5 >= PRECISION_AT_5_THRESHOLD // At least 95% precision
   );
 }
 
@@ -243,7 +245,7 @@ export function formatReport(report: BenchmarkReport): string {
       ' '.repeat(40),
   );
   lines.push(
-    `│  Precision@5:     ${pct(report.overallPrecisionAt5)}  ${report.overallPrecisionAt5 >= 0.7 ? '✅' : '❌'}  (threshold: 70%)`,
+    `│  Precision@5:     ${pct(report.overallPrecisionAt5)}  ${report.overallPrecisionAt5 >= PRECISION_AT_5_THRESHOLD ? '✅' : '❌'}  (threshold: ${pct(PRECISION_AT_5_THRESHOLD)})`,
   );
   lines.push(`│  Recall@20:       ${pct(report.overallRecallAt20)}`);
   lines.push(`│  MRR:             ${report.overallMrr.toFixed(4)}`);

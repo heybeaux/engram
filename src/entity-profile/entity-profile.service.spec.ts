@@ -269,6 +269,44 @@ describe('EntityProfileService', () => {
       expect(result.profiles).toHaveLength(1);
     });
 
+    it('should include attributes, tags, and attached memory text in profile search', async () => {
+      mockPrisma.$transaction.mockResolvedValue([[baseProfile], 1]);
+
+      await service.list(ACCOUNT_ID, {
+        search: 'Powell River',
+        page: 1,
+        limit: 25,
+      });
+
+      const transactionArg = mockPrisma.$transaction.mock.calls[0][0];
+      const findManyCall = mockPrisma.entityProfile.findMany.mock.calls[0][0];
+      expect(transactionArg).toBeDefined();
+      expect(findManyCall.where.OR).toEqual(
+        expect.arrayContaining([
+          { tags: { hasSome: expect.arrayContaining(['powell river']) } },
+          {
+            attributes: {
+              some: {
+                OR: expect.arrayContaining([
+                  { value: { contains: 'Powell River', mode: 'insensitive' } },
+                ]),
+              },
+            },
+          },
+          {
+            memories: {
+              some: {
+                memory: expect.objectContaining({
+                  deletedAt: null,
+                  raw: { contains: 'Powell River', mode: 'insensitive' },
+                }),
+              },
+            },
+          },
+        ]),
+      );
+    });
+
     it('should return correct pagination metadata', async () => {
       mockPrisma.$transaction.mockResolvedValue([
         [baseProfile, baseProfile],

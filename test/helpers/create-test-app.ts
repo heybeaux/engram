@@ -32,9 +32,25 @@ export interface TestApp {
  * @param overrideEmbedding - If true (default), swap real EmbeddingService for
  *                            CachedEmbeddingService so tests don't hit external APIs.
  */
+export interface TestProviderOverride {
+  provide: unknown;
+  useValue: unknown;
+}
+
+export interface CreateTestAppOptions {
+  overrideEmbedding?: boolean;
+  overrideProviders?: TestProviderOverride[];
+}
+
 export async function createTestApp(
-  overrideEmbedding = true,
+  overrideEmbeddingOrOptions: boolean | CreateTestAppOptions = true,
 ): Promise<TestApp> {
+  const options: CreateTestAppOptions =
+    typeof overrideEmbeddingOrOptions === 'boolean'
+      ? { overrideEmbedding: overrideEmbeddingOrOptions }
+      : overrideEmbeddingOrOptions;
+  const overrideEmbedding = options.overrideEmbedding ?? true;
+
   const builder = Test.createTestingModule({
     imports: [AppModule],
   });
@@ -49,6 +65,12 @@ export async function createTestApp(
     deleteMemory: async () => {},
     keywordSearch: async () => [],
   });
+
+  for (const provider of options.overrideProviders ?? []) {
+    builder
+      .overrideProvider(provider.provide as never)
+      .useValue(provider.useValue);
+  }
 
   const moduleRef = await builder.compile();
 

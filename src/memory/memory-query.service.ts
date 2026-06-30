@@ -26,7 +26,12 @@ import {
   MultiQueryMetadataDto,
   ResultExplanationDto,
 } from '../multi-query/dto/multi-query.dto';
-import { Memory, MemoryLayer, SubjectType } from '@prisma/client';
+import {
+  EmbeddingStatus,
+  Memory,
+  MemoryLayer,
+  SubjectType,
+} from '@prisma/client';
 import {
   MemoryWithExtraction,
   MemoryWithScore,
@@ -145,6 +150,7 @@ export class MemoryQueryService {
     const temporalRangeFilter = this.buildTemporalRangeFilter(dto);
 
     let scoredMemories: MemoryWithScore[];
+    const keywordRescueMap = new Map<string, MemoryWithScore>();
 
     if (hasTemporalIntent) {
       // TEMPORAL PATH — HEY-575: Adaptive window expansion
@@ -223,6 +229,8 @@ export class MemoryQueryService {
             deletedAt: null,
             supersededById: null,
             searchable: { not: false },
+            embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+            isDuplicateOf: null,
             OR: [
               { observedAt: activeCreatedAt },
               { observedAt: null, createdAt: activeCreatedAt },
@@ -364,14 +372,20 @@ export class MemoryQueryService {
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       const memoryIds = vectorResults.map((r) => r.id);
+      const keywordRescueIds = new Set<string>();
 
-      // BM25/tsvector hybrid: safety net for exact-keyword queries
+      // BM25/tsvector hybrid: safety net for exact-keyword queries.
       // In pool-auth mode (no userId), scope FTS via pool-membership subquery.
+      // When account auth resolves multiple users, search all resolved users
+      // instead of collapsing keyword rescue to the first user.
       const ftsResultIds = new Set<string>();
       const poolOnlyMode = poolIds && poolIds.length > 0 && !singleUserId;
+      const resolvedUserIds = Array.isArray(userId)
+        ? userId
+        : singleUserId
+          ? [singleUserId]
+          : [];
       try {
-        // ENG-109 + H1 fix: pool mode now uses a pool-membership IN subquery
-        // so keyword recall is not silently dropped when there is no userId.
         const ftsResults = poolOnlyMode
           ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
               `SELECT m.id FROM memories m
@@ -383,22 +397,26 @@ export class MemoryQueryService {
                  AND m.deleted_at IS NULL
                  AND m.superseded_by_id IS NULL
                  AND m.searchable IS NOT FALSE
+                 AND m.embedding_status != 'DUPLICATE'
+                 AND m.is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC
                LIMIT 100`,
               poolIds,
               searchQuery,
             )
-          : singleUserId
+          : resolvedUserIds.length > 0
             ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                 `SELECT id FROM memories
-               WHERE user_id = $1
+               WHERE user_id = ANY($1::text[])
                  AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
+                 AND embedding_status != 'DUPLICATE'
+                 AND is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
                LIMIT 100`,
-                singleUserId ?? 'default',
+                resolvedUserIds,
                 searchQuery,
               )
             : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
@@ -407,6 +425,8 @@ export class MemoryQueryService {
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
+                 AND embedding_status != 'DUPLICATE'
+                 AND is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
                LIMIT 100`,
                 searchQuery,
@@ -421,13 +441,13 @@ export class MemoryQueryService {
           const row = ftsResults[ftsRank];
           const bm25Score = 1 / (RRF_K + ftsRank + 1);
           ftsResultIds.add(row.id);
+          keywordRescueIds.add(row.id);
           if (!scoreMap.has(row.id)) {
-            scoreMap.set(row.id, bm25Score);
+            scoreMap.set(row.id, 1.25);
             memoryIds.push(row.id);
             ftsAdded++;
           } else {
-            // Combine via RRF: add BM25 rank contribution to existing vector score
-            scoreMap.set(row.id, scoreMap.get(row.id)! + bm25Score);
+            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.25));
           }
         }
         if (ftsAdded > 0) {
@@ -436,62 +456,138 @@ export class MemoryQueryService {
           );
         }
 
-        // ILIKE fallback
-        if (ftsResults.length === 0) {
-          const words = searchQuery
-            .toLowerCase()
-            .split(/\s+/)
-            .filter((w) => w.length >= 4);
-          if (words.length > 0) {
-            try {
-              // ENG-109: Adjust parameter indices when no userId
-              const paramOffset = singleUserId ? 2 : 1;
-              const ilikeConditions = words
-                .map((_, i) => `LOWER(raw) LIKE $${i + paramOffset}`)
-                .join(' OR ');
-              const ilikeParams = words.map((w) => `%${w}%`);
-              const ilikeResults = singleUserId
+        // Lexical rescue runs alongside FTS, not only when FTS returns zero.
+        // websearch_to_tsquery can be too strict for natural questions (for
+        // example requiring filler terms such as "tell" or "need"), while a
+        // curated ILIKE pass catches exact domain words like medication/roast.
+        const words = this.extractLexicalRescueTerms(searchQuery);
+        if (words.length > 0) {
+          try {
+            const hasResolvedUsers = resolvedUserIds.length > 0;
+            const paramOffset = hasResolvedUsers ? 2 : 1;
+            const ilikeConditions = words
+              .map((_, i) => `LOWER(raw) LIKE $${i + paramOffset}`)
+              .join(' OR ');
+            const ilikeParams = words.map((w) => `%${w}%`);
+            const ilikeResults = poolOnlyMode
+              ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                  `SELECT m.id FROM memories m
+                   WHERE m.id IN (
+                     SELECT mpm.memory_id FROM memory_pool_memberships mpm
+                     WHERE mpm.pool_id = ANY($1::text[])
+                   )
+                     AND (${words
+                       .map((_, i) => `LOWER(m.raw) LIKE $${i + 2}`)
+                       .join(' OR ')})
+                     AND m.deleted_at IS NULL
+                     AND m.superseded_by_id IS NULL
+                     AND m.searchable IS NOT FALSE
+                     AND m.embedding_status != 'DUPLICATE'
+                     AND m.is_duplicate_of IS NULL
+                   ORDER BY m.importance_score DESC, m.created_at DESC
+                   LIMIT 20`,
+                  poolIds,
+                  ...ilikeParams,
+                )
+              : hasResolvedUsers
                 ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                     `SELECT id FROM memories
-                     WHERE user_id = $1
-                       AND (${ilikeConditions})
-                       AND deleted_at IS NULL
-                       AND superseded_by_id IS NULL
-                       AND searchable IS NOT FALSE
-                     LIMIT 20`,
-                    singleUserId ?? 'default',
+                   WHERE user_id = ANY($1::text[])
+                     AND (${ilikeConditions})
+                     AND deleted_at IS NULL
+                     AND superseded_by_id IS NULL
+                     AND searchable IS NOT FALSE
+                     AND embedding_status != 'DUPLICATE'
+                     AND is_duplicate_of IS NULL
+                   ORDER BY importance_score DESC, created_at DESC
+                   LIMIT 20`,
+                    resolvedUserIds,
                     ...ilikeParams,
                   )
                 : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                     `SELECT id FROM memories
-                     WHERE (${ilikeConditions})
-                       AND deleted_at IS NULL
-                       AND superseded_by_id IS NULL
-                       AND searchable IS NOT FALSE
-                     LIMIT 20`,
+                   WHERE (${ilikeConditions})
+                     AND deleted_at IS NULL
+                     AND superseded_by_id IS NULL
+                     AND searchable IS NOT FALSE
+                     AND embedding_status != 'DUPLICATE'
+                     AND is_duplicate_of IS NULL
+                   ORDER BY importance_score DESC, created_at DESC
+                   LIMIT 20`,
                     ...ilikeParams,
                   );
-              let ilikeAdded = 0;
-              for (const row of ilikeResults) {
-                ftsResultIds.add(row.id);
-                if (!scoreMap.has(row.id)) {
-                  scoreMap.set(row.id, 0.7);
-                  memoryIds.push(row.id);
-                  ilikeAdded++;
-                } else {
-                  scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 0.7));
-                }
+            let ilikeAdded = 0;
+            for (const row of ilikeResults) {
+              ftsResultIds.add(row.id);
+              keywordRescueIds.add(row.id);
+              if (!scoreMap.has(row.id)) {
+                scoreMap.set(row.id, 1.1);
+                memoryIds.push(row.id);
+                ilikeAdded++;
+              } else {
+                scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.1));
               }
-              if (ilikeAdded > 0) {
-                this.logger.debug(
-                  `[Recall] ILIKE fallback: rescued ${ilikeAdded} candidates`,
-                );
-              }
-            } catch (ilikeError) {
+            }
+            if (ilikeAdded > 0) {
               this.logger.debug(
-                `[Recall] ILIKE fallback skipped: ${(ilikeError as Error).message}`,
+                `[Recall] ILIKE fallback: rescued ${ilikeAdded} candidates`,
               );
             }
+          } catch (ilikeError) {
+            this.logger.debug(
+              `[Recall] ILIKE fallback skipped: ${(ilikeError as Error).message}`,
+            );
+          }
+        }
+
+        if (this.isIdentityProfileQuery(searchQuery) && !poolOnlyMode) {
+          try {
+            const identityResults = await this.prisma.memory.findMany({
+              where: {
+                ...(userIdFilter !== undefined ? { userId: userIdFilter } : {}),
+                deletedAt: null,
+                supersededById: null,
+                searchable: { not: false },
+                embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+                isDuplicateOf: null,
+                OR: [
+                  { tags: { has: 'identity' } },
+                  { tags: { has: 'work' } },
+                  { tags: { has: 'career' } },
+                  { raw: { contains: 'developer', mode: 'insensitive' } },
+                  { raw: { contains: 'building', mode: 'insensitive' } },
+                ],
+                ...subjectTypeFilter,
+                ...visibilityFilter,
+                ...metadataFilter,
+                ...temporalRangeFilter,
+                ...sessionIdFilter,
+                ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
+              },
+              orderBy: [{ importanceScore: 'desc' }, { createdAt: 'desc' }],
+              take: 10,
+              select: { id: true },
+            });
+            let identityAdded = 0;
+            for (const row of identityResults) {
+              keywordRescueIds.add(row.id);
+              if (!scoreMap.has(row.id)) {
+                scoreMap.set(row.id, 1.15);
+                memoryIds.push(row.id);
+                identityAdded++;
+              } else {
+                scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.15));
+              }
+            }
+            if (identityAdded > 0) {
+              this.logger.debug(
+                `[Recall] identity rescue: injected ${identityAdded} candidates`,
+              );
+            }
+          } catch (identityError) {
+            this.logger.debug(
+              `[Recall] identity rescue skipped: ${(identityError as Error).message}`,
+            );
           }
         }
       } catch (ftsError) {
@@ -506,6 +602,8 @@ export class MemoryQueryService {
           deletedAt: null,
           supersededById: null,
           searchable: { not: false },
+          embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+          isDuplicateOf: null,
           ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
           ...subjectTypeFilter,
           ...visibilityFilter,
@@ -519,7 +617,11 @@ export class MemoryQueryService {
       const sorted = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
-          return { ...memory, score: semanticScore } as MemoryWithScore;
+          return {
+            ...memory,
+            score: semanticScore,
+            __keywordRescued: keywordRescueIds.has(memory.id),
+          } as MemoryWithScore;
         })
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
@@ -527,6 +629,10 @@ export class MemoryQueryService {
 
       const topIds = new Set(sorted.map((m) => m.id));
       const memoryMap = new Map(sorted.map((m) => [m.id, m]));
+      for (const id of keywordRescueIds) {
+        const mem = memoryMap.get(id);
+        if (mem) keywordRescueMap.set(id, mem);
+      }
       const forcedFts: MemoryWithScore[] = [];
       for (const id of ftsResultIds) {
         if (!topIds.has(id)) {
@@ -611,6 +717,28 @@ export class MemoryQueryService {
       limit,
     );
 
+    // Exact keyword/ILIKE rescued memories are deterministic high-signal hits.
+    // Keep them sticky after reranking so the cross-encoder cannot drop fresh
+    // exact-match writes from the final top-N.
+    const missingKeywordHits = [...keywordRescueMap.entries()]
+      .filter(([id]) => !scoredMemories.some((m) => m.id === id))
+      .map(
+        ([, mem]) =>
+          ({ ...mem, score: Math.max(mem.score ?? 0, 1.1) }) as MemoryWithScore,
+      );
+    if (missingKeywordHits.length > 0) {
+      scoredMemories = [...missingKeywordHits, ...scoredMemories]
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, limit);
+    }
+
+    // v1.7: Agent-scoped filter
+    if (dto.filterAgentId) {
+      scoredMemories = scoredMemories.filter(
+        (m) => m.agentId === dto.filterAgentId,
+      );
+    }
+
     // v1.7: Agent boost
     if (dto.agentBoost && dto.agentBoost > 1.0 && dto.agentId) {
       scoredMemories = scoredMemories.map((m) => {
@@ -622,11 +750,11 @@ export class MemoryQueryService {
       scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     }
 
-    let result: MemoryWithScore[] = scoredMemories;
+    let result: MemoryWithScore[] = this.filterRecallSurvivors(scoredMemories);
     if (dto.includeChains) {
-      result = ((await this.memoryFailureService?.attachChains(
-        scoredMemories,
-      )) ?? scoredMemories) as MemoryWithScore[];
+      result = ((await this.memoryFailureService?.attachChains(result)) ??
+        result) as MemoryWithScore[];
+      result = this.filterRecallSurvivors(result);
     }
 
     const resultIds = result.map((m) => m.id);
@@ -676,6 +804,8 @@ export class MemoryQueryService {
         );
       }
     }
+
+    result = this.filterRecallSurvivors(result);
 
     const latencyMs = Date.now() - startTime;
 
@@ -759,6 +889,8 @@ export class MemoryQueryService {
         deletedAt: null,
         supersededById: null,
         searchable: { not: false },
+        embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+        isDuplicateOf: null,
         ...subjectTypeFilter,
         ...visibilityFilterMQ,
         ...metadataFilterMQ,
@@ -784,22 +916,30 @@ export class MemoryQueryService {
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
     // Apply the same post-processing chain as the standard path so multi-query
-    // is not silently downgraded to cosine-only ranking (retrieval H4).
+    // is not silently downgraded to cosine-only ranking (retrieval H4), then
+    // enforce survivor filtering again after graph/insight/rerank additions.
     let postProcessedMQ: MemoryWithScore[] = scoredMemories;
     try {
-      postProcessedMQ = await this.rankingService.applyUsageWeighting(postProcessedMQ);
+      postProcessedMQ =
+        await this.rankingService.applyUsageWeighting(postProcessedMQ);
     } catch (err) {
-      this.logger.warn(`[MultiQuery] Usage weighting failed: ${(err as Error)?.message}`);
+      this.logger.warn(
+        `[MultiQuery] Usage weighting failed: ${(err as Error)?.message}`,
+      );
     }
     try {
       postProcessedMQ = await this.rankingService.mergeGraphResults(
         postProcessedMQ,
         dto.query,
-        Array.isArray(userId) ? (userId[0] ?? 'default') : (userId ?? 'default'),
+        Array.isArray(userId)
+          ? (userId[0] ?? 'default')
+          : (userId ?? 'default'),
         dto.limit ?? 10,
       );
     } catch (err) {
-      this.logger.warn(`[MultiQuery] Graph recall merge failed: ${(err as Error)?.message}`);
+      this.logger.warn(
+        `[MultiQuery] Graph recall merge failed: ${(err as Error)?.message}`,
+      );
     }
     const mqUserIds = Array.isArray(userId) ? userId : userId ? [userId] : [];
     postProcessedMQ = await this.rankingService.surfaceInsights(
@@ -814,11 +954,11 @@ export class MemoryQueryService {
       dto.limit ?? 10,
     );
 
-    let result: MemoryWithScore[] = postProcessedMQ;
+    let result: MemoryWithScore[] = this.filterRecallSurvivors(postProcessedMQ);
     if (dto.includeChains) {
-      result = ((await this.memoryFailureService?.attachChains(
-        postProcessedMQ,
-      )) ?? postProcessedMQ) as MemoryWithScore[];
+      result = ((await this.memoryFailureService?.attachChains(result)) ??
+        result) as MemoryWithScore[];
+      result = this.filterRecallSurvivors(result);
     }
 
     const resultIds = result.map((m) => m.id);
@@ -882,6 +1022,8 @@ export class MemoryQueryService {
       }
     }
 
+    result = this.filterRecallSurvivors(result);
+
     const latencyMsMq = Date.now() - startTime;
 
     // Fire-and-forget query log for re-ranker training (multi-query path)
@@ -909,6 +1051,53 @@ export class MemoryQueryService {
       explanations,
       ...(anticipatoryMeta2 ? { anticipatoryMeta: anticipatoryMeta2 } : {}),
     };
+  }
+
+  private extractLexicalRescueTerms(query: string): string[] {
+    const stopWords = new Set([
+      'about',
+      'does',
+      'doing',
+      'have',
+      'mine',
+      'need',
+      'tell',
+      'that',
+      'this',
+      'what',
+      'when',
+      'where',
+      'which',
+      'whose',
+      'with',
+      'your',
+    ]);
+
+    return [...new Set(query.toLowerCase().match(/[a-z0-9]+/g) ?? [])]
+      .filter((word) => word.length >= 4 && !stopWords.has(word))
+      .slice(0, 8);
+  }
+
+  private isIdentityProfileQuery(query: string): boolean {
+    const normalized = query.toLowerCase();
+    return (
+      /who\s+am\s+i/.test(normalized) ||
+      /what\s+do\s+i\s+do/.test(normalized) ||
+      /what\s+am\s+i\s+building/.test(normalized)
+    );
+  }
+
+  private filterRecallSurvivors<T extends MemoryWithScore>(memories: T[]): T[] {
+    return memories.filter((memory) => {
+      const embeddingStatus = (memory as any).embeddingStatus;
+      return (
+        embeddingStatus !== EmbeddingStatus.DUPLICATE &&
+        (memory as any).isDuplicateOf == null &&
+        (memory as any).supersededById == null &&
+        (memory as any).deletedAt == null &&
+        (memory as any).searchable !== false
+      );
+    });
   }
 
   /**
@@ -980,6 +1169,8 @@ export class MemoryQueryService {
       deletedAt: null,
       supersededById: null,
       searchable: { not: false },
+      embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
+      isDuplicateOf: null,
       importanceScore: { gte: 0.6 },
       createdAt,
       ...subjectTypeFilter,
