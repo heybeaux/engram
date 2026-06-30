@@ -6,7 +6,8 @@ DATE=$(date +%Y-%m-%d)
 REPORT_DIR="$ENGRAM_DIR/reports/nightly"
 REPORT="$REPORT_DIR/$DATE.md"
 ALERT_FILE="/tmp/engram-quality-alert.txt"
-API_KEY="engram_gv9r6c4vesomlekojvkne"
+API_KEY="${ENGRAM_API_KEY:?Set ENGRAM_API_KEY before running this script}"
+USER_ID="${ENGRAM_USER_ID:-user_123}"
 HAS_ISSUES=false
 
 mkdir -p "$REPORT_DIR"

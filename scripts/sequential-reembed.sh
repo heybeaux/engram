@@ -3,7 +3,7 @@
 # Usage: ./scripts/sequential-reembed.sh
 
 API_URL="http://127.0.0.1:3001"
-API_KEY="engram_gv9r6c4vesomlekojvkne"
+API_KEY="${ENGRAM_API_KEY:?Set ENGRAM_API_KEY before running this script}"
 MODELS=("minilm" "gte-base" "nomic" "kalm-v2" "bge-base")
 
 for model in "${MODELS[@]}"; do

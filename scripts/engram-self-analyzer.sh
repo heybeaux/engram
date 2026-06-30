@@ -7,8 +7,9 @@ TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S %Z')
 START_TIME=$(date +%s)
 REPORT_DIR="$ENGRAM_DIR/reports/engram-health"
 REPORT="$REPORT_DIR/$DATE.md"
-API_KEY="engram_gv9r6c4vesomlekojvkne"
-HEADERS=(-H "X-AM-API-Key: $API_KEY" -H "X-AM-User-ID: Beaux")
+API_KEY="${ENGRAM_API_KEY:?Set ENGRAM_API_KEY before running this script}"
+USER_ID="${ENGRAM_USER_ID:-user_123}"
+HEADERS=(-H "X-AM-API-Key: $API_KEY" -H "X-AM-User-ID: $USER_ID")
 
 mkdir -p "$REPORT_DIR"
 

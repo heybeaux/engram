@@ -13,7 +13,7 @@ Test failure, bug report, health degradation, or CI failure
    `POST http://localhost:3002/v1/search {"query": "<error context>", "projectId": "af22c027-7495-46d7-9c4d-d0d89e07a1bb", "limit": 10}`
 3. Query Engram for similar past issues:
    `POST http://localhost:3001/v1/recall {"query": "<error description>", "limit": 5}`
-   Headers: X-AM-API-Key: engram_gv9r6c4vesomlekojvkne, X-AM-User-ID: Beaux
+   Headers: X-AM-API-Key: eg_sk_your_key_here, X-AM-User-ID: user_123
 4. Identify root cause
 5. Implement fix
 6. Add regression test

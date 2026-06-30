@@ -14,8 +14,8 @@ TODAY=$(date +%Y-%m-%d)
 REPORT_FILE="$REPORT_DIR/$TODAY.md"
 
 ENGRAM_URL="http://localhost:3001/v1/memories"
-API_KEY="engram_gv9r6c4vesomlekojvkne"
-USER_ID="Beaux"
+API_KEY="${ENGRAM_API_KEY:?Set ENGRAM_API_KEY before running this script}"
+USER_ID="${ENGRAM_USER_ID:-user_123}"
 
 FULL_MODE="${1:-}"
 
