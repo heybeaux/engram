@@ -5,14 +5,14 @@ Engram's JavaScript/TypeScript package story currently has two tracks:
 | Package | Status | Notes |
 |---------|--------|-------|
 | [`@openengram/mcp`](https://www.npmjs.com/package/@openengram/mcp) | **Published** | MCP server package. Installs the `engram-mcp` binary. |
-| `@engram/client` | **Source available, not published to npm yet** | Lightweight TypeScript client in [`heybeaux/engram-client`](https://github.com/heybeaux/engram-client). |
-| `@engram/sdk` | **Not published** | Reserved for a future higher-level SDK surface. Do not use in copy/paste instructions yet. |
+| `@openengram/client` | **Source available, publish-ready; npm publish pending auth** | Lightweight TypeScript client in [`heybeaux/engram-client`](https://github.com/heybeaux/engram-client). |
+| `@openengram/sdk` | **Not published** | Reserved for a future higher-level SDK surface. Do not use in copy/paste instructions yet. |
 
 If you are integrating today, use one of:
 
 1. The REST API directly
 2. The published MCP package (`@openengram/mcp`)
-3. The TypeScript client source repo (`heybeaux/engram-client`) until `@engram/client` is published
+3. The TypeScript client source repo (`heybeaux/engram-client`) until `@openengram/client` is published
 
 ---
 
@@ -86,12 +86,12 @@ pnpm install
 pnpm build
 ```
 
-Current package metadata in that repo declares the package name as `@engram/client`, but it is not published to npm yet.
+Current package metadata in that repo declares the package name as `@openengram/client`, but npm publish is still pending registry authentication.
 
 Example usage once the client is available in your project:
 
 ```typescript
-import { EngramClient } from '@engram/client';
+import { EngramClient } from '@openengram/client';
 
 const engram = new EngramClient({
   baseUrl: 'http://localhost:3001',
@@ -125,6 +125,6 @@ Client capabilities include:
 
 ## Future SDK
 
-A higher-level `@engram/sdk` package may exist later, but it is not currently published. Do not add copy/paste install commands or production imports for that package until it is released.
+A higher-level `@openengram/sdk` package may exist later, but it is not currently published. Do not add copy/paste install commands or production imports for that package until it is released.
 
 When the SDK ships, this page should be updated with the real npm package name, install command, exports, and verified examples.
