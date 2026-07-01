@@ -4,11 +4,21 @@ All notable changes to the Engram project will be documented in this file.
 
 ## [1.5.0] — 2026-02-16
 
-### Release notes draft
+### Release published
 
-A draft release-note packet is available at [`docs/RELEASE_NOTES_v1.5.0_DRAFT.md`](./docs/RELEASE_NOTES_v1.5.0_DRAFT.md). It summarizes the local/cloud edition split, first-run setup, cloud backup/sync foundations, instance keys, RLS hardening, dashboard/API reliability fixes, and CI/test coverage work since v1.0.0.
+Engram v1.5.0 is published as a GitHub Release and npm package:
 
-> Publishing a GitHub Release, creating or moving tags, and publishing npm packages still require explicit release approval.
+- GitHub Release: [`v1.5.0`](https://github.com/heybeaux/engram/releases/tag/v1.5.0)
+- npm package: [`@openengram/engram@1.5.0`](https://www.npmjs.com/package/@openengram/engram/v/1.5.0)
+- Release-note packet: [`docs/RELEASE_NOTES_v1.5.0_DRAFT.md`](./docs/RELEASE_NOTES_v1.5.0_DRAFT.md)
+
+The release notes summarize the local/cloud edition split, first-run setup, cloud backup/sync foundations, instance keys, RLS hardening, dashboard/API reliability fixes, and CI/test coverage work since v1.0.0.
+
+### Provenance note
+
+The `v1.5.0` Git tag was created earlier at commit `be41d6e37e12f2b8f6784cf4ebfd2c53622e4ac2`. Production was subsequently promoted through PR #307 and package-publication metadata was finalized in PR #308. The npm artifact `@openengram/engram@1.5.0` was published from the protected `production` branch after that metadata hardening, with package name `@openengram/engram`, `private: false`, and `publishConfig.access: public`.
+
+Do not move or recreate the existing `v1.5.0` tag just to align it with the later packaging commit; document the provenance instead.
 
 ---
 
