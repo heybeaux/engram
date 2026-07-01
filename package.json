@@ -1,9 +1,9 @@
 {
-  "name": "engram",
+  "name": "@openengram/engram",
   "version": "1.5.0",
   "description": "Persistent memory infrastructure for AI agents: semantic, temporal, type-aware, self-hostable, and production-ready.",
   "author": "Beaux Walton",
-  "private": true,
+  "private": false,
   "license": "Apache-2.0",
   "engines": {
     "node": ">=20"
@@ -171,5 +171,31 @@
     "pgvector",
     "self-hosted",
     "mcp"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "!dist/**/*.spec.js",
+    "!dist/**/*.spec.js.map",
+    "!dist/**/*.test.js",
+    "!dist/**/*.test.js.map",
+    "!dist/**/*.security.spec.js",
+    "!dist/**/*.security.spec.js.map",
+    "!dist/**/*.tsbuildinfo",
+    "prisma/schema.prisma",
+    "prisma/migrations/**/*",
+    "public/**/*",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "docs/API.md",
+    "docs/SELF_HOSTING.md",
+    "docs/getting-started.md",
+    "docs/SDK.md",
+    "docker-compose.yml",
+    "docker-entrypoint.sh"
   ]
 }

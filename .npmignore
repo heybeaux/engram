@@ -1,0 +1,25 @@
+# Keep the npm package runtime-focused. package.json `files` is the allowlist;
+# these exclusions trim generated test/debug artifacts inside allowlisted folders.
+
+# Environment/local data/secrets
+.env*
+.factory*
+logs/
+*.db
+*.sqlite
+*.sqlite3
+ruvector.db
+
+# Build artifacts not needed at runtime
+**/*.spec.js
+**/*.spec.js.map
+**/*.test.js
+**/*.test.js.map
+**/*.tsbuildinfo
+
+# Tooling/cache
+.github/
+.openclaw/
+.receipts/
+node_modules/
+coverage/
