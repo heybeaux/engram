@@ -2080,8 +2080,11 @@ model DelegatedTask {
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
-  template DelegationTemplate? @relation(fields: [templateId], references: [id])
-  contract DelegationContract? @relation(fields: [contractId], references: [id])
+  template    DelegationTemplate?   @relation(fields: [templateId], references: [id])
+  contract    DelegationContract?   @relation(fields: [contractId], references: [id])
+  events      DelegationEvent[]
+  validations DelegationValidation[]
+  receipts    DelegationReceipt[]
 
   @@index([userId, status])
   @@index([assignedTo, status])
@@ -2137,12 +2140,132 @@ model DelegationContract {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  tasks DelegatedTask[]
+  tasks       DelegatedTask[]
+  events      DelegationEvent[]
+  validations DelegationValidation[]
+  receipts    DelegationReceipt[]
 
   @@index([userId, status])
   @@index([delegator])
   @@index([delegate])
   @@map("delegation_contracts")
+}
+
+enum DelegationEventType {
+  CONTRACT_CREATED
+  CONTRACT_ACCEPTED
+  CONTRACT_STARTED
+  CONTRACT_COMPLETED
+  CONTRACT_VERIFIED
+  CONTRACT_REJECTED
+  TASK_ASSIGNED
+  TASK_STARTED
+  TASK_COMPLETED
+  TASK_FAILED
+  HANDOFF_VALIDATED
+  RECEIPT_ATTACHED
+  TRUST_SCORED
+  CHALLENGE_RAISED
+  AOP_EVENT_RECORDED
+}
+
+enum DelegationEventSource {
+  ENGRAM
+  SONDER
+  LATTICE
+  RECEIPTS
+  OPENCLAW
+}
+
+/// Append-only lifecycle/event log for delegated work.
+model DelegationEvent {
+  id              String                @id @default(cuid())
+  userId          String                @map("user_id")
+  contractId      String?               @map("contract_id")
+  taskId          String?               @map("task_id")
+  agentSessionKey String?               @map("agent_session_key")
+  eventType       DelegationEventType   @map("event_type")
+  agentId         String?               @map("agent_id")
+  parentEventId   String?               @map("parent_event_id")
+  traceId         String?               @map("trace_id")
+  source          DelegationEventSource @default(ENGRAM)
+  payload         Json                  @default("{}")
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  contract DelegationContract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  task     DelegatedTask?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([contractId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([agentId, createdAt])
+  @@index([traceId])
+  @@index([eventType])
+  @@map("delegation_events")
+}
+
+/// Lattice StateContract + validation evidence captured for a delegated handoff.
+model DelegationValidation {
+  id                String   @id @default(cuid())
+  userId            String   @map("user_id")
+  contractId        String   @map("contract_id")
+  taskId            String?  @map("task_id")
+  latticeContractId String?  @map("lattice_contract_id")
+  traceId           String?  @map("trace_id")
+  passed            Boolean
+  tier              String
+  tiersRun          String[] @default([]) @map("tiers_run")
+  durationMs        Int?     @map("duration_ms")
+  reason            String?
+  confidence        Float?
+  providerFailure   Boolean  @default(false) @map("provider_failure")
+  evidence          Json     @default("[]")
+  stateContract     Json     @map("state_contract")
+  validationResult  Json     @default("{}") @map("validation_result")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  contract DelegationContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  task     DelegatedTask?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([contractId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([latticeContractId])
+  @@index([traceId])
+  @@index([passed])
+  @@map("delegation_validations")
+}
+
+/// Receipt proof-of-work attached to a delegated task or contract.
+model DelegationReceipt {
+  id                  String   @id @default(cuid())
+  userId              String   @map("user_id")
+  contractId          String?  @map("contract_id")
+  taskId              String?  @map("task_id")
+  receiptId           String   @map("receipt_id")
+  status              String
+  claimSummary        String   @map("claim_summary")
+  actorId             String?  @map("actor_id")
+  actorModel          String?  @map("actor_model")
+  verificationSummary String?  @map("verification_summary")
+  checks              Json     @default("[]")
+  riskLevel           String?  @map("risk_level")
+  artifactUri         String?  @map("artifact_uri")
+  payloadHash         String?  @map("payload_hash")
+  artifactHashes      Json     @default("[]") @map("artifact_hashes")
+  receipt             Json
+  integrityStatus     String?  @map("integrity_status")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  contract DelegationContract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  task     DelegatedTask?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, receiptId])
+  @@index([userId, createdAt])
+  @@index([contractId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([status])
+  @@map("delegation_receipts")
 }
 
 model InboundEmail {

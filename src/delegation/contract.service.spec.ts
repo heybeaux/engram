@@ -2,10 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ContractService } from './contract.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { DelegationLedgerService } from './delegation-ledger.service';
 
 describe('ContractService', () => {
   let service: ContractService;
   let prisma: any;
+  let ledger: any;
 
   const mockContract = {
     id: 'contract-1',
@@ -36,11 +38,13 @@ describe('ContractService', () => {
         })),
       },
     };
+    ledger = { recordEvent: jest.fn().mockResolvedValue({ id: 'event-1' }) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ContractService,
         { provide: PrismaService, useValue: prisma },
+        { provide: DelegationLedgerService, useValue: ledger },
       ],
     }).compile();
 
@@ -56,6 +60,17 @@ describe('ContractService', () => {
         terms: { deadline: '2026-03-01' },
       });
       expect(result.status).toBe('PROPOSED');
+      expect(ledger.recordEvent).toHaveBeenCalledWith('user-1', {
+        eventType: 'CONTRACT_CREATED',
+        source: 'ENGRAM',
+        contractId: 'contract-1',
+        agentId: 'agent-a',
+        payload: expect.objectContaining({
+          delegator: 'agent-a',
+          delegate: 'agent-b',
+          taskDescription: 'Deploy v2',
+        }),
+      });
     });
   });
 
@@ -65,6 +80,16 @@ describe('ContractService', () => {
         status: 'ACCEPTED',
       });
       expect(prisma.delegationContract.update).toHaveBeenCalled();
+      expect(ledger.recordEvent).toHaveBeenCalledWith('user-1', {
+        eventType: 'CONTRACT_ACCEPTED',
+        source: 'ENGRAM',
+        contractId: 'contract-1',
+        agentId: 'agent-b',
+        payload: expect.objectContaining({
+          previousStatus: 'PROPOSED',
+          status: 'ACCEPTED',
+        }),
+      });
     });
 
     it('should reject invalid transition PROPOSED → COMPLETED', async () => {
