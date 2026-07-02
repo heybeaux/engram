@@ -51,13 +51,18 @@ export class RlsInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    // Determine timeout: long-running endpoints (sync) need more time
+    // Determine timeout: long-running endpoints need more time.
+    // Some endpoints perform expensive external work (embedding generation,
+    // sync, admin scans) before their final database write. Keep them inside
+    // the RLS transaction, but allow enough time for the guarded operation to
+    // complete instead of expiring before the final write.
     const isLongRunning =
       url.includes('/sync') ||
       url.includes('/cloud/sync') ||
       url.includes('/admin/') ||
-      url.includes('/dedup/scan');
-    const txTimeout = isLongRunning ? 300_000 : 30_000; // 5 min for sync/admin, 30s default
+      url.includes('/dedup/scan') ||
+      url.includes('/ensemble/drift/analyze');
+    const txTimeout = isLongRunning ? 300_000 : 30_000; // 5 min for long-running endpoints, 30s default
 
     // Wrap the request handler in an interactive transaction with SET LOCAL
     return from(

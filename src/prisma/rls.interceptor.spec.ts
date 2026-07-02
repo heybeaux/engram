@@ -200,6 +200,28 @@ describe('RlsInterceptor', () => {
     });
   });
 
+  it('should use long timeout for drift analysis endpoint', (done) => {
+    const mockTx = {
+      $executeRawUnsafe: jest.fn().mockResolvedValue(undefined),
+    };
+
+    prisma.$transaction = jest.fn().mockImplementation(async (fn, opts) => {
+      expect(opts.timeout).toBe(300_000); // drift analysis generates embeddings before persisting snapshots
+      return fn(mockTx);
+    });
+
+    const ctx = createMockContext({
+      accountId: 'acc-123',
+      url: '/v1/ensemble/drift/analyze',
+    });
+    const handler = createMockCallHandler('drift-result');
+
+    interceptor.intercept(ctx, handler).subscribe({
+      next: () => done(),
+      error: done,
+    });
+  });
+
   it('should enforce RLS for sync pull endpoint', (done) => {
     const mockTx = {
       $executeRawUnsafe: jest.fn().mockResolvedValue(undefined),
