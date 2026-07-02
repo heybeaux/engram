@@ -14,7 +14,7 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { UserId } from '../common/decorators/user-id.decorator';
 
-@Controller('v1/delegation-contracts')
+@Controller(['v1/delegation-contracts', 'v1/delegation/contracts'])
 @UseGuards(ApiKeyOrJwtGuard)
 export class ContractController {
   constructor(private readonly contractService: ContractService) {}

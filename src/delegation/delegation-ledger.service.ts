@@ -213,7 +213,9 @@ export class DelegationLedgerService {
     const task = await this.prisma.delegatedTask.findFirst({
       where: { id: taskId, userId },
       include: {
-        contract: true,
+        contract: {
+          include: { events: { orderBy: { createdAt: 'asc' } } },
+        },
         validations: { orderBy: { createdAt: 'desc' } },
         receipts: { orderBy: { createdAt: 'desc' } },
         events: { orderBy: { createdAt: 'asc' } },
@@ -238,7 +240,7 @@ export class DelegationLedgerService {
       currentBlocker: this.currentBlocker(latestValidation, latestReceipt),
       latestValidation,
       latestReceipt,
-      events: task.events,
+      events: this.mergeEvents(task.contract?.events ?? [], task.events),
       trustSignals,
       trustSummary: this.summarizeTrustSignals(trustSignals),
       evidenceSummary: {
@@ -450,6 +452,17 @@ export class DelegationLedgerService {
     return createHash('sha256')
       .update(JSON.stringify({ ...receipt, integrity: undefined }))
       .digest('hex');
+  }
+
+  private mergeEvents(contractEvents: any[], taskEvents: any[]) {
+    const byId = new Map<string, any>();
+    for (const event of [...contractEvents, ...taskEvents]) {
+      byId.set(event.id, event);
+    }
+    return [...byId.values()].sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
   }
 
   private currentBlocker(validation: any, receipt: any): string | null {
