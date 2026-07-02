@@ -215,6 +215,34 @@ describe('SummarizationService', () => {
     });
   });
 
+  describe('shutdown', () => {
+    it('should not throw if Redis is already closed during shutdown', async () => {
+      const closedRedis = {
+        status: 'end',
+        keys: jest.fn(),
+        quit: jest.fn(),
+      };
+      (service as any).redis = closedRedis;
+
+      await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+      expect(closedRedis.keys).not.toHaveBeenCalled();
+      expect(closedRedis.quit).not.toHaveBeenCalled();
+    });
+
+    it('should skip Redis shutdown flush if listing buffered sessions fails', async () => {
+      const redis = {
+        status: 'ready',
+        keys: jest.fn().mockRejectedValue(new Error('Connection is closed.')),
+        quit: jest.fn().mockResolvedValue('OK'),
+      };
+      (service as any).redis = redis;
+
+      await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+      expect(redis.keys).toHaveBeenCalledWith('engram:summ:turns:*');
+      expect(redis.quit).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('config', () => {
     it('should read SUMMARIZATION_ENABLED', () => {
       expect(service.isEnabled).toBe(true);

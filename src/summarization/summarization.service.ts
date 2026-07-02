@@ -250,13 +250,21 @@ export class SummarizationService implements OnModuleDestroy {
 
   /** Return all session ids that have non-empty buffers (for shutdown flush). */
   private async allBufferedSessionIds(): Promise<string[]> {
-    if (!this.redis) {
+    if (!this.redis || this.redis.status === 'end') {
       return [...this.turnBuffers.entries()]
         .filter(([, t]) => t.length > 0)
         .map(([sid]) => sid);
     }
-    const keys = await this.redis.keys(`${REDIS_KEY_PREFIX}turns:*`);
-    return keys.map((k) => k.slice(`${REDIS_KEY_PREFIX}turns:`.length));
+
+    try {
+      const keys = await this.redis.keys(`${REDIS_KEY_PREFIX}turns:*`);
+      return keys.map((k) => k.slice(`${REDIS_KEY_PREFIX}turns:`.length));
+    } catch (error) {
+      this.logger.warn(
+        `[Shutdown] Could not list Redis summarization buffers; skipping Redis flush: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return [];
+    }
   }
 
   // ─── Public API ─────────────────────────────────────────────────
@@ -326,7 +334,7 @@ export class SummarizationService implements OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     const sessionIds = await this.allBufferedSessionIds();
     if (sessionIds.length === 0) {
-      if (this.redis) await this.redis.quit().catch(() => {});
+      await this.closeRedis();
       return;
     }
 
@@ -355,7 +363,13 @@ export class SummarizationService implements OnModuleDestroy {
       `[Shutdown] Summarization flush complete: ${flushed} flushed, ${failed} failed`,
     );
 
-    if (this.redis) await this.redis.quit().catch(() => {});
+    await this.closeRedis();
+  }
+
+  private async closeRedis(): Promise<void> {
+    if (!this.redis) return;
+    if (this.redis.status === 'end') return;
+    await this.redis.quit().catch(() => {});
   }
 
   private normalizeCategory(category: string): SummaryFact['category'] {
