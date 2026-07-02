@@ -73,9 +73,8 @@ export class AnalyticsService {
     const { granularity = 'day', cumulative = false } = dto;
 
     // Build the date_trunc interval — validated against allowlist to prevent injection.
-    // date_trunc() requires a literal string argument in PostgreSQL (cannot be parameterized),
-    // so we validate against the allowlist first. Any value not in the allowlist throws
-    // BadRequestException rather than silently defaulting, ensuring defense-in-depth.
+    // Any value not in the allowlist throws BadRequestException rather than
+    // silently defaulting, ensuring defense-in-depth.
     const intervalLiteral = validateInterval(granularity);
 
     // Default date range
@@ -97,22 +96,27 @@ export class AnalyticsService {
     }
 
     // Raw SQL for time-series aggregation using parameterized $queryRaw.
-    // date_trunc requires a literal interval string — we use the allowlist-validated
-    // intervalLiteral via Prisma.sql to ensure it's never a raw user string.
+    // The date_trunc interval remains parameterized after allowlist validation.
+    // Compute the bucket once in a subquery, then group by the alias; repeating
+    // date_trunc($param, created_at) in SELECT and GROUP BY can produce distinct
+    // placeholders that Postgres does not consider the same expression.
     const result = await this.prisma.$queryRaw<
       Array<{ timestamp: Date; count: bigint }>
     >(
       Prisma.sql`
       SELECT
-        date_trunc(${intervalLiteral}, created_at) AS timestamp,
+        bucket AS timestamp,
         COUNT(*) AS count
-      FROM memories
-      WHERE user_id = ANY(${userIds})
-        AND deleted_at IS NULL
-        AND created_at >= ${start}
-        AND created_at <= ${end}
-      GROUP BY date_trunc(${intervalLiteral}, created_at)
-      ORDER BY timestamp ASC
+      FROM (
+        SELECT date_trunc(${intervalLiteral}, created_at) AS bucket
+        FROM memories
+        WHERE user_id = ANY(${userIds})
+          AND deleted_at IS NULL
+          AND created_at >= ${start}
+          AND created_at <= ${end}
+      ) AS memory_buckets
+      GROUP BY bucket
+      ORDER BY bucket ASC
     `,
     );
 
@@ -147,8 +151,8 @@ export class AnalyticsService {
   ): Promise<TypeBreakdownResponse> {
     const { granularity = 'week' } = dto;
 
-    // Validate interval against allowlist before using in SQL (cannot be parameterized in date_trunc).
-    // Passing granularity directly ensures injection strings are rejected rather than silently
+    // Validate interval against allowlist before using in SQL. Passing granularity
+    // directly ensures injection strings are rejected rather than silently
     // defaulting to 'day', providing defense-in-depth.
     const intervalLiteral = validateInterval(granularity);
 
@@ -168,21 +172,28 @@ export class AnalyticsService {
     }
 
     // Get time-series data by type using parameterized $queryRaw.
+    // Compute the truncated timestamp once so SELECT/GROUP BY do not use
+    // separate parameter placeholders for the same date_trunc interval.
     const result = await this.prisma.$queryRaw<
       Array<{ timestamp: Date; memory_type: MemoryType | null; count: bigint }>
     >(
       Prisma.sql`
       SELECT
-        date_trunc(${intervalLiteral}, created_at) AS timestamp,
+        bucket AS timestamp,
         memory_type,
         COUNT(*) AS count
-      FROM memories
-      WHERE user_id = ANY(${userIds})
-        AND deleted_at IS NULL
-        AND created_at >= ${start}
-        AND created_at <= ${end}
-      GROUP BY date_trunc(${intervalLiteral}, created_at), memory_type
-      ORDER BY timestamp ASC, memory_type
+      FROM (
+        SELECT
+          date_trunc(${intervalLiteral}, created_at) AS bucket,
+          memory_type
+        FROM memories
+        WHERE user_id = ANY(${userIds})
+          AND deleted_at IS NULL
+          AND created_at >= ${start}
+          AND created_at <= ${end}
+      ) AS memory_buckets
+      GROUP BY bucket, memory_type
+      ORDER BY bucket ASC, memory_type
     `,
     );
 
@@ -334,8 +345,8 @@ export class AnalyticsService {
     if (includeTrend) {
       const end = new Date();
       const start = this.getDefaultStartDate(granularity, end, 90);
-      // Validate interval against allowlist before using in SQL (cannot be parameterized in date_trunc).
-      // Passing granularity directly ensures injection strings are rejected up front.
+      // Validate interval against allowlist before using in SQL. Passing granularity
+      // directly ensures injection strings are rejected up front.
       const intervalLiteral = validateInterval(granularity);
 
       const trendResult = await this.prisma.$queryRaw<
@@ -343,16 +354,21 @@ export class AnalyticsService {
       >(
         Prisma.sql`
         SELECT
-          date_trunc(${intervalLiteral}, created_at) AS timestamp,
+          bucket AS timestamp,
           layer,
           COUNT(*) AS count
-        FROM memories
-        WHERE user_id = ANY(${userIds})
-          AND deleted_at IS NULL
-          AND created_at >= ${start}
-          AND created_at <= ${end}
-        GROUP BY date_trunc(${intervalLiteral}, created_at), layer
-        ORDER BY timestamp ASC
+        FROM (
+          SELECT
+            date_trunc(${intervalLiteral}, created_at) AS bucket,
+            layer
+          FROM memories
+          WHERE user_id = ANY(${userIds})
+            AND deleted_at IS NULL
+            AND created_at >= ${start}
+            AND created_at <= ${end}
+        ) AS memory_buckets
+        GROUP BY bucket, layer
+        ORDER BY bucket ASC
       `,
       );
 

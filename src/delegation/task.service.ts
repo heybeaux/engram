@@ -1,15 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
-import { UpdateTaskDto } from './dto/update-task.dto';
+import { UpdateTaskDto, TaskStatus } from './dto/update-task.dto';
 import { QueryTaskDto } from './dto/query-task.dto';
+import { DelegationLedgerService } from './delegation-ledger.service';
 
 @Injectable()
 export class TaskService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly ledger?: DelegationLedgerService,
+  ) {}
 
   async create(userId: string, dto: CreateTaskDto) {
-    return this.prisma.delegatedTask.create({
+    const task = await this.prisma.delegatedTask.create({
       data: {
         userId,
         assignedTo: dto.assignedTo,
@@ -21,6 +25,20 @@ export class TaskService {
         contractId: dto.contractId,
       },
     });
+    await this.ledger?.recordEvent(userId, {
+      eventType: 'TASK_ASSIGNED',
+      source: 'ENGRAM',
+      contractId: task.contractId ?? undefined,
+      taskId: task.id,
+      agentId: task.assignedTo,
+      payload: {
+        assignedBy: task.assignedBy,
+        assignedTo: task.assignedTo,
+        taskDescription: task.taskDescription,
+        deadline: task.deadline?.toISOString?.() ?? task.deadline,
+      },
+    });
+    return task;
   }
 
   async update(userId: string, id: string, dto: UpdateTaskDto) {
@@ -38,7 +56,25 @@ export class TaskService {
     }
     if (dto.result !== undefined) data.result = dto.result;
 
-    return this.prisma.delegatedTask.update({ where: { id }, data });
+    const updated = await this.prisma.delegatedTask.update({
+      where: { id },
+      data,
+    });
+    if (dto.status) {
+      await this.ledger?.recordEvent(userId, {
+        eventType: this.eventTypeForStatus(dto.status),
+        source: 'ENGRAM',
+        contractId: updated.contractId ?? task.contractId ?? undefined,
+        taskId: id,
+        agentId: updated.assignedTo ?? task.assignedTo,
+        payload: {
+          previousStatus: task.status,
+          status: dto.status,
+          result: dto.result,
+        },
+      });
+    }
+    return updated;
   }
 
   async findAll(userId: string, query: QueryTaskDto) {
@@ -62,5 +98,18 @@ export class TaskService {
     });
     if (!task) throw new NotFoundException('Task not found');
     return task;
+  }
+
+  private eventTypeForStatus(status: TaskStatus) {
+    switch (status) {
+      case 'IN_PROGRESS':
+        return 'TASK_STARTED' as const;
+      case 'COMPLETED':
+        return 'TASK_COMPLETED' as const;
+      case 'FAILED':
+        return 'TASK_FAILED' as const;
+      default:
+        return 'TASK_ASSIGNED' as const;
+    }
   }
 }

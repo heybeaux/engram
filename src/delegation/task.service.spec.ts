@@ -2,10 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TaskService } from './task.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException } from '@nestjs/common';
+import { DelegationLedgerService } from './delegation-ledger.service';
 
 describe('TaskService', () => {
   let service: TaskService;
   let prisma: any;
+  let ledger: any;
 
   const mockTask = {
     id: 'task-1',
@@ -36,9 +38,14 @@ describe('TaskService', () => {
           .mockResolvedValue({ ...mockTask, status: 'IN_PROGRESS' }),
       },
     };
+    ledger = { recordEvent: jest.fn().mockResolvedValue({ id: 'event-1' }) };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [TaskService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        TaskService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: DelegationLedgerService, useValue: ledger },
+      ],
     }).compile();
 
     service = module.get<TaskService>(TaskService);
@@ -59,6 +66,18 @@ describe('TaskService', () => {
           taskDescription: 'Review PR #42',
         }),
       });
+      expect(ledger.recordEvent).toHaveBeenCalledWith('user-1', {
+        eventType: 'TASK_ASSIGNED',
+        source: 'ENGRAM',
+        contractId: undefined,
+        taskId: 'task-1',
+        agentId: 'agent-b',
+        payload: expect.objectContaining({
+          assignedBy: 'agent-a',
+          assignedTo: 'agent-b',
+          taskDescription: 'Review PR #42',
+        }),
+      });
     });
   });
 
@@ -70,6 +89,17 @@ describe('TaskService', () => {
       expect(prisma.delegatedTask.update).toHaveBeenCalledWith({
         where: { id: 'task-1' },
         data: { status: 'IN_PROGRESS' },
+      });
+      expect(ledger.recordEvent).toHaveBeenCalledWith('user-1', {
+        eventType: 'TASK_STARTED',
+        source: 'ENGRAM',
+        contractId: undefined,
+        taskId: 'task-1',
+        agentId: 'agent-b',
+        payload: expect.objectContaining({
+          previousStatus: 'ASSIGNED',
+          status: 'IN_PROGRESS',
+        }),
       });
     });
 

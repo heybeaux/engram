@@ -5,7 +5,8 @@
  * 1. Injection strings in the `granularity` field are rejected before reaching the DB
  * 2. The validateInterval allowlist blocks any non-enumerated value
  * 3. $queryRaw (tagged template) is used instead of $queryRawUnsafe with interpolation
- * 4. Prisma.sql receives the allowlisted literal, not raw user input
+ * 4. Time buckets are grouped by a computed alias so repeated date_trunc()
+ *    placeholders cannot trip Postgres GROUP BY expression matching
  */
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -17,7 +18,7 @@ const SQL_INJECTION_STRINGS = [
   "'; DROP TABLE memories; --",
   "' OR '1'='1",
   "' OR 1=1 --",
-  "1; SELECT * FROM users --",
+  '1; SELECT * FROM users --',
   "hour'; DELETE FROM memories WHERE '1'='1",
   "day' UNION SELECT table_name FROM information_schema.tables --",
   'day\x00',
@@ -27,6 +28,11 @@ const SQL_INJECTION_STRINGS = [
   'hour OR 1=1',
   '1=1',
 ];
+
+function getRawQueryText(callArg: unknown): string {
+  const query = callArg as { text?: string; sql?: string; strings?: string[] };
+  return query.text || query.sql || query.strings?.join('?') || '';
+}
 
 describe('Analytics SQL Injection Security (GIN-42)', () => {
   let service: AnalyticsService;
@@ -60,9 +66,7 @@ describe('Analytics SQL Injection Security (GIN-42)', () => {
     (prisma.agent.findUnique as jest.Mock).mockResolvedValue({
       accountId: 'test-account',
     });
-    (prisma.user.findMany as jest.Mock).mockResolvedValue([
-      { id: 'user-1' },
-    ]);
+    (prisma.user.findMany as jest.Mock).mockResolvedValue([{ id: 'user-1' }]);
   });
 
   // ---------------------------------------------------------------------------
@@ -274,7 +278,7 @@ describe('Analytics SQL Injection Security (GIN-42)', () => {
   // Confirm $queryRaw (parameterized) is used — not $queryRawUnsafe
   // ---------------------------------------------------------------------------
   describe('query method verification', () => {
-    it('getTimeline uses $queryRaw (parameterized template tag), not $queryRawUnsafe', async () => {
+    it('getTimeline uses $queryRaw and groups by the computed bucket alias', async () => {
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([
         { timestamp: new Date(), count: BigInt(1) },
       ]);
@@ -283,18 +287,32 @@ describe('Analytics SQL Injection Security (GIN-42)', () => {
 
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
+      const queryText = getRawQueryText(
+        (prisma.$queryRaw as jest.Mock).mock.calls[0][0],
+      );
+      expect(queryText).toContain('date_trunc(');
+      expect(queryText).toContain('AS bucket');
+      expect(queryText).toContain('GROUP BY bucket');
+      expect(queryText).not.toContain('GROUP BY date_trunc');
     });
 
-    it('getTypeBreakdown uses $queryRaw, not $queryRawUnsafe', async () => {
+    it('getTypeBreakdown uses $queryRaw and groups by the computed bucket alias', async () => {
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
 
       await service.getTypeBreakdown('agent-1', { granularity: 'day' });
 
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
+      const queryText = getRawQueryText(
+        (prisma.$queryRaw as jest.Mock).mock.calls[0][0],
+      );
+      expect(queryText).toContain('date_trunc(');
+      expect(queryText).toContain('AS bucket');
+      expect(queryText).toContain('GROUP BY bucket, memory_type');
+      expect(queryText).not.toContain('GROUP BY date_trunc');
     });
 
-    it('getLayerDistribution (with trend) uses $queryRaw, not $queryRawUnsafe', async () => {
+    it('getLayerDistribution (with trend) uses $queryRaw and groups by the computed bucket alias', async () => {
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([]);
 
       await service.getLayerDistribution('agent-1', {
@@ -305,6 +323,13 @@ describe('Analytics SQL Injection Security (GIN-42)', () => {
       // Two calls: one for layer counts, one for trend data
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
       expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
+      const trendQueryText = getRawQueryText(
+        (prisma.$queryRaw as jest.Mock).mock.calls[1][0],
+      );
+      expect(trendQueryText).toContain('date_trunc(');
+      expect(trendQueryText).toContain('AS bucket');
+      expect(trendQueryText).toContain('GROUP BY bucket, layer');
+      expect(trendQueryText).not.toContain('GROUP BY date_trunc');
     });
   });
 });
