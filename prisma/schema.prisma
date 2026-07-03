@@ -1228,6 +1228,7 @@ model EmbeddingNomic {
 /// Drift snapshot for tracking embedding drift over time
 model DriftSnapshot {
   id          String   @id @default(cuid())
+  accountId   String?  @map("account_id")
   modelId     String   @map("model_id")
   avgDrift    Float    @map("avg_drift")
   maxDrift    Float    @map("max_drift")
@@ -1235,6 +1236,7 @@ model DriftSnapshot {
   alertLevel  String   @map("alert_level") // 'normal' | 'warning' | 'critical'
   createdAt   DateTime @default(now()) @map("created_at")
 
+  @@index([accountId, modelId, createdAt])
   @@index([modelId, createdAt])
   @@index([alertLevel])
   @@map("drift_snapshots")

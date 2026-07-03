@@ -3,6 +3,7 @@ import { EnsembleController } from './ensemble.controller';
 import { EnsembleService } from './ensemble.service';
 import { NightlyReembedService } from './nightly-reembed.service';
 import { DriftDetectionService } from './drift-detection.service';
+import { DriftAnalysisJobService } from './drift-analysis-job.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('EnsembleController', () => {
@@ -10,6 +11,7 @@ describe('EnsembleController', () => {
   let ensembleService: jest.Mocked<EnsembleService>;
   let nightlyReembedService: jest.Mocked<NightlyReembedService>;
   let driftDetectionService: jest.Mocked<DriftDetectionService>;
+  let driftAnalysisJobService: jest.Mocked<DriftAnalysisJobService>;
   let prisma: jest.Mocked<PrismaService>;
 
   beforeEach(() => {
@@ -42,6 +44,13 @@ describe('EnsembleController', () => {
       summarizeDrift: jest.fn(),
     } as any;
 
+    driftAnalysisJobService = {
+      enqueue: jest.fn(),
+      getStatus: jest.fn(),
+      getStatusOrThrow: jest.fn(),
+      analyzeNow: jest.fn(),
+    } as any;
+
     prisma = {
       $queryRawUnsafe: jest.fn(),
       driftSnapshot: {
@@ -58,6 +67,7 @@ describe('EnsembleController', () => {
       ensembleService,
       nightlyReembedService,
       driftDetectionService,
+      driftAnalysisJobService,
       prisma,
     );
   });
@@ -283,7 +293,9 @@ describe('EnsembleController', () => {
   // =========================================================================
   describe('getLatestDrift', () => {
     it('should return per-model drift data', async () => {
-      prisma.$queryRawUnsafe.mockResolvedValue([{ model_id: 'model-a' }]);
+      (prisma.driftSnapshot.findMany as jest.Mock).mockResolvedValue([
+        { modelId: 'model-a' },
+      ]);
       (prisma.driftSnapshot.findFirst as jest.Mock).mockResolvedValue({
         modelId: 'model-a',
         avgDrift: 0.05,
@@ -293,15 +305,26 @@ describe('EnsembleController', () => {
         createdAt: new Date(),
       });
 
-      const result = await controller.getLatestDrift();
+      const result = await controller.getLatestDrift({ accountId: 'acc-123' });
+      expect(prisma.driftSnapshot.findMany).toHaveBeenCalledWith({
+        where: { accountId: 'acc-123' },
+        distinct: ['modelId'],
+        select: { modelId: true },
+        orderBy: { modelId: 'asc' },
+      });
+      expect(prisma.driftSnapshot.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { accountId: 'acc-123', modelId: 'model-a' },
+        }),
+      );
       expect(result.perModel).toHaveLength(1);
       expect(result.perModel[0].modelId).toBe('model-a');
       expect(result.thresholds).toEqual({ drift: 0.1, alert: 0.2 });
     });
 
     it('should handle no models', async () => {
-      prisma.$queryRawUnsafe.mockResolvedValue([]);
-      const result = await controller.getLatestDrift();
+      (prisma.driftSnapshot.findMany as jest.Mock).mockResolvedValue([]);
+      const result = await controller.getLatestDrift({ accountId: 'acc-123' });
       expect(result.perModel).toHaveLength(0);
     });
   });
@@ -327,10 +350,16 @@ describe('EnsembleController', () => {
 
     it('should filter by modelId and since', async () => {
       (prisma.driftSnapshot.findMany as jest.Mock).mockResolvedValue([]);
-      await controller.getDriftHistory('model-a', '10', '2026-01-01');
+      await controller.getDriftHistory('model-a', '10', '2026-01-01', {
+        accountId: 'acc-123',
+      });
       expect(prisma.driftSnapshot.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { modelId: 'model-a', createdAt: { gte: expect.any(Date) } },
+          where: {
+            accountId: 'acc-123',
+            modelId: 'model-a',
+            createdAt: { gte: expect.any(Date) },
+          },
           take: 10,
         }),
       );
@@ -338,75 +367,81 @@ describe('EnsembleController', () => {
   });
 
   describe('analyzeDrift', () => {
-    it('should return empty when no memories', async () => {
-      (prisma.memory.findMany as jest.Mock).mockResolvedValue([]);
-      const result = await controller.analyzeDrift();
-      expect(result.snapshots).toHaveLength(0);
-      expect(result.summary).toBe('No memories to analyze');
+    it('should queue a drift analysis job for the authenticated account', () => {
+      driftAnalysisJobService.enqueue.mockReturnValue({
+        jobId: 'drift-job-1',
+        status: 'queued',
+        createdAt: new Date(),
+        progress: { current: 0, total: 0, message: 'Queued drift analysis' },
+      });
+
+      const result = controller.analyzeDrift({ accountId: 'acc-123' });
+
+      expect(driftAnalysisJobService.enqueue).toHaveBeenCalledWith('acc-123');
+      expect(result.jobId).toBe('drift-job-1');
+      expect(result.status).toBe('queued');
     });
 
-    it('should analyze drift and persist snapshots', async () => {
-      (prisma.memory.findMany as jest.Mock).mockResolvedValue([
-        { id: 'm1', raw: 'test' },
-      ]);
-      ensembleService.getConfig.mockReturnValue({
-        models: ['model-a'],
-        fusionMethod: 'rrf',
-        k: 60,
-      } as any);
-      ensembleService.embedAll.mockResolvedValue({
-        embeddings: [
+    it('should dedupe to the active job returned by the job service', () => {
+      driftAnalysisJobService.enqueue.mockReturnValue({
+        jobId: 'drift-existing',
+        status: 'running',
+        createdAt: new Date(),
+        startedAt: new Date(),
+        progress: { current: 1, total: 2, message: 'Analyzing drift' },
+      });
+
+      const result = controller.analyzeDrift({ accountId: 'acc-123' });
+
+      expect(result.jobId).toBe('drift-existing');
+      expect(result.status).toBe('running');
+    });
+
+    it('should allow LAN/global queueing when no accountId is present', () => {
+      driftAnalysisJobService.enqueue.mockReturnValue({
+        jobId: 'drift-global',
+        status: 'queued',
+        createdAt: new Date(),
+        progress: { current: 0, total: 0 },
+      });
+
+      controller.analyzeDrift({});
+
+      expect(driftAnalysisJobService.enqueue).toHaveBeenCalledWith(null);
+    });
+  });
+
+  describe('getDriftAnalyzeJob', () => {
+    it('should return drift analysis job status', () => {
+      driftAnalysisJobService.getStatusOrThrow.mockReturnValue({
+        jobId: 'drift-job-1',
+        status: 'succeeded',
+        createdAt: new Date(),
+        startedAt: new Date(),
+        completedAt: new Date(),
+        progress: { current: 1, total: 1, message: 'done' },
+        snapshots: [
           {
-            model: 'model-a',
-            embedding: [0.1, 0.2],
-            dimensions: 2,
-            latencyMs: 5,
+            modelId: 'model-a',
+            avgDrift: 0.05,
+            maxDrift: 0.08,
+            sampleCount: 1,
+            alertLevel: 'normal',
           },
         ],
-        totalMs: 5,
-      } as any);
-      driftDetectionService.measureBatchDrift.mockResolvedValue([
-        { drift: 0.05 },
-      ] as any);
-      driftDetectionService.summarizeDrift.mockReturnValue({
-        avgCosineDrift: 0.05,
-        maxCosineDrift: 0.08,
-      } as any);
-      (prisma.driftSnapshot.create as jest.Mock).mockResolvedValue({});
+        summary: 'All models within normal drift range',
+      });
 
-      const result = await controller.analyzeDrift();
-      expect(result.snapshots).toHaveLength(1);
-      expect(result.snapshots[0].alertLevel).toBe('normal');
+      const result = controller.getDriftAnalyzeJob('drift-job-1', {
+        accountId: 'acc-123',
+      });
+
+      expect(driftAnalysisJobService.getStatusOrThrow).toHaveBeenCalledWith(
+        'drift-job-1',
+        'acc-123',
+      );
+      expect(result.status).toBe('succeeded');
       expect(result.summary).toContain('normal');
-    });
-
-    it('should flag critical drift', async () => {
-      (prisma.memory.findMany as jest.Mock).mockResolvedValue([
-        { id: 'm1', raw: 'test' },
-      ]);
-      ensembleService.getConfig.mockReturnValue({
-        models: ['model-a'],
-        fusionMethod: 'rrf',
-        k: 60,
-      } as any);
-      ensembleService.embedAll.mockResolvedValue({
-        embeddings: [
-          { model: 'model-a', embedding: [0.1], dimensions: 1, latencyMs: 5 },
-        ],
-        totalMs: 5,
-      } as any);
-      driftDetectionService.measureBatchDrift.mockResolvedValue([
-        { drift: 0.3 },
-      ] as any);
-      driftDetectionService.summarizeDrift.mockReturnValue({
-        avgCosineDrift: 0.3,
-        maxCosineDrift: 0.5,
-      } as any);
-      (prisma.driftSnapshot.create as jest.Mock).mockResolvedValue({});
-
-      const result = await controller.analyzeDrift();
-      expect(result.snapshots[0].alertLevel).toBe('critical');
-      expect(result.summary).toContain('critical');
     });
   });
 
