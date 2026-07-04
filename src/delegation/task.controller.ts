@@ -15,7 +15,7 @@ import { QueryTaskDto } from './dto/query-task.dto';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { UserId } from '../common/decorators/user-id.decorator';
 
-@Controller('v1/tasks')
+@Controller(['v1/tasks', 'v1/delegation/tasks'])
 @UseGuards(ApiKeyOrJwtGuard)
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
