@@ -75,7 +75,7 @@ export class MemoryPoolService {
     const pool = await this.prisma.memoryPool.create({
       data: {
         name: dto.name,
-        userId: dto.userId,
+        userId: dto.userId!,
         visibility: (dto.visibility ?? 'GLOBAL') as any,
         description: dto.description,
         createdBy: dto.createdBy,
@@ -159,7 +159,7 @@ export class MemoryPoolService {
 
   async findOrCreatePool(dto: CreateMemoryPoolDto) {
     const existing = await this.prisma.memoryPool.findUnique({
-      where: { userId_name: { userId: dto.userId, name: dto.name } },
+      where: { userId_name: { userId: dto.userId!, name: dto.name } },
     });
     if (existing) return existing;
     return this.create(dto);

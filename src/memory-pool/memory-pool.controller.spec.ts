@@ -44,10 +44,13 @@ describe('MemoryPoolController', () => {
       const expected = { id: 'pool-1', ...dto };
       mockService.create.mockResolvedValue(expected);
 
-      const result = await controller.create(dto as any);
+      const result = await controller.create(dto as any, 'internal-user-1');
 
       expect(result).toEqual(expected);
-      expect(mockService.create).toHaveBeenCalledWith(dto);
+      expect(mockService.create).toHaveBeenCalledWith({
+        ...dto,
+        userId: 'internal-user-1',
+      });
     });
   });
 
@@ -108,7 +111,10 @@ describe('MemoryPoolController', () => {
 
       const result = await controller.getMembers('pool-1');
 
-      expect(result).toEqual(memberships);
+      expect(result).toEqual({
+        members: memberships,
+        total: memberships.length,
+      });
     });
 
     it('should return empty array when no memberships', async () => {
@@ -116,7 +122,7 @@ describe('MemoryPoolController', () => {
 
       const result = await controller.getMembers('pool-1');
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ members: [], total: 0 });
     });
   });
 
@@ -127,7 +133,7 @@ describe('MemoryPoolController', () => {
 
       const result = await controller.getGrants('pool-1');
 
-      expect(result).toEqual(grants);
+      expect(result).toEqual({ grants });
     });
 
     it('should return empty array when no grants', async () => {
@@ -135,7 +141,7 @@ describe('MemoryPoolController', () => {
 
       const result = await controller.getGrants('pool-1');
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ grants: [] });
     });
   });
 

@@ -28,8 +28,15 @@ export class MemoryPoolController {
 
   @Post()
   @ApiOperation({ summary: 'Create a memory pool' })
-  async create(@Body() dto: CreateMemoryPoolDto) {
-    return this.service.create(dto);
+  async create(
+    @Body() dto: CreateMemoryPoolDto,
+    @UserId() authenticatedUserId: string | null,
+  ) {
+    const userId = authenticatedUserId || dto.userId;
+    if (!userId) {
+      throw new BadRequestException('Authenticated user id is required');
+    }
+    return this.service.create({ ...dto, userId });
   }
 
   @Get()
@@ -61,14 +68,15 @@ export class MemoryPoolController {
   @ApiOperation({ summary: 'Get pool members (memories)' })
   async getMembers(@Param('id') id: string) {
     const pool = await this.service.getById(id, true);
-    return pool.memberships ?? [];
+    const members = pool.memberships ?? [];
+    return { members, total: members.length };
   }
 
   @Get(':id/grants')
   @ApiOperation({ summary: 'Get pool grants' })
   async getGrants(@Param('id') id: string) {
     const pool = await this.service.getById(id, true);
-    return pool.grants ?? [];
+    return { grants: pool.grants ?? [] };
   }
 
   @Delete(':id')

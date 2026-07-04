@@ -179,12 +179,19 @@ describe('MemoryAccessLogService', () => {
   describe('getSessionSummary', () => {
     it('should return session summary', async () => {
       prisma.agentSession.findUnique.mockResolvedValue(mockCompletedSession);
-      prisma.memoryAccessLog.count.mockResolvedValue(5);
-      prisma.memoryAccessLog.findMany.mockResolvedValue([
-        { memoryId: 'mem-1' },
-        { memoryId: 'mem-2' },
-        { memoryId: 'mem-1' }, // duplicate
-      ]);
+      prisma.memoryAccessLog.findMany
+        .mockResolvedValueOnce([
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-1' },
+        ])
+        .mockResolvedValueOnce([
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-2' },
+          { memoryId: 'mem-1' }, // duplicate
+        ]);
 
       const result = await service.getSessionSummary('agent:main:subagent:abc');
 

@@ -54,7 +54,7 @@ describe('AgentSessionController', () => {
       service.upsert!.mockResolvedValue(mockSession as any);
 
       const dto = { sessionKey: 'agent-key-1', label: 'test-task' };
-      const result = await controller.upsert(dto as any);
+      const result = await controller.upsert(dto as any, null);
 
       expect(service.upsert).toHaveBeenCalledWith(dto);
       expect(result).toEqual(mockSession);
@@ -71,9 +71,40 @@ describe('AgentSessionController', () => {
         userId: 'u1',
         contextTokenBudget: 2000,
       };
-      await controller.upsert(dto as any);
+      await controller.upsert(dto as any, 'internal-user-1');
+
+      expect(service.upsert).toHaveBeenCalledWith({
+        ...dto,
+        userId: 'internal-user-1',
+      });
+    });
+
+    it('should preserve body userId when auth user is unavailable', async () => {
+      service.upsert!.mockResolvedValue(mockSession as any);
+
+      const dto = {
+        sessionKey: 'agent-key-3',
+        label: 'sub-task',
+        userId: 'legacy-user',
+      };
+      await controller.upsert(dto as any, null);
 
       expect(service.upsert).toHaveBeenCalledWith(dto);
+    });
+
+    it('should use authenticated user id even when body userId is omitted', async () => {
+      service.upsert!.mockResolvedValue(mockSession as any);
+
+      const dto = {
+        sessionKey: 'agent-key-4',
+        label: 'header-only-task',
+      };
+      await controller.upsert(dto as any, 'internal-user-2');
+
+      expect(service.upsert).toHaveBeenCalledWith({
+        ...dto,
+        userId: 'internal-user-2',
+      });
     });
   });
 

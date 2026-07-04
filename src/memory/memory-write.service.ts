@@ -284,11 +284,13 @@ export class MemoryWriteService {
     if (this.durabilityClassifier) {
       const classifier = this.durabilityClassifier;
       setImmediate(() => {
-        const durability = classifier.classify(rawContent);
-        this.prisma.memory
-          .update({
-            where: { id: memory.id },
-            data: { durability, durabilityClassifiedAt: new Date() },
+        void rlsContext
+          .run(undefined, async () => {
+            const durability = classifier.classify(rawContent);
+            await this.prisma.memory.update({
+              where: { id: memory.id },
+              data: { durability, durabilityClassifiedAt: new Date() },
+            });
           })
           .catch((err) =>
             this.logger.error(
@@ -855,7 +857,7 @@ export class MemoryWriteService {
     // This method is intentionally invoked fire-and-forget from remember().
     // Detach it from request-scoped RLS AsyncLocalStorage so it does not inherit
     // a transactional Prisma client after the HTTP request has completed.
-    await rlsContext.run(undefined as any, async () => {
+    await rlsContext.run(undefined, async () => {
       const globalPool = await this.prisma.memoryPool.upsert({
         where: { userId_name: { userId, name: 'global' } },
         update: {
@@ -872,26 +874,54 @@ export class MemoryWriteService {
         select: { id: true },
       });
 
-      try {
-        await this.prisma.memoryPoolMembership.create({
-          data: {
-            memoryId,
-            poolId: globalPool.id,
-            addedBy: agentSessionKey,
-          },
-        });
-      } catch (err: any) {
-        if (err?.code !== 'P2002') throw err;
-      }
+      await this.retryCommittedMemorySideEffect(async () => {
+        try {
+          await this.prisma.memoryPoolMembership.create({
+            data: {
+              memoryId,
+              poolId: globalPool.id,
+              addedBy: agentSessionKey,
+            },
+          });
+        } catch (err: any) {
+          if (err?.code !== 'P2002') throw err;
+        }
 
-      if (this.memoryAccessLogService) {
-        await this.memoryAccessLogService.writeLogEntry({
-          memoryId,
-          agentSessionKey,
-          accessType: MemoryAccessType.CREATED,
-        });
-      }
+        if (this.memoryAccessLogService) {
+          await this.memoryAccessLogService.writeLogEntry({
+            memoryId,
+            agentSessionKey,
+            accessType: MemoryAccessType.CREATED,
+          });
+        }
+      });
     });
+  }
+
+  /**
+   * Detached post-write side effects can race the request transaction commit:
+   * the memory row was created successfully, but a separate Prisma context may
+   * not see it for a few milliseconds. Retry FK failures rather than dropping
+   * global-pool membership or CREATED attribution.
+   */
+  private async retryCommittedMemorySideEffect(
+    fn: () => Promise<void>,
+    attempts = 5,
+  ): Promise<void> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        await fn();
+        return;
+      } catch (err: any) {
+        lastError = err;
+        if (err?.code !== 'P2003' || attempt === attempts) {
+          throw err;
+        }
+        await new Promise((resolve) => setTimeout(resolve, attempt * 25));
+      }
+    }
+    throw lastError;
   }
 
   /**
