@@ -15,6 +15,7 @@ import {
   UpdateAgentSessionDto,
 } from './dto/agent-session.dto';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
+import { UserId } from '../common/decorators/user-id.decorator';
 
 @ApiTags('agent-sessions')
 @UseGuards(ApiKeyOrJwtGuard)
@@ -24,8 +25,17 @@ export class AgentSessionController {
 
   @Post()
   @ApiOperation({ summary: 'Register or upsert an agent session' })
-  async upsert(@Body() dto: CreateAgentSessionDto) {
-    return this.service.upsert(dto);
+  async upsert(
+    @Body() dto: CreateAgentSessionDto,
+    @UserId() authenticatedUserId: string | null,
+  ) {
+    // HTTP callers often send the external X-AM-User-ID value in dto.userId.
+    // Pools are keyed by the resolved internal User.id, so prefer the
+    // authenticated user id whenever a session asks for user-owned pool wiring.
+    const normalizedDto = authenticatedUserId
+      ? { ...dto, userId: authenticatedUserId }
+      : dto;
+    return this.service.upsert(normalizedDto);
   }
 
   @Get(':key')

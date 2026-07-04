@@ -339,12 +339,14 @@ export class MemoryAccessLogService {
     }
 
     // Count memories created
-    const createdCount = await (this.prisma as any).memoryAccessLog.count({
+    const createdLogs = await (this.prisma as any).memoryAccessLog.findMany({
       where: {
         agentSessionId: session.id,
         accessType: MemoryAccessType.CREATED,
       },
+      select: { memoryId: true },
     });
+    const createdCount = createdLogs.length;
 
     // Count all access events (non-CREATED)
     const accessLogs = await (this.prisma as any).memoryAccessLog.findMany({
@@ -355,7 +357,13 @@ export class MemoryAccessLogService {
       select: { memoryId: true },
     });
 
-    const uniqueMemoryIds = new Set(accessLogs.map((l: any) => l.memoryId));
+    const uniqueAccessedMemoryIds = new Set(
+      accessLogs.map((l: any) => l.memoryId),
+    );
+    const uniqueMemoryIds = new Set([
+      ...createdLogs.map((l: any) => l.memoryId),
+      ...uniqueAccessedMemoryIds,
+    ]);
 
     // Calculate duration in milliseconds. The dashboard formats numeric ms;
     // returning ISO-8601 durations here produced NaN duration cards.
@@ -372,7 +380,7 @@ export class MemoryAccessLogService {
       memoriesCreated: createdCount,
       memoriesAccessed: accessLogs.length,
       uniqueMemories: uniqueMemoryIds.size,
-      uniqueMemoriesAccessed: uniqueMemoryIds.size,
+      uniqueMemoriesAccessed: uniqueAccessedMemoryIds.size,
       duration,
       topTopics: [],
     };
