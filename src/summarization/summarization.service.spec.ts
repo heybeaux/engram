@@ -133,9 +133,26 @@ describe('SummarizationService', () => {
       expect(result.facts).toHaveLength(3);
       expect(memoryService.remember).toHaveBeenCalledTimes(3);
 
-      // Check source attribution is set
+      // Check source attribution and agent-session attribution are set
       const firstCall = (memoryService.remember as jest.Mock).mock.calls[0][1];
       expect(firstCall.sourceTurnIndex).toBe(0);
+      expect(firstCall.context.sessionId).toBe('session-1');
+    });
+
+    it('should pass pool and agent-session attribution through to memory writes', async () => {
+      await service.summarizeAndStore('user-1', mockTurns, {
+        sessionId: 'session-1',
+        poolId: 'pool-1',
+        agentSessionKey: 'agent-session-1',
+      });
+
+      expect(memoryService.remember).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({
+          poolId: 'pool-1',
+          agentSessionKey: 'agent-session-1',
+        }),
+      );
     });
 
     it('should filter by minImportance', async () => {

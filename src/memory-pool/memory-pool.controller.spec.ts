@@ -52,22 +52,40 @@ describe('MemoryPoolController', () => {
   });
 
   describe('list', () => {
-    it('should list pools for a user', async () => {
-      const pools = [{ id: 'pool-1', name: 'Pool A' }];
+    it('should list pools for the authenticated user', async () => {
+      const pools = { pools: [{ id: 'pool-1', name: 'Pool A' }], total: 1 };
       mockService.listByUser.mockResolvedValue(pools);
 
       const result = await controller.list('user-1');
 
       expect(result).toEqual(pools);
-      expect(mockService.listByUser).toHaveBeenCalledWith('user-1', undefined);
+      expect(mockService.listByUser).toHaveBeenCalledWith('user-1', undefined, {
+        limit: undefined,
+        offset: undefined,
+      });
     });
 
-    it('should pass visibility filter', async () => {
-      mockService.listByUser.mockResolvedValue([]);
+    it('should pass visibility and pagination filters', async () => {
+      mockService.listByUser.mockResolvedValue({ pools: [], total: 0 });
 
-      await controller.list('user-1', 'SHARED');
+      await controller.list('user-1', undefined, 'SHARED', '25', '5');
 
-      expect(mockService.listByUser).toHaveBeenCalledWith('user-1', 'SHARED');
+      expect(mockService.listByUser).toHaveBeenCalledWith('user-1', 'SHARED', {
+        limit: 25,
+        offset: 5,
+      });
+    });
+
+    it('should fall back to legacy userId query only when auth user is absent', async () => {
+      mockService.listByUser.mockResolvedValue({ pools: [], total: 0 });
+
+      await controller.list('', 'legacy-user');
+
+      expect(mockService.listByUser).toHaveBeenCalledWith(
+        'legacy-user',
+        undefined,
+        { limit: undefined, offset: undefined },
+      );
     });
   });
 

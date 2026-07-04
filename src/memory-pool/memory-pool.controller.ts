@@ -7,6 +7,7 @@ import {
   Body,
   Query,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { MemoryPoolService } from './memory-pool.service';
@@ -17,6 +18,7 @@ import {
   BulkAddMemoriesToPoolDto,
 } from './dto/memory-pool.dto';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
+import { UserId } from '../common/decorators/user-id.decorator';
 
 @ApiTags('memory-pools')
 @UseGuards(ApiKeyOrJwtGuard)
@@ -31,12 +33,22 @@ export class MemoryPoolController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List pools for a user' })
+  @ApiOperation({ summary: 'List pools for the authenticated user' })
   async list(
-    @Query('userId') userId: string,
+    @UserId() authenticatedUserId: string | null,
+    @Query('userId') legacyUserId?: string,
     @Query('visibility') visibility?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
-    return this.service.listByUser(userId, visibility);
+    const userId = authenticatedUserId || legacyUserId;
+    if (!userId) {
+      throw new BadRequestException('Authenticated user id is required');
+    }
+    return this.service.listByUser(userId, visibility, {
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
   }
 
   @Get(':id')
@@ -48,14 +60,14 @@ export class MemoryPoolController {
   @Get(':id/members')
   @ApiOperation({ summary: 'Get pool members (memories)' })
   async getMembers(@Param('id') id: string) {
-    const pool = (await this.service.getById(id, true)) as any;
+    const pool = await this.service.getById(id, true);
     return pool.memberships ?? [];
   }
 
   @Get(':id/grants')
   @ApiOperation({ summary: 'Get pool grants' })
   async getGrants(@Param('id') id: string) {
-    const pool = (await this.service.getById(id, true)) as any;
+    const pool = await this.service.getById(id, true);
     return pool.grants ?? [];
   }
 

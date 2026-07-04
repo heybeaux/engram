@@ -152,6 +152,8 @@ export class SummarizationService implements OnModuleDestroy {
       projectId?: string;
       userName?: string;
       minImportance?: number;
+      poolId?: string;
+      agentSessionKey?: string;
     },
   ): Promise<SummarizeResult> {
     const startTime = Date.now();
@@ -172,6 +174,8 @@ export class SummarizationService implements OnModuleDestroy {
             projectId: options?.projectId,
             sessionId: options?.sessionId,
           },
+          poolId: options?.poolId,
+          agentSessionKey: options?.agentSessionKey,
           // Summary metadata encoded in source attribution
           sourceTurnIndex: fact.sourceTurnIndices[0] ?? 0,
         });
@@ -269,7 +273,12 @@ export class SummarizationService implements OnModuleDestroy {
     userId: string,
     sessionId: string,
     turns: MessageTurnDto[],
-    options?: { projectId?: string; userName?: string },
+    options?: {
+      projectId?: string;
+      userName?: string;
+      poolId?: string;
+      agentSessionKey?: string;
+    },
   ): Promise<SummarizeResult | null> {
     if (!this.enabled) return null;
 
@@ -286,6 +295,8 @@ export class SummarizationService implements OnModuleDestroy {
         sessionId,
         projectId: options?.projectId,
         userName: options?.userName,
+        poolId: options?.poolId,
+        agentSessionKey: options?.agentSessionKey,
       });
     }
 
@@ -298,7 +309,12 @@ export class SummarizationService implements OnModuleDestroy {
   async flushBuffer(
     userId: string,
     sessionId: string,
-    options?: { projectId?: string; userName?: string },
+    options?: {
+      projectId?: string;
+      userName?: string;
+      poolId?: string;
+      agentSessionKey?: string;
+    },
   ): Promise<SummarizeResult | null> {
     const buffer = await this.getRedisBuffer(sessionId);
     if (buffer.length === 0) return null;
@@ -308,6 +324,8 @@ export class SummarizationService implements OnModuleDestroy {
       sessionId,
       projectId: options?.projectId,
       userName: options?.userName,
+      poolId: options?.poolId,
+      agentSessionKey: options?.agentSessionKey,
     });
   }
 

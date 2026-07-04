@@ -15,8 +15,64 @@ import {
 export class MemoryPoolService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private toPoolDto(pool: any) {
+    const memberCount =
+      pool.memberCount ??
+      pool._count?.memberships ??
+      (Array.isArray(pool.memberships) ? pool.memberships.length : undefined);
+    const grantCount =
+      pool.grantCount ??
+      pool._count?.grants ??
+      (Array.isArray(pool.grants) ? pool.grants.length : undefined);
+
+    return {
+      id: pool.id,
+      name: pool.name,
+      description: pool.description ?? null,
+      visibility: pool.visibility,
+      createdBy: pool.createdBy,
+      createdBySession: pool.createdBy ?? null,
+      memberCount,
+      grantCount,
+      createdAt: pool.createdAt,
+      updatedAt: pool.updatedAt,
+      archivedAt: pool.archivedAt ?? null,
+    };
+  }
+
+  private toPoolMemberDto(membership: any) {
+    const memory = membership.memory ?? {};
+    return {
+      id: membership.id,
+      memoryId: membership.memoryId,
+      poolId: membership.poolId,
+      raw: memory.raw ?? '',
+      layer: memory.layer ?? null,
+      createdAt: memory.createdAt ?? membership.addedAt,
+      importanceScore: memory.importanceScore ?? 0,
+      addedBy: membership.addedBy,
+      addedAt: membership.addedAt,
+    };
+  }
+
+  private toPoolGrantDto(grant: any) {
+    return {
+      id: grant.id,
+      poolId: grant.poolId,
+      agentSessionId: grant.agentSessionId ?? null,
+      agentId: grant.agentId ?? null,
+      sessionKey: grant.agentSession?.sessionKey ?? grant.agentId ?? null,
+      agentName: grant.agent?.name ?? null,
+      permission: grant.permission,
+      permissions: grant.permission,
+      grantedBy: grant.grantedBy,
+      grantedAt: grant.grantedAt,
+      expiresAt: grant.expiresAt ?? null,
+    };
+  }
+
   async create(dto: CreateMemoryPoolDto) {
-    return this.prisma.memoryPool.create({
+    const pool = await this.prisma.memoryPool.create({
       data: {
         name: dto.name,
         userId: dto.userId,
@@ -25,17 +81,34 @@ export class MemoryPoolService {
         createdBy: dto.createdBy,
       },
     });
+    return this.toPoolDto(pool);
   }
 
-  async listByUser(userId: string, visibility?: string) {
-    return this.prisma.memoryPool.findMany({
-      where: {
-        userId,
-        archivedAt: null,
-        ...(visibility ? { visibility: visibility as any } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async listByUser(
+    userId: string,
+    visibility?: string,
+    options?: { limit?: number; offset?: number },
+  ) {
+    const take = Math.min(Math.max(options?.limit ?? 50, 1), 100);
+    const skip = Math.max(options?.offset ?? 0, 0);
+    const where = {
+      userId,
+      archivedAt: null,
+      ...(visibility ? { visibility: visibility as any } : {}),
+    };
+    const [pools, total] = await Promise.all([
+      this.prisma.memoryPool.findMany({
+        where,
+        include: {
+          _count: { select: { memberships: true, grants: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take,
+        skip,
+      }),
+      this.prisma.memoryPool.count({ where }),
+    ]);
+    return { pools: pools.map((pool) => this.toPoolDto(pool)), total };
   }
 
   async getById(id: string, includeRelations = false) {
@@ -43,15 +116,29 @@ export class MemoryPoolService {
       where: { id },
       include: includeRelations
         ? {
+            _count: { select: { memberships: true, grants: true } },
             memberships: {
+              orderBy: { addedAt: 'desc' },
               include: {
-                memory: { select: { id: true, raw: true, createdAt: true } },
+                memory: {
+                  select: {
+                    id: true,
+                    raw: true,
+                    layer: true,
+                    createdAt: true,
+                    importanceScore: true,
+                  },
+                },
               },
             },
             grants: {
+              orderBy: { grantedAt: 'desc' },
               include: {
                 agentSession: {
                   select: { id: true, sessionKey: true, label: true },
+                },
+                agent: {
+                  select: { id: true, name: true },
                 },
               },
             },
@@ -59,7 +146,15 @@ export class MemoryPoolService {
         : undefined,
     });
     if (!pool) throw new NotFoundException(`Pool '${id}' not found`);
-    return pool;
+    const dto: any = this.toPoolDto(pool);
+    if (includeRelations) {
+      dto.memberships = (pool as any).memberships.map((m: any) =>
+        this.toPoolMemberDto(m),
+      );
+      dto.members = dto.memberships;
+      dto.grants = (pool as any).grants.map((g: any) => this.toPoolGrantDto(g));
+    }
+    return dto;
   }
 
   async findOrCreatePool(dto: CreateMemoryPoolDto) {

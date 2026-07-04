@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { rlsContext } from '../prisma/rls-context';
 
 /**
  * Access types matching the MemoryAccessType enum that Phase 1 will add to Prisma.
@@ -45,8 +46,10 @@ export interface SessionSummaryResult {
   status: string;
   memoriesCreated: number;
   memoriesAccessed: number;
+  uniqueMemories: number;
   uniqueMemoriesAccessed: number;
-  duration: string | null;
+  duration: number | null;
+  topTopics: string[];
 }
 
 @Injectable()
@@ -158,9 +161,14 @@ export class MemoryAccessLogService {
    * Fire-and-forget single log entry.
    */
   private logAccessFireAndForget(params: LogAccessParams): void {
-    this.writeLogEntry(params).catch((err) => {
-      this.logger.warn(`Failed to log access: ${err.message}`, err.stack);
-    });
+    // Fire-and-forget work can outlive the request transaction opened by the
+    // RLS interceptor. Detach it from AsyncLocalStorage so it does not inherit
+    // a closed transactional Prisma client after the HTTP response completes.
+    void rlsContext.run(undefined as any, () =>
+      this.writeLogEntry(params).catch((err) => {
+        this.logger.warn(`Failed to log access: ${err.message}`, err.stack);
+      }),
+    );
   }
 
   /**
@@ -168,9 +176,16 @@ export class MemoryAccessLogService {
    */
   private logBatchFireAndForget(entries: LogAccessParams[]): void {
     if (entries.length === 0) return;
-    this.writeBatchLogEntries(entries).catch((err) => {
-      this.logger.warn(`Failed to log batch access: ${err.message}`, err.stack);
-    });
+    // See logAccessFireAndForget: access logs are intentionally detached from
+    // request-scoped RLS transactions because these writes are async telemetry.
+    void rlsContext.run(undefined as any, () =>
+      this.writeBatchLogEntries(entries).catch((err) => {
+        this.logger.warn(
+          `Failed to log batch access: ${err.message}`,
+          err.stack,
+        );
+      }),
+    );
   }
 
   /**
@@ -316,8 +331,10 @@ export class MemoryAccessLogService {
         status: 'UNKNOWN',
         memoriesCreated: 0,
         memoriesAccessed: 0,
+        uniqueMemories: 0,
         uniqueMemoriesAccessed: 0,
         duration: null,
+        topTopics: [],
       };
     }
 
@@ -340,15 +357,13 @@ export class MemoryAccessLogService {
 
     const uniqueMemoryIds = new Set(accessLogs.map((l: any) => l.memoryId));
 
-    // Calculate duration
-    let duration: string | null = null;
-    if (session.endedAt) {
-      const ms =
-        new Date(session.endedAt).getTime() -
-        new Date(session.createdAt).getTime();
-      const minutes = Math.round(ms / 60000);
-      duration = `PT${minutes}M`;
-    }
+    // Calculate duration in milliseconds. The dashboard formats numeric ms;
+    // returning ISO-8601 durations here produced NaN duration cards.
+    const durationEnd = session.endedAt ?? new Date();
+    const duration = Math.max(
+      0,
+      new Date(durationEnd).getTime() - new Date(session.createdAt).getTime(),
+    );
 
     return {
       sessionKey: session.sessionKey,
@@ -356,8 +371,10 @@ export class MemoryAccessLogService {
       status: session.status,
       memoriesCreated: createdCount,
       memoriesAccessed: accessLogs.length,
+      uniqueMemories: uniqueMemoryIds.size,
       uniqueMemoriesAccessed: uniqueMemoryIds.size,
       duration,
+      topTopics: [],
     };
   }
 }

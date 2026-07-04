@@ -22,7 +22,10 @@ import {
 import { CorrectionService } from '../correction/correction.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { generateContentHash } from '../common/content-hash.util';
-import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
+import {
+  MemoryAccessLogService,
+  MemoryAccessType,
+} from '../memory-access-log/memory-access-log.service';
 import { SOURCE_CONFIDENCE } from './memory-dedup.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
 import { EmbeddingQueueProducer } from './embedding-queue.producer';
@@ -216,19 +219,21 @@ export class MemoryWriteService {
       );
     }
 
-    // v0.9: Pool-scoped memory write
+    // v0.9: Pool-scoped memory write. Keep this in the request RLS context so
+    // caller-supplied poolId authorization is still enforced; await it so the
+    // membership is not lost after the request transaction closes.
     if (dto.poolId && this.memoryPoolService) {
-      this.memoryPoolService
-        .addMemory(dto.poolId, {
+      try {
+        await this.memoryPoolService.addMemory(dto.poolId, {
           memoryId: memory.id,
           addedBy: dto.agentSessionKey ?? 'system',
-        })
-        .catch((err) => {
-          this.logger.error(
-            `[Memory] Failed to add memory ${memory.id} to pool ${dto.poolId}:`,
-            err,
-          );
         });
+      } catch (err) {
+        this.logger.error(
+          `[Memory] Failed to add memory ${memory.id} to pool ${dto.poolId}:`,
+          err,
+        );
+      }
     }
 
     // 8. Build extraction context
@@ -847,11 +852,26 @@ export class MemoryWriteService {
     userId: string,
     agentSessionKey: string,
   ): Promise<void> {
-    const globalPool = await this.prisma.memoryPool.findFirst({
-      where: { userId, name: 'global', visibility: 'GLOBAL', archivedAt: null },
-      select: { id: true },
-    });
-    if (globalPool) {
+    // This method is intentionally invoked fire-and-forget from remember().
+    // Detach it from request-scoped RLS AsyncLocalStorage so it does not inherit
+    // a transactional Prisma client after the HTTP request has completed.
+    await rlsContext.run(undefined as any, async () => {
+      const globalPool = await this.prisma.memoryPool.upsert({
+        where: { userId_name: { userId, name: 'global' } },
+        update: {
+          visibility: 'GLOBAL' as any,
+          archivedAt: null,
+        },
+        create: {
+          userId,
+          name: 'global',
+          visibility: 'GLOBAL' as any,
+          description: 'Global memory pool',
+          createdBy: 'system',
+        },
+        select: { id: true },
+      });
+
       try {
         await this.prisma.memoryPoolMembership.create({
           data: {
@@ -861,15 +881,17 @@ export class MemoryWriteService {
           },
         });
       } catch (err: any) {
-        if (!err?.code?.includes('P2002')) throw err;
+        if (err?.code !== 'P2002') throw err;
       }
-    }
 
-    if (this.memoryAccessLogService) {
-      this.memoryAccessLogService
-        .logCreated(memoryId, agentSessionKey)
-        .catch(() => {});
-    }
+      if (this.memoryAccessLogService) {
+        await this.memoryAccessLogService.writeLogEntry({
+          memoryId,
+          agentSessionKey,
+          accessType: MemoryAccessType.CREATED,
+        });
+      }
+    });
   }
 
   /**
