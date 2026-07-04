@@ -13,7 +13,7 @@ import {
   ExtractedMemory,
   ImportanceSignal,
 } from './dto/observe.dto';
-import { MemoryLayer, MemorySource, ImportanceHint } from '@prisma/client';
+import { MemoryLayer, ImportanceHint } from '@prisma/client';
 
 export interface ObserveContext {
   userName?: string;
@@ -49,6 +49,10 @@ export class ConversationObserverService {
   ): Promise<ObserveResult> {
     const startTime = Date.now();
     const minImportance = dto.minImportance ?? 0.4;
+    // OpenClaw hook integrations historically sent the conversation/session key
+    // as sessionId before agentSessionKey existed. Treat it as the attribution
+    // key for observe writes unless an explicit agentSessionKey is supplied.
+    const agentSessionKey = dto.agentSessionKey ?? dto.sessionId;
 
     // 1. Get user info for extraction context if not provided
     let userName = context?.userName;
@@ -66,7 +70,12 @@ export class ConversationObserverService {
         userId,
         dto.sessionId,
         dto.turns,
-        { projectId: dto.projectId, userName },
+        {
+          projectId: dto.projectId,
+          userName,
+          poolId: dto.poolId,
+          agentSessionKey,
+        },
       );
 
       if (summaryResult) {
@@ -119,7 +128,12 @@ export class ConversationObserverService {
     const skipped = extracted.length - toStore.length;
 
     // 6. Store memories
-    const created = await this.storeMemories(userId, toStore, dto);
+    const created = await this.storeMemories(
+      userId,
+      toStore,
+      dto,
+      agentSessionKey,
+    );
 
     return {
       memories: extracted, // Return all for visibility
@@ -138,6 +152,7 @@ export class ConversationObserverService {
     userId: string,
     memories: ExtractedMemory[],
     dto: ObserveDto,
+    agentSessionKey?: string,
   ): Promise<number> {
     let created = 0;
 
@@ -163,7 +178,7 @@ export class ConversationObserverService {
           sourceTimestamp,
           // v0.9: Pool-scoped write + session attribution
           poolId: dto.poolId,
-          agentSessionKey: dto.agentSessionKey,
+          agentSessionKey,
         });
         created++;
       } catch (error) {

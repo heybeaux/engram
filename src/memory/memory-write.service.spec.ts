@@ -51,6 +51,12 @@ describe('MemoryWriteService', () => {
         createMany: jest.fn(),
         findMany: jest.fn(),
       },
+      memoryPool: {
+        upsert: jest.fn().mockResolvedValue({ id: 'global-pool-1' }),
+      },
+      memoryPoolMembership: {
+        create: jest.fn().mockResolvedValue({ id: 'membership-1' }),
+      },
       session: {
         findUnique: jest.fn().mockResolvedValue(null),
         findFirst: jest.fn().mockResolvedValue(null),
@@ -154,6 +160,55 @@ describe('MemoryWriteService', () => {
         }),
       });
       expect(result).toEqual(mockMemory);
+    });
+
+    it('should add session-attributed memories to the global pool and log creation', async () => {
+      mockImportance.calculate.mockReturnValue(0.6);
+      mockPrisma.memory.create.mockResolvedValue(mockMemory);
+      const memoryAccessLogService = {
+        writeLogEntry: jest.fn().mockResolvedValue(undefined),
+      };
+      const serviceWithPools = new MemoryWriteService(
+        mockPrisma,
+        mockExtraction,
+        mockEmbedding,
+        mockImportance,
+        mockPipelineService,
+        mockElasticsearchService as ElasticsearchService,
+        undefined,
+        undefined,
+        memoryAccessLogService as any,
+        undefined,
+        mockEmbeddingQueue,
+      );
+
+      await serviceWithPools.remember('user-456', {
+        raw: 'Session attributed memory',
+        layer: MemoryLayer.SESSION,
+        agentSessionKey: 'agent:main',
+      });
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockPrisma.memoryPool.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId_name: { userId: 'user-456', name: 'global' } },
+        }),
+      );
+      expect(mockPrisma.memoryPoolMembership.create).toHaveBeenCalledWith({
+        data: {
+          memoryId: 'mem-123',
+          poolId: 'global-pool-1',
+          addedBy: 'agent:main',
+        },
+      });
+      expect(memoryAccessLogService.writeLogEntry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          memoryId: 'mem-123',
+          agentSessionKey: 'agent:main',
+          accessType: 'CREATED',
+        }),
+      );
     });
 
     it('should default to SESSION layer when not specified', async () => {

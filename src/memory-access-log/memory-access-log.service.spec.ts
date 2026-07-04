@@ -192,8 +192,10 @@ describe('MemoryAccessLogService', () => {
       expect(result.status).toBe('COMPLETED');
       expect(result.memoriesCreated).toBe(5);
       expect(result.memoriesAccessed).toBe(3);
+      expect(result.uniqueMemories).toBe(2);
       expect(result.uniqueMemoriesAccessed).toBe(2);
-      expect(result.duration).toBe('PT45M');
+      expect(result.duration).toBe(45 * 60 * 1000);
+      expect(result.topTopics).toEqual([]);
     });
 
     it('should handle unknown session', async () => {
