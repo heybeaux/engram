@@ -21,6 +21,7 @@ import {
   TeamQueryDto,
   CloseArcDto,
 } from './dto/query-timeline.dto';
+import { ArcSearchDto } from './dto/arc-search.dto';
 
 @ApiTags('Timelines')
 @UseGuards(ApiKeyOrJwtGuard, RateLimitGuard)
@@ -58,6 +59,26 @@ export class TimelineController {
       from: dto.from,
       to: dto.to,
     });
+  }
+
+  @Post('arc/search')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Search arcs semantically and/or by calendar window',
+    description:
+      'Ranks arcs by semantic similarity to `query` and/or filters by a ' +
+      '`from`/`to` date window. At least one of query/from/to is required.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ranked arcs matching the query and/or window.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Empty search (query/from/to all absent) or invalid dates.',
+  })
+  async searchArcs(@Agent() agent: any, @Body() dto: ArcSearchDto) {
+    return this.timelineService.searchArcs(agent.id, dto);
   }
 
   @Get('arc/:arcId')
