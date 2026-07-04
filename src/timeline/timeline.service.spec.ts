@@ -44,6 +44,7 @@ describe('TimelineService', () => {
         upsert: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        updateMany: jest.fn(),
       },
       memory: {
         findMany: jest.fn(),
@@ -251,6 +252,83 @@ describe('TimelineService', () => {
       const result = await service.findByDateRange(agentId, {});
 
       expect(result).toEqual([]);
+    });
+
+    it('should filter by arcId when provided', async () => {
+      prisma.timeline.findMany.mockResolvedValue([]);
+
+      await service.findByDateRange(agentId, { arcId: 'arc-42' });
+
+      const call = prisma.timeline.findMany.mock.calls[0][0];
+      expect(call.where.arcId).toBe('arc-42');
+    });
+  });
+
+  describe('findByArc', () => {
+    it('should return all timelines for an arc ordered ascending', async () => {
+      prisma.timeline.findMany.mockResolvedValue([mockTimelineRecord]);
+
+      const result = await service.findByArc(agentId, 'arc-1', 'summary');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe(mockTimelineRecord.summaryText);
+      const call = prisma.timeline.findMany.mock.calls[0][0];
+      expect(call.where).toEqual({ agentId: 'agent-1', arcId: 'arc-1' });
+      expect(call.orderBy).toEqual({ agentLocalDate: 'asc' });
+    });
+
+    it('should default to summary LOD', async () => {
+      prisma.timeline.findMany.mockResolvedValue([mockTimelineRecord]);
+
+      const result = await service.findByArc(agentId, 'arc-1');
+
+      expect(result[0].text).toBe(mockTimelineRecord.summaryText);
+    });
+
+    it('should return empty array for an arc with no timelines', async () => {
+      prisma.timeline.findMany.mockResolvedValue([]);
+
+      const result = await service.findByArc(agentId, 'arc-empty');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('closeArc', () => {
+    it('should stamp arcId across the date range and report count', async () => {
+      prisma.timeline.updateMany.mockResolvedValue({ count: 14 });
+
+      const result = await service.closeArc(agentId, 'arc-1', {
+        from: '2026-03-01',
+        to: '2026-03-14',
+      });
+
+      expect(result).toEqual({ arcId: 'arc-1', timelinesLinked: 14 });
+      const call = prisma.timeline.updateMany.mock.calls[0][0];
+      expect(call.where).toEqual({
+        agentId: 'agent-1',
+        agentLocalDate: {
+          gte: new Date('2026-03-01'),
+          lte: new Date('2026-03-14'),
+        },
+      });
+      expect(call.data).toEqual({ arcId: 'arc-1' });
+    });
+
+    it('should throw BadRequestException when from is after to', async () => {
+      await expect(
+        service.closeArc(agentId, 'arc-1', {
+          from: '2026-03-14',
+          to: '2026-03-01',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.timeline.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException on invalid date', async () => {
+      await expect(
+        service.closeArc(agentId, 'arc-1', { from: 'nope', to: '2026-03-01' }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
