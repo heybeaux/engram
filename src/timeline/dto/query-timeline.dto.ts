@@ -12,6 +12,11 @@ export class QueryTimelineDto {
   @IsDateString()
   to?: string;
 
+  @ApiPropertyOptional({ description: 'Filter to a single arc' })
+  @IsOptional()
+  @IsString()
+  arcId?: string;
+
   @ApiPropertyOptional({
     description: 'Level of detail',
     enum: ['index', 'summary', 'standard'],
@@ -20,6 +25,16 @@ export class QueryTimelineDto {
   @IsOptional()
   @IsIn(['index', 'summary', 'standard'])
   lod?: 'index' | 'summary' | 'standard';
+}
+
+export class CloseArcDto {
+  @ApiPropertyOptional({ description: 'Start date of the arc (inclusive)' })
+  @IsDateString()
+  from!: string;
+
+  @ApiPropertyOptional({ description: 'End date of the arc (inclusive)' })
+  @IsDateString()
+  to!: string;
 }
 
 export class TeamQueryDto {

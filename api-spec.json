@@ -7682,6 +7682,76 @@
           "Profiles — Bulk Import v2"
         ]
       }
+    },
+    "/v1/timelines/arc/search": {
+      "post": {
+        "operationId": "TimelineController_searchArcs",
+        "description": "Ranks arcs by semantic similarity to `query` and/or filters by a `from`/`to` date window. At least one of query/from/to is required.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Semantic query text; ranked against per-day summaryEmbedding"
+                  },
+                  "from": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Calendar lower bound (inclusive), agentLocalDate"
+                  },
+                  "to": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Calendar upper bound (inclusive), agentLocalDate"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "default": 10,
+                    "description": "Max number of arcs to return"
+                  },
+                  "lod": {
+                    "type": "string",
+                    "enum": [
+                      "index",
+                      "summary",
+                      "standard"
+                    ],
+                    "default": "summary",
+                    "description": "Level of detail for the representative summary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked arcs matching the query and/or window."
+          },
+          "400": {
+            "description": "Empty search (query/from/to all absent) or invalid dates."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "api-key": []
+          }
+        ],
+        "summary": "Search arcs semantically and/or by calendar window",
+        "tags": [
+          "Timelines"
+        ]
+      }
     }
   },
   "info": {
