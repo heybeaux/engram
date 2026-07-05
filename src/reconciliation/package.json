@@ -1,0 +1,14 @@
+{
+  "name": "@openengram/reconciliation",
+  "version": "0.1.0",
+  "description": "Versioned facts + anti-entropy reconciliation (Spec 16). Pure TS, no runtime deps.",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  }
+}
