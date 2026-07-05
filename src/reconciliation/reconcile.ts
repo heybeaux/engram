@@ -6,7 +6,8 @@ import { verifyFact, type VersionedFact } from './versioned-fact';
  * healing vs rejection per node (Spec 16 B2 healing accounting).
  *
  * - `kept`             held copy retained; incoming brought nothing better.
- * - `adopted`          held was absent/unverifiable; incoming verified and was taken.
+ * - `adopted`          node held nothing; incoming was taken (verified, or a
+ *                      provisional corrupt copy that stays healable).
  * - `healed`           held was corrupt (or a stale verified copy) and incoming
  *                      repaired it — the exp-08 first-write-wins villain, inverted.
  * - `rejected_corrupt` incoming failed verification and was refused; corruption
@@ -38,13 +39,14 @@ export function reconcile(
   const incomingOk = verifyFact(incoming);
   const heldOk = held !== null && verifyFact(held);
 
-  // No usable held copy yet.
+  // No held copy yet: adopt whatever arrives so the node becomes informed. A
+  // verified arrival is a clean adoption; a corrupt one is still adopted — the
+  // node holds a provisional, UNVERIFIED copy that a later verifiable retelling
+  // or an anti-entropy pass will HEAL. This is the exp-08 reality (nodes do adopt
+  // corrupt early-hop copies) made healable, instead of first-write-wins freezing
+  // it. Refusing here would strand the node uninformed and leave nothing to heal.
   if (held === null) {
-    return incomingOk
-      ? { result: incoming, outcome: 'adopted' }
-      : // Nothing held and the arrival is corrupt: refuse it rather than seed
-        // the node with a copy that can never verify.
-        { result: null, outcome: 'rejected_corrupt' };
+    return { result: incoming, outcome: 'adopted' };
   }
 
   // We hold a VERIFIED copy. Only a verified, strictly-newer version may replace

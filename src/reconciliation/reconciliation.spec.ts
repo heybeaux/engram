@@ -34,17 +34,16 @@ describe('versioned facts + anti-entropy (Spec 16)', () => {
   });
 
   it('(a) exp-08 recipe: a corrupted early-hop copy is HEALED by a later verifiable retelling', () => {
-    // Node adopts a mangled early-hop version (first-write-wins would freeze this).
+    // Node adopts a mangled early-hop version — first-write-wins would freeze this
+    // forever. Under reconcile the empty node still adopts (so it is informed and
+    // spreads), holding a provisional UNVERIFIED copy.
     const mangled = corrupt(makeVersionedFact(FACT_ID, 1, ORIGIN, TRUTH), 'QAAQAAQAAQAA');
     const adopt = reconcile(null, mangled);
-    // A corrupt arrival with nothing held is refused rather than seeded...
-    expect(adopt.outcome).toBe('rejected_corrupt');
+    expect(adopt.outcome).toBe('adopted');
+    expect(verifyFact(adopt.result as VersionedFact)).toBe(false); // provisional, corrupt
 
-    // ...but the honest sim path: the node first hears a *verifiable* (if noisy
-    // at origin) copy, then later a truer one. Model the sticky-corruption case
-    // directly: the node is holding a corrupt copy (as in the mesh) and a
-    // verifiable retelling arrives.
-    let held: VersionedFact | null = mangled; // node is stuck on a corrupt copy
+    // Later, a verifiable retelling of the same fact arrives and HEALS the node.
+    let held: VersionedFact | null = adopt.result; // node is stuck on a corrupt copy
     const truth = makeVersionedFact(FACT_ID, 1, ORIGIN, TRUTH);
     const r = reconcile(held, truth);
     expect(r.outcome).toBe('healed');
