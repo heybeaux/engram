@@ -42,6 +42,12 @@ import { RecallWeightService } from './recall-weight.service';
 import { MemoryQueryRankingService } from './memory-query-ranking.service';
 import { MemoryQueryContextService } from './memory-query-context.service';
 import { MemoryFailureService } from './memory-failure.service';
+import {
+  compareByRankKeys,
+  ftsRescueScore,
+  ilikeRescueScore,
+  ILIKE_RESCUE_BAND_BOTTOM,
+} from './memory-ranking.util';
 
 @Injectable()
 export class MemoryQueryService {
@@ -351,9 +357,13 @@ export class MemoryQueryService {
             blendedScore *
             this.recallWeightService.recallWeight(memory) *
             this.rankingService.getImportanceMultiplier(memory);
-          return { ...memory, score: adjustedScore } as MemoryWithScore;
+          return {
+            ...memory,
+            score: adjustedScore,
+            vectorScore: scoreMap.get(memory.id),
+          } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .sort(compareByRankKeys)
         .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
     } else {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
@@ -371,6 +381,10 @@ export class MemoryQueryService {
       );
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
+      // Preserved separately from scoreMap: the keyword-rescue paths below
+      // overwrite scoreMap with band values, but the raw cosine similarity is
+      // the first tie-break key (see compareByRankKeys).
+      const cosineMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       const memoryIds = vectorResults.map((r) => r.id);
       const keywordRescueIds = new Set<string>();
 
@@ -386,9 +400,12 @@ export class MemoryQueryService {
           ? [singleUserId]
           : [];
       try {
+        type FtsRow = { id: string; ts_rank: number };
         const ftsResults = poolOnlyMode
-          ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-              `SELECT m.id FROM memories m
+          ? await this.prisma.$queryRawUnsafe<FtsRow[]>(
+              `SELECT m.id,
+                      ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) AS ts_rank
+               FROM memories m
                WHERE m.id IN (
                  SELECT mpm.memory_id FROM memory_pool_memberships mpm
                  WHERE mpm.pool_id = ANY($1::text[])
@@ -405,8 +422,10 @@ export class MemoryQueryService {
               searchQuery,
             )
           : resolvedUserIds.length > 0
-            ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                `SELECT id FROM memories
+            ? await this.prisma.$queryRawUnsafe<FtsRow[]>(
+                `SELECT id,
+                        ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) AS ts_rank
+               FROM memories
                WHERE user_id = ANY($1::text[])
                  AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
                  AND deleted_at IS NULL
@@ -419,8 +438,10 @@ export class MemoryQueryService {
                 resolvedUserIds,
                 searchQuery,
               )
-            : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                `SELECT id FROM memories
+            : await this.prisma.$queryRawUnsafe<FtsRow[]>(
+                `SELECT id,
+                        ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) AS ts_rank
+               FROM memories
                WHERE to_tsvector('english', raw) @@ websearch_to_tsquery('english', $1)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
@@ -431,23 +452,34 @@ export class MemoryQueryService {
                LIMIT 100`,
                 searchQuery,
               );
-        // RRF fusion (k=60): BM25 rank contributes 1/(k+rank) so rank-1
-        // BM25 hit scores ≈0.016, rank-100 ≈0.006. This prevents a flat
-        // 0.75 override from promoting low-quality exact-keyword matches
-        // above high-quality semantic matches.
-        const RRF_K = 60;
+        // Continuous FTS rescue band. Previously every FTS-rescued candidate
+        // was assigned the constant 1.25, which is what made 18/20 benchmark
+        // queries end in a 5-way tie at the top score. The score now varies
+        // with the ts_rank the SQL was already ordering by (SELECTed above but
+        // formerly discarded), blended with an RRF positional term.
+        //
+        // Invariant: band top is exactly 1.25 for the best hit, values are
+        // strictly decreasing with rank, and never fall to or below 1.10 —
+        // so FTS rescue still outranks ILIKE rescue and every cosine hit.
+        // Rows arrive ordered by ts_rank DESC, so row 0 carries the max.
+        const maxTsRank =
+          ftsResults.length > 0 ? Number(ftsResults[0].ts_rank) : 0;
         let ftsAdded = 0;
         for (let ftsRank = 0; ftsRank < ftsResults.length; ftsRank++) {
           const row = ftsResults[ftsRank];
-          const bm25Score = 1 / (RRF_K + ftsRank + 1);
+          const bandedScore = ftsRescueScore(
+            Number(row.ts_rank),
+            maxTsRank,
+            ftsRank,
+          );
           ftsResultIds.add(row.id);
           keywordRescueIds.add(row.id);
           if (!scoreMap.has(row.id)) {
-            scoreMap.set(row.id, 1.25);
+            scoreMap.set(row.id, bandedScore);
             memoryIds.push(row.id);
             ftsAdded++;
           } else {
-            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.25));
+            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, bandedScore));
           }
         }
         if (ftsAdded > 0) {
@@ -468,10 +500,22 @@ export class MemoryQueryService {
             const ilikeConditions = words
               .map((_, i) => `LOWER(raw) LIKE $${i + paramOffset}`)
               .join(' OR ');
+            // Lexical coverage: how many of the extracted rescue terms this row
+            // actually contains. This is the quality signal that makes the
+            // ILIKE band continuous instead of a flat 1.1 constant.
+            const matchCountExpr = (column: string, offset: number): string =>
+              words
+                .map(
+                  (_, i) =>
+                    `(CASE WHEN LOWER(${column}) LIKE $${i + offset} THEN 1 ELSE 0 END)`,
+                )
+                .join(' + ');
             const ilikeParams = words.map((w) => `%${w}%`);
+            type IlikeRow = { id: string; match_count: number };
             const ilikeResults = poolOnlyMode
-              ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                  `SELECT m.id FROM memories m
+              ? await this.prisma.$queryRawUnsafe<IlikeRow[]>(
+                  `SELECT m.id, (${matchCountExpr('m.raw', 2)}) AS match_count
+                   FROM memories m
                    WHERE m.id IN (
                      SELECT mpm.memory_id FROM memory_pool_memberships mpm
                      WHERE mpm.pool_id = ANY($1::text[])
@@ -490,8 +534,9 @@ export class MemoryQueryService {
                   ...ilikeParams,
                 )
               : hasResolvedUsers
-                ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                    `SELECT id FROM memories
+                ? await this.prisma.$queryRawUnsafe<IlikeRow[]>(
+                    `SELECT id, (${matchCountExpr('raw', paramOffset)}) AS match_count
+                   FROM memories
                    WHERE user_id = ANY($1::text[])
                      AND (${ilikeConditions})
                      AND deleted_at IS NULL
@@ -504,8 +549,9 @@ export class MemoryQueryService {
                     resolvedUserIds,
                     ...ilikeParams,
                   )
-                : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                    `SELECT id FROM memories
+                : await this.prisma.$queryRawUnsafe<IlikeRow[]>(
+                    `SELECT id, (${matchCountExpr('raw', paramOffset)}) AS match_count
+                   FROM memories
                    WHERE (${ilikeConditions})
                      AND deleted_at IS NULL
                      AND superseded_by_id IS NULL
@@ -516,16 +562,37 @@ export class MemoryQueryService {
                    LIMIT 20`,
                     ...ilikeParams,
                   );
+            // Continuous ILIKE rescue band, replacing the flat 1.1 constant.
+            // Quality signal = lexical coverage (matched terms / extracted
+            // terms); positional tie-break = RRF over the SQL ordering
+            // (importance_score DESC, created_at DESC).
+            //
+            // Invariant: values live strictly inside (1.00, 1.10] — always
+            // above the cosine ceiling of 1.0, never reaching the FTS band —
+            // and are strictly decreasing with rank at equal coverage.
             let ilikeAdded = 0;
-            for (const row of ilikeResults) {
+            for (
+              let ilikeRank = 0;
+              ilikeRank < ilikeResults.length;
+              ilikeRank++
+            ) {
+              const row = ilikeResults[ilikeRank];
+              const bandedScore = ilikeRescueScore(
+                Number(row.match_count),
+                words.length,
+                ilikeRank,
+              );
               ftsResultIds.add(row.id);
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
-                scoreMap.set(row.id, 1.1);
+                scoreMap.set(row.id, bandedScore);
                 memoryIds.push(row.id);
                 ilikeAdded++;
               } else {
-                scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.1));
+                scoreMap.set(
+                  row.id,
+                  Math.max(scoreMap.get(row.id)!, bandedScore),
+                );
               }
             }
             if (ilikeAdded > 0) {
@@ -620,10 +687,11 @@ export class MemoryQueryService {
           return {
             ...memory,
             score: semanticScore,
+            vectorScore: cosineMap.get(memory.id),
             __keywordRescued: keywordRescueIds.has(memory.id),
           } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        .sort(compareByRankKeys);
 
       const RERANK_POOL = sorted.length;
 
@@ -720,15 +788,22 @@ export class MemoryQueryService {
     // Exact keyword/ILIKE rescued memories are deterministic high-signal hits.
     // Keep them sticky after reranking so the cross-encoder cannot drop fresh
     // exact-match writes from the final top-N.
+    // Preserve the banded rescue score the candidate already carries. Clamping
+    // to a flat 1.1 here would re-flatten exactly the scores the FTS/ILIKE
+    // bands above made continuous; the band bottom is only a floor for the
+    // pathological case of a rescued memory arriving with no score at all.
     const missingKeywordHits = [...keywordRescueMap.entries()]
       .filter(([id]) => !scoredMemories.some((m) => m.id === id))
       .map(
         ([, mem]) =>
-          ({ ...mem, score: Math.max(mem.score ?? 0, 1.1) }) as MemoryWithScore,
+          ({
+            ...mem,
+            score: mem.score ?? ILIKE_RESCUE_BAND_BOTTOM,
+          }) as MemoryWithScore,
       );
     if (missingKeywordHits.length > 0) {
       scoredMemories = [...missingKeywordHits, ...scoredMemories]
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .sort(compareByRankKeys)
         .slice(0, limit);
     }
 
@@ -747,7 +822,7 @@ export class MemoryQueryService {
         }
         return m;
       });
-      scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      scoredMemories.sort(compareByRankKeys);
     }
 
     let result: MemoryWithScore[] = this.filterRecallSurvivors(scoredMemories);
@@ -911,9 +986,13 @@ export class MemoryQueryService {
         const adjustedScore =
           blendedScore * this.recallWeightService.recallWeight(memory);
 
-        return { ...memory, score: adjustedScore } as MemoryWithScore;
+        return {
+          ...memory,
+          score: adjustedScore,
+          vectorScore: scoreMap.get(memory.id),
+        } as MemoryWithScore;
       })
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      .sort(compareByRankKeys);
 
     // Apply the same post-processing chain as the standard path so multi-query
     // is not silently downgraded to cosine-only ranking (retrieval H4), then

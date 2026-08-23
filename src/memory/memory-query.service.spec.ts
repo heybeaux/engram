@@ -533,6 +533,160 @@ describe('MemoryQueryService', () => {
     });
   });
 
+  // Regression suite for the tie-domination defect:
+  // docs/research/memory-formation-query-transform/04-finding-tie-domination.md
+  //
+  // Before this fix every FTS-rescued candidate scored a flat 1.25 and every
+  // ILIKE-rescued candidate a flat 1.1, and every sort was a bare score
+  // comparator over a stable sort — so top-1 was decided by Postgres row
+  // order, not by relevance.
+  describe('keyword rescue scoring is continuous and deterministic', () => {
+    const mem = (id: string, overrides: Record<string, any> = {}) => ({
+      id,
+      raw: `memory ${id}`,
+      importanceScore: 0.5,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      extraction: {},
+      ...overrides,
+    });
+
+    /**
+     * Routes raw SQL by shape: the FTS query SELECTs ts_rank, the lexical
+     * rescue query SELECTs match_count.
+     */
+    const mockRawSql = (opts: {
+      fts?: { id: string; ts_rank: number }[];
+      ilike?: { id: string; match_count: number }[];
+    }) =>
+      jest.fn().mockImplementation((sql: string) => {
+        if (sql.includes('match_count'))
+          return Promise.resolve(opts.ilike ?? []);
+        if (sql.includes('ts_rank')) return Promise.resolve(opts.fts ?? []);
+        return Promise.resolve([]);
+      });
+
+    it('gives FTS-rescued candidates with different ts_rank different scores', async () => {
+      embedding.search.mockResolvedValue([]);
+      (prisma as any).$queryRawUnsafe = mockRawSql({
+        fts: [
+          { id: 'f1', ts_rank: 0.9 },
+          { id: 'f2', ts_rank: 0.1 },
+        ],
+      });
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValue([mem('f2'), mem('f1')]);
+
+      const result = await service.recall(userId, { query: 'roast' } as any);
+
+      expect(result.memories).toHaveLength(2);
+      const [first, second] = result.memories;
+      expect(first.score).not.toEqual(second.score);
+      // Higher ts_rank wins, regardless of the order the DB returned rows in.
+      expect(first.id).toBe('f1');
+      expect(second.id).toBe('f2');
+    });
+
+    it('separates FTS-rescued candidates even when ts_rank ties exactly', async () => {
+      embedding.search.mockResolvedValue([]);
+      (prisma as any).$queryRawUnsafe = mockRawSql({
+        fts: [
+          { id: 'f1', ts_rank: 0.5 },
+          { id: 'f2', ts_rank: 0.5 },
+          { id: 'f3', ts_rank: 0.5 },
+        ],
+      });
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValue([mem('f1'), mem('f2'), mem('f3')]);
+
+      const result = await service.recall(userId, { query: 'roast' } as any);
+
+      const scores = result.memories.map((m) => m.score);
+      expect(new Set(scores).size).toBe(3);
+    });
+
+    it('keeps an FTS rescue above a 0.99 cosine hit', async () => {
+      embedding.search.mockResolvedValue([{ id: 'c1', score: 0.99 }] as any);
+      (prisma as any).$queryRawUnsafe = mockRawSql({
+        fts: [{ id: 'f1', ts_rank: 0.2 }],
+      });
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValue([mem('c1'), mem('f1')]);
+
+      const result = await service.recall(userId, { query: 'roast' } as any);
+
+      expect(result.memories[0].id).toBe('f1');
+      expect(result.memories[0].score!).toBeGreaterThan(
+        result.memories[1].score!,
+      );
+    });
+
+    it('keeps an FTS rescue above an ILIKE rescue (band ordering preserved)', async () => {
+      embedding.search.mockResolvedValue([]);
+      (prisma as any).$queryRawUnsafe = mockRawSql({
+        fts: [{ id: 'f1', ts_rank: 0.01 }],
+        ilike: [{ id: 'l1', match_count: 1 }],
+      });
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValue([mem('l1'), mem('f1')]);
+
+      const result = await service.recall(userId, { query: 'roast' } as any);
+
+      expect(result.memories.map((m) => m.id)).toEqual(['f1', 'l1']);
+    });
+
+    it('ranks ILIKE rescues by lexical coverage, not a flat constant', async () => {
+      embedding.search.mockResolvedValue([]);
+      (prisma as any).$queryRawUnsafe = mockRawSql({
+        // SQL order is importance/createdAt, so the low-coverage row comes
+        // first — coverage must still promote the 2-of-2 match.
+        ilike: [
+          { id: 'l1', match_count: 1 },
+          { id: 'l2', match_count: 2 },
+        ],
+      });
+      prisma.memory.findMany = jest
+        .fn()
+        .mockResolvedValue([mem('l1'), mem('l2')]);
+
+      const result = await service.recall(userId, {
+        query: 'roast medication',
+      } as any);
+
+      expect(result.memories.map((m) => m.id)).toEqual(['l2', 'l1']);
+      expect(result.memories[0].score).not.toEqual(result.memories[1].score);
+    });
+
+    it('resolves genuinely equal scores deterministically, not by input order', async () => {
+      // Five candidates that tie on cosine score — the exact regime that made
+      // 18/20 benchmark queries tie-dominated. The output must be identical
+      // regardless of the order Postgres returned the rows in.
+      const tied = ['m1', 'm2', 'm3', 'm4', 'm5'];
+      const runWithOrder = async (order: string[]) => {
+        embedding.search.mockResolvedValue(
+          tied.map((id) => ({ id, score: 0.5 })) as any,
+        );
+        (prisma as any).$queryRawUnsafe = mockRawSql({});
+        prisma.memory.findMany = jest
+          .fn()
+          .mockResolvedValue(order.map((id) => mem(id)));
+        const result = await service.recall(userId, { query: 'roast' } as any);
+        return result.memories.map((m) => m.id);
+      };
+
+      const forward = await runWithOrder(tied);
+      const reversed = await runWithOrder([...tied].reverse());
+      const shuffled = await runWithOrder(['m3', 'm5', 'm1', 'm4', 'm2']);
+
+      expect(forward).toEqual(reversed);
+      expect(forward).toEqual(shuffled);
+      expect(forward).toEqual(tied);
+    });
+  });
+
   describe('shouldUseMultiQuery', () => {
     it('should return false when multiQueryService is not available', () => {
       const recallWeightService = {
