@@ -19,6 +19,7 @@ interventions in Engram's memory lifecycle:
 | 1 | [`01-current-state-map.md`](01-current-state-map.md) | Ingestion→recall data-flow audit, score semantics, data model, intervention points, existing LLM usage |
 | 2 | [`02-research-memo.md`](02-research-memo.md) | Literature review (formation + query-transform), blind-spot pass, promising-vs-hype read, cited primary sources |
 | 3 | [`03-experiment-spec.md`](03-experiment-spec.md) | A–E ablation matrix, graduated corpora, retrieval + downstream metrics, reproducibility controls, budgets |
+| 4 | [`04-finding-tie-domination.md`](04-finding-tie-domination.md) | **Blocking finding.** Retrieval ranking is decided by array order among tied scores, not by score. Changes the required sequencing. |
 
 ## Executive summary
 
@@ -66,14 +67,24 @@ and **1.1** (ILIKE) and graph hits get **×1.2**. This is why wrong distractors
 tie correct memories at 1.25. Scores are relative sort ranks, not probabilities.
 Recommend a ticket to document/calibrate this regardless of the initiative.
 
-## Recommended sequencing (from the research)
+## Recommended sequencing (REVISED after the tie-domination finding)
 
-1. **Baseline (cell A)** on graduated corpora — establish CI width before thresholds.
-2. **Hybrid + rerank + RRF tuning first** — it targets our actual bottleneck and is
-   the best-evidenced lever; also the fair baseline the query-transform arm must beat.
+Phase 2 measurement work produced a blocking result (see
+[`04`](04-finding-tie-domination.md)): **18/20 queries end in a 5-way tie at the
+top score, and only 2/20 top-1 results are decided by score at all.** Better
+candidates cannot move top-1 when the tie-break decides it, so the A–E matrix
+would largely measure Postgres row order.
+
+Sequencing is therefore now:
+
+1. **Fix score semantics / tie-breaking first** (was step 2, now mandatory and
+   first). The hard-coded rescue constants (FTS `1.25`, ILIKE `1.1`) and the
+   `×1.2` graph boost collapse distinct candidates onto identical scores.
+2. **Re-establish baseline (cell A)** with tie-aware metrics — always report the
+   four-way tie envelope, never `asReturned` alone.
 3. **Formation as union + contextual prepend** (cell B) on the F1 corpus it's
    designed to win.
-4. **Query transform** (cell C) **only vs a compute-matched reranker baseline.**
+4. **Query transform** (cell C) **only vs the compute-matched control.**
 5. Cells D/E only if D shows a CI-excludes-zero retrieval gain.
 
 ## Hard constraints honored
