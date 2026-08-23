@@ -45,6 +45,21 @@ of the effect flips per-query (rewriting helps some, harms 23–42% of others). 
 just against A. Engram already exposes `multiQuery` + `explanations` plumbing to
 instrument this without new infra.
 
+**Findings from the prototype build that corrected this research** (see
+`01-current-state-map.md` errata + §7):
+- Local Engram is on port **47291**, not 3001 (3001 is whalehawk provider-server).
+- **`content` is a legacy alias for `raw`, not a second field.** The original plan
+  to "store formed text in `content`, keep `raw` for provenance" would have been a
+  **silent no-op**. Union is instead realized inside the single embedded string
+  (contextual prefix + verbatim observation, `prefixLength` recorded so the
+  original is recoverable byte-for-byte) — which is Anthropic's Contextual
+  Retrieval shape and still satisfies raw ∪ derived.
+- The local embedder **500s under parallel recall**, which silently degraded arm C
+  into the baseline on the first smoke run — a bias against the intervention we
+  are trying to measure. Now mitigated with concurrency limiting.
+- A **pre-existing pgvector dimension mismatch (1536 vs 384)** is logged on write.
+  Unrelated to this work; recommend a separate ticket.
+
 **Correctness smell found during the audit (independent of the R&D):** recall
 scores exceed [0,1] because keyword-rescue hits are hard-coded to **1.25** (FTS)
 and **1.1** (ILIKE) and graph hits get **×1.2**. This is why wrong distractors

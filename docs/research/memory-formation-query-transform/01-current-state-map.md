@@ -1,7 +1,17 @@
 # Current-State Map: Engram Memory Lifecycle (Ingestion → Recall)
 
 **Scope:** Read-only audit of Engram's `staging` branch. No code or data modified.
-**Date:** 2026-08-23
+**Date:** 2026-08-23 (revised same day after prototype-build verification)
+
+> **Errata from the prototype build.** Three assumptions in the original revision
+> were falsified by running against the live service. All are corrected inline:
+> 1. **Local Engram serves on port `47291`, not `3001`.** Port 3001 is the
+>    whalehawk provider-server (returns `Hello World!` at `/`, 404s on
+>    `/v1/memories/*`). Verified: `47291` returns 401 on
+>    `/v1/memories/embedding-status`; `3001` returns 404.
+> 2. **`content` is a legacy alias for `raw`, not a second field** — see §4.
+> 3. **The local embedder 500s under parallel recall** (`non-finite value
+>    NaN/inf` from minilm) — see §7.
 **Purpose:** Map the ingestion→recall data flow and identify intervention points for
 (A) LLM-assisted memory formation at store time and (B) LLM-assisted query
 transformation at recall time.
@@ -155,11 +165,26 @@ transformation at recall time.
 - `MemoryEventTime` — resolved temporal references
 
 ### What formation would add
-- Store formed/canonical text in `content` (DTO already accepts `content` +
-  `raw`), retaining `raw` for provenance — **no schema change required for a
-  union-storage MVP.**
-- Optional: `metadata.formation = {formationScore, promptVersion, model,
-  suggestedRaw}` or a dedicated `MemoryFormation` table if we want it queryable.
+
+> **CORRECTION (2026-08-23, verified against source during prototype build).**
+> An earlier revision of this document claimed `CreateMemoryDto` accepts `content`
+> and `raw` as two independent fields, and that formed text could go in `content`
+> with `raw` kept for provenance. **That is false.** `create-memory.dto.ts` (~L94)
+> applies `@Transform(({ value, obj }) => value ?? obj.content)` to `raw`, and the
+> adjacent comment reads *"Legacy alias: content -> raw (accepted but transformed
+> to raw)"*. There is **no `content` column on `Memory`** — posting both discards
+> `content`. Storing formed text in `content` would have been a **silent no-op**
+> and would have invalidated intervention B.
+
+- **Union must be realized inside the single embedded string.** The prototype
+  stores `contextualPrefix + verbatimObservation` in `raw`, and records
+  `prefixLength` in metadata so the original observation is recoverable
+  **byte-for-byte** (`storedText.slice(prefixLength) === observation`, asserted at
+  write time). This is precisely Anthropic's Contextual Retrieval shape and it
+  preserves the raw-∪-derived property the CogCanvas result demands.
+- Provenance rides in `metadata.formation = {promptVersion, model, prefixLength,
+  constraintEchoes[]}`. A dedicated `MemoryFormation` table is the option if we
+  later want it queryable — not needed for the MVP.
 
 ---
 
@@ -197,6 +222,28 @@ consolidation. Formation is a *second refinement pass*, not net-new plumbing, an
 a clean feature-flag precedent already exists.
 
 ---
+
+## 7. Infrastructure defects found during the prototype build
+
+Both were surfaced by running the shims against live Engram + oMLX. Both are
+**measurement hazards** — left unhandled they bias experimental results.
+
+### 7.1 Local embedder 500s under parallel recall (biases intervention C downward)
+Issuing sub-queries concurrently (which is exactly what query expansion does)
+made the local embedder return 500 `non-finite value NaN/inf` from minilm. In the
+first smoke run this forced arm C to fall back to baseline recall — i.e. **the
+intervention silently degraded into the control**, which would have understated C
+in the ablation. Mitigated in the harness with bounded retries + sub-query
+concurrency limiting (second run: zero fall-backs). Any future arm that fans out
+queries must keep this limiter or the comparison is invalid.
+
+### 7.2 pgvector dimension mismatch on write (pre-existing, unrelated to this R&D)
+Engram logs a dimension mismatch (**1536 vs 384**) on the write path — an
+openai-small-shaped vector meeting a minilm-shaped column. This is independent of
+the shims and predates them. It is the same *class* of failure as the known
+`engram-embed` saturation bug (writes that silently end up with no usable
+embedding → empty recall). **Recommend a ticket**; until resolved, pin and record
+the embedder per run, and keep the `embedding-status` gate mandatory.
 
 ## Key implications for the R&D
 
