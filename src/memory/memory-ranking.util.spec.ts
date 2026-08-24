@@ -8,10 +8,38 @@ import {
   FTS_RESCUE_BAND_BOTTOM,
   ILIKE_RESCUE_BAND_TOP,
   ILIKE_RESCUE_BAND_BOTTOM,
+  meetsLexicalCoverageFloor,
   RankableMemory,
 } from './memory-ranking.util';
 
 describe('memory-ranking.util', () => {
+  describe('meetsLexicalCoverageFloor (defect A, part 1)', () => {
+    it('rejects a single incidental term out of many', () => {
+      // The exact benchmark case: an eight-term query, and a 71-character junk
+      // memory whose only overlap is the corpus-wide token "mnemon".
+      expect(meetsLexicalCoverageFloor(1, 8)).toBe(false);
+    });
+
+    it('accepts two or more matched terms', () => {
+      expect(meetsLexicalCoverageFloor(2, 8)).toBe(true);
+      expect(meetsLexicalCoverageFloor(8, 8)).toBe(true);
+    });
+
+    it('degrades to "match the only term" for single-term queries', () => {
+      expect(meetsLexicalCoverageFloor(1, 1)).toBe(true);
+      expect(meetsLexicalCoverageFloor(0, 1)).toBe(false);
+    });
+
+    it('treats a garbled match count as not clearing the floor', () => {
+      expect(meetsLexicalCoverageFloor(Number.NaN, 8)).toBe(false);
+    });
+
+    it('never rejects on a zero-term query (no terms, no floor to clear)', () => {
+      // totalTerms 0 is coerced to 1, so the rule is still "match what exists".
+      expect(meetsLexicalCoverageFloor(1, 0)).toBe(true);
+    });
+  });
+
   describe('rrfNorm', () => {
     it('is 1 at rank 0 and strictly decreasing', () => {
       expect(rrfNorm(0)).toBe(1);

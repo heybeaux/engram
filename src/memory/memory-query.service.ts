@@ -46,6 +46,7 @@ import {
   compareByRankKeys,
   ftsRescueScore,
   ilikeRescueScore,
+  meetsLexicalCoverageFloor,
   ILIKE_RESCUE_BAND_BOTTOM,
 } from './memory-ranking.util';
 
@@ -86,6 +87,47 @@ export class MemoryQueryService {
    * itself.
    */
   private readonly noRescue = process.env.RECALL_NO_RESCUE === 'true';
+
+  /**
+   * RESEARCH FLAG — default OFF. Defect A, part 1.
+   *
+   * `RECALL_LEXICAL_COVERAGE_FLOOR=true` stops the `OR`-joined ILIKE rescue
+   * from promoting a row that contains a single incidental query token into the
+   * (1.00, 1.10] band, where it outranks every cosine hit including perfect
+   * semantic matches. On the noisy corpus one 71-character junk memory matched
+   * exactly one of the eight extracted terms ("mnemon", which appears in all 20
+   * task queries) and was promoted on 20/20 queries for it.
+   *
+   * Rows below the floor are NOT removed from the candidate pool — they simply
+   * keep their cosine score instead of being lifted above the cosine ceiling.
+   */
+  private readonly lexicalCoverageFloor =
+    process.env.RECALL_LEXICAL_COVERAGE_FLOOR === 'true';
+
+  /**
+   * RESEARCH FLAG — default OFF. Defect B.
+   *
+   * `RECALL_RESCUE_SQL_TIEBREAK=true` appends `id ASC` to every rescue query's
+   * `ORDER BY`. Without it, `ORDER BY ts_rank DESC` / `ORDER BY importance_score
+   * DESC, created_at DESC` leave ties to Postgres' physical row order, which is
+   * not stable across server restarts, VACUUMs or plan changes. On the
+   * benchmark corpus the gold memory sits in a cluster of ~11 near-identical
+   * rows with equal `ts_rank`, so *which* member the `LIMIT 100`/`LIMIT 20`
+   * window keeps — and hence which one gets the rank-0 RRF term — is decided by
+   * heap order. `compareByRankKeys` only imposes a total order on rows that
+   * already came back; this imposes one on the rows that come back at all.
+   */
+  private readonly rescueSqlTiebreak =
+    process.env.RECALL_RESCUE_SQL_TIEBREAK === 'true';
+
+  /**
+   * `, <col> ASC` fragment appended to rescue `ORDER BY` clauses, or the empty
+   * string when {@link rescueSqlTiebreak} is off — so flag-off SQL is
+   * character-identical to the shipped statements.
+   */
+  private rescueTiebreak(column = 'id'): string {
+    return this.rescueSqlTiebreak ? `, ${column} ASC` : '';
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -453,7 +495,7 @@ export class MemoryQueryService {
                  AND m.searchable IS NOT FALSE
                  AND m.embedding_status != 'DUPLICATE'
                  AND m.is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC
+               ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC${this.rescueTiebreak('m.id')}
                LIMIT 100`,
                 poolIds,
                 searchQuery,
@@ -470,7 +512,7 @@ export class MemoryQueryService {
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
+               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC${this.rescueTiebreak()}
                LIMIT 100`,
                   resolvedUserIds,
                   searchQuery,
@@ -485,7 +527,7 @@ export class MemoryQueryService {
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
+               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC${this.rescueTiebreak()}
                LIMIT 100`,
                   searchQuery,
                 );
@@ -567,7 +609,7 @@ export class MemoryQueryService {
                      AND m.searchable IS NOT FALSE
                      AND m.embedding_status != 'DUPLICATE'
                      AND m.is_duplicate_of IS NULL
-                   ORDER BY m.importance_score DESC, m.created_at DESC
+                   ORDER BY m.importance_score DESC, m.created_at DESC${this.rescueTiebreak('m.id')}
                    LIMIT 20`,
                   poolIds,
                   ...ilikeParams,
@@ -583,7 +625,7 @@ export class MemoryQueryService {
                      AND searchable IS NOT FALSE
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
-                   ORDER BY importance_score DESC, created_at DESC
+                   ORDER BY importance_score DESC, created_at DESC${this.rescueTiebreak()}
                    LIMIT 20`,
                     resolvedUserIds,
                     ...ilikeParams,
@@ -597,7 +639,7 @@ export class MemoryQueryService {
                      AND searchable IS NOT FALSE
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
-                   ORDER BY importance_score DESC, created_at DESC
+                   ORDER BY importance_score DESC, created_at DESC${this.rescueTiebreak()}
                    LIMIT 20`,
                     ...ilikeParams,
                   );
@@ -610,16 +652,37 @@ export class MemoryQueryService {
             // above the cosine ceiling of 1.0, never reaching the FTS band —
             // and are strictly decreasing with rank at equal coverage.
             let ilikeAdded = 0;
+            let ilikeBandRank = 0;
             for (
               let ilikeRank = 0;
               ilikeRank < ilikeResults.length;
               ilikeRank++
             ) {
               const row = ilikeResults[ilikeRank];
+              // Defect A, part 1 (flag-gated): a row containing exactly one of
+              // the extracted terms is a coincidence, not a lexical agreement,
+              // and must not be lifted above the cosine ceiling. Skipping it
+              // here leaves any cosine score it already has untouched and keeps
+              // it out of `keywordRescueIds`, so it also loses the sticky
+              // re-add protection it never earned.
+              if (
+                this.lexicalCoverageFloor &&
+                !meetsLexicalCoverageFloor(
+                  Number(row.match_count),
+                  words.length,
+                )
+              ) {
+                continue;
+              }
+              // Position within the *promoted* set, so skipping a row does not
+              // leave a hole in the RRF positional term. Identical to
+              // `ilikeRank` whenever the floor is off, because nothing is
+              // skipped then.
+              const bandRank = ilikeBandRank++;
               const bandedScore = ilikeRescueScore(
                 Number(row.match_count),
                 words.length,
-                ilikeRank,
+                bandRank,
               );
               ftsResultIds.add(row.id);
               keywordRescueIds.add(row.id);
@@ -674,7 +737,11 @@ export class MemoryQueryService {
                 ...sessionIdFilter,
                 ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
               },
-              orderBy: [{ importanceScore: 'desc' }, { createdAt: 'desc' }],
+              orderBy: [
+                { importanceScore: 'desc' },
+                { createdAt: 'desc' },
+                ...(this.rescueSqlTiebreak ? [{ id: 'asc' } as const] : []),
+              ],
               take: 10,
               select: { id: true },
             });

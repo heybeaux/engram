@@ -122,6 +122,39 @@ export function ilikeRescueScore(
   );
 }
 
+/**
+ * Minimum number of extracted rescue terms a row must actually contain before
+ * the ILIKE path is allowed to promote it ABOVE the cosine ceiling.
+ *
+ * The ILIKE rescue SQL is `OR`-joined, so a row matching a single incidental
+ * token out of eight enters the (1.00, 1.10] band and therefore outranks a
+ * perfect semantic match. That is not a lexical agreement, it is a coincidence.
+ * The floor is structural rather than tuned: "one token is not a match, two
+ * are", degrading to "match the only term there is" for single-term queries.
+ *
+ * See docs/research/memory-formation-query-transform/06-finding-rescue-admission.md.
+ */
+export const MIN_LEXICAL_RESCUE_TERMS = 2;
+
+/**
+ * Does this ILIKE row clear the coverage floor?
+ *
+ * `matched` is the SQL-computed count of rescue terms present in the row and
+ * `total` the number of terms extracted from the query. A row below the floor
+ * is not *dropped* — it simply is not promoted into the rescue band, so it
+ * keeps whatever cosine score the vector search gave it (or none at all, if the
+ * vector search never surfaced it).
+ */
+export function meetsLexicalCoverageFloor(
+  matched: number,
+  total: number,
+): boolean {
+  const totalTerms = total > 0 ? total : 1;
+  const required = Math.min(MIN_LEXICAL_RESCUE_TERMS, totalTerms);
+  const safeMatched = Number.isFinite(matched) ? Math.floor(matched) : 0;
+  return safeMatched >= required;
+}
+
 /** Minimal shape the comparator needs. Deliberately structural, not `Memory`. */
 export interface RankableMemory {
   id?: string;
