@@ -1,0 +1,6744 @@
+{
+  "generatedAt": "2026-08-24T06:32:59.974Z",
+  "config": {
+    "finalLimit": 10,
+    "baseFlags": {
+      "RECALL_RERANK_SCALE_FIX": true,
+      "RECALL_LEXICAL_COVERAGE_FLOOR": true,
+      "RECALL_RESCUE_SQL_TIEBREAK": true
+    },
+    "diversityOff": {},
+    "diversityOn": {
+      "RECALL_CANDIDATE_POOL_DEPTH": 12,
+      "RECALL_NEAR_DUPLICATE_CLUSTER_LIMIT": 2,
+      "jaccardThreshold": 0.9
+    },
+    "snapshotIsolation": "usage restored before every query and repeat",
+    "fixtureIntegrity": {
+      "memoriesChecked": 1210,
+      "taggedMemories": 1210
+    },
+    "embeddingModel": "bge-base",
+    "embeddingDimensions": 768
+  },
+  "off": {
+    "label": "diversity-off",
+    "summary": {
+      "queryCount": 81,
+      "precisionAt5": 0.967741935483871,
+      "recallAt10": 0.9726027397260274,
+      "mrrAt10": 0.9126200274348422,
+      "falsePositiveInjectionRate": 0,
+      "queriesWithFalsePositiveInjection": 0,
+      "fullPageRate": 0.9125,
+      "minPageSize": 0,
+      "meanPageSize": 9.4375,
+      "latencyP50Ms": 23,
+      "latencyP95Ms": 31,
+      "latencyMeanMs": 21.825,
+      "_counts": {
+        "mustTop5Count": 62,
+        "top5HitCount": 60,
+        "expectedCount": 73,
+        "relevantAt10Count": 71,
+        "forbiddenCount": 91,
+        "forbiddenHitCount": 0
+      }
+    },
+    "stabilityChangedQueries": [],
+    "queries": [
+      {
+        "queryId": "semantic_001",
+        "category": "semantic",
+        "expected": [
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_004_correction"
+        ],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "resultIds": [
+          "alice_coffee_001",
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_calm_001",
+          "alice_coffee_002",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_worry_001",
+          "alice_travel_001",
+          "alice_books_001"
+        ],
+        "latencyMs": 45,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "relevantAt10": [
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_004_correction"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.6
+      },
+      {
+        "queryId": "semantic_002",
+        "category": "semantic",
+        "expected": [
+          "alice_coffee_002"
+        ],
+        "forbidden": [
+          "bob_routine_001",
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "alice_coffee_002",
+          "alice_calm_001",
+          "alice_emotion_change_001",
+          "alice_cooking_001",
+          "alice_joy_001",
+          "alice_health_002",
+          "alice_coffee_001",
+          "alice_insight_001",
+          "alice_coffee_004_correction",
+          "alice_stress_001"
+        ],
+        "latencyMs": 31,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_002"
+        ],
+        "relevantAt10": [
+          "alice_coffee_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_003",
+        "category": "semantic",
+        "expected": [
+          "alice_work_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_work_001",
+          "alice_new_preference_001",
+          "alice_old_preference_001",
+          "alice_identity_project_001",
+          "alice_coffee_001",
+          "alice_yesterday_work_001",
+          "alice_frustration_001",
+          "alice_last_week_work_001",
+          "alice_work_002",
+          "alice_oldest_memory_001"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_work_001"
+        ],
+        "relevantAt10": [
+          "alice_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_004",
+        "category": "semantic",
+        "expected": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "forbidden": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "resultIds": [
+          "bob_coffee_001",
+          "bob_coffee_002",
+          "bob_routine_001",
+          "bob_travel_001",
+          "bob_health_001",
+          "bob_family_001",
+          "bob_books_001",
+          "bob_family_002",
+          "bob_work_002",
+          "bob_work_001"
+        ],
+        "latencyMs": 24,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "relevantAt10": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.75
+      },
+      {
+        "queryId": "semantic_005",
+        "category": "semantic",
+        "expected": [
+          "alice_books_001"
+        ],
+        "forbidden": [
+          "bob_books_001"
+        ],
+        "resultIds": [
+          "alice_books_001",
+          "alice_health_002",
+          "alice_stress_001",
+          "alice_work_002",
+          "alice_calm_001",
+          "alice_coffee_001",
+          "alice_coffee_004_correction",
+          "alice_travel_001",
+          "alice_joy_001",
+          "alice_emotion_change_001"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_books_001"
+        ],
+        "relevantAt10": [
+          "alice_books_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_006",
+        "category": "semantic",
+        "expected": [
+          "alice_cooking_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_cooking_001",
+          "alice_travel_001",
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_family_001",
+          "alice_emotion_change_001",
+          "alice_joy_001",
+          "alice_old_preference_001",
+          "alice_work_001",
+          "alice_oldest_memory_001"
+        ],
+        "latencyMs": 26,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_cooking_001"
+        ],
+        "relevantAt10": [
+          "alice_cooking_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_007",
+        "category": "semantic",
+        "expected": [
+          "alice_finance_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_finance_001",
+          "alice_worry_001",
+          "alice_health_002",
+          "alice_work_002",
+          "alice_calm_001",
+          "alice_pride_001",
+          "alice_insight_001",
+          "alice_joy_001",
+          "alice_cooking_001",
+          "alice_coffee_002"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_finance_001"
+        ],
+        "relevantAt10": [
+          "alice_finance_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_008",
+        "category": "semantic",
+        "expected": [
+          "bob_work_001"
+        ],
+        "forbidden": [
+          "alice_work_001"
+        ],
+        "resultIds": [
+          "bob_work_001",
+          "bob_coffee_002",
+          "bob_travel_001",
+          "bob_family_001",
+          "bob_health_001",
+          "bob_family_002",
+          "bob_books_001",
+          "bob_routine_001",
+          "bob_work_002",
+          "bob_coffee_001"
+        ],
+        "latencyMs": 27,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_work_001"
+        ],
+        "relevantAt10": [
+          "bob_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_009",
+        "category": "semantic",
+        "expected": [
+          "alice_travel_002"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_travel_002",
+          "alice_travel_001",
+          "alice_work_003",
+          "alice_emotion_change_001",
+          "alice_cooking_001",
+          "alice_calm_001",
+          "alice_coffee_004_correction",
+          "alice_family_002",
+          "alice_coffee_001",
+          "alice_work_002"
+        ],
+        "latencyMs": 24,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_travel_002"
+        ],
+        "relevantAt10": [
+          "alice_travel_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_010",
+        "category": "semantic",
+        "expected": [
+          "alice_work_003"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_work_003",
+          "alice_identity_project_001",
+          "alice_insight_001",
+          "alice_work_001",
+          "alice_work_002",
+          "alice_new_preference_001",
+          "alice_anxiety_001",
+          "alice_yesterday_work_001",
+          "alice_pride_001",
+          "alice_last_week_work_001"
+        ],
+        "latencyMs": 28,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_work_003"
+        ],
+        "relevantAt10": [
+          "alice_work_003"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_011",
+        "category": "semantic",
+        "expected": [
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old"
+        ],
+        "forbidden": [
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_calm_001",
+          "alice_travel_002",
+          "alice_cooking_001",
+          "alice_worry_001",
+          "alice_emotion_change_001",
+          "alice_work_001"
+        ],
+        "latencyMs": 28,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_004_correction"
+        ],
+        "relevantAt10": [
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_001",
+        "category": "emotional",
+        "expected": [
+          "alice_joy_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_pride_001",
+          "alice_mixed_emotion_001",
+          "alice_work_001",
+          "alice_family_001",
+          "alice_travel_001",
+          "alice_family_003",
+          "alice_books_001",
+          "alice_finance_001"
+        ],
+        "latencyMs": 26,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_joy_001"
+        ],
+        "relevantAt10": [
+          "alice_joy_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_002",
+        "category": "emotional",
+        "expected": [
+          "alice_grief_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_stress_001",
+          "alice_grief_001",
+          "alice_anxiety_001",
+          "alice_emotion_change_001",
+          "alice_worry_001",
+          "alice_frustration_001",
+          "alice_family_003",
+          "alice_work_002",
+          "alice_coffee_004_correction",
+          "alice_health_002"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_grief_001"
+        ],
+        "relevantAt10": [
+          "alice_grief_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "emotional_003",
+        "category": "emotional",
+        "expected": [
+          "alice_stress_001",
+          "alice_work_002"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_stress_001",
+          "alice_anxiety_001",
+          "alice_grief_001",
+          "alice_emotion_change_001",
+          "alice_worry_001",
+          "alice_frustration_001",
+          "alice_family_003",
+          "alice_health_002",
+          "alice_work_002",
+          "alice_coffee_001"
+        ],
+        "latencyMs": 24,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_stress_001"
+        ],
+        "relevantAt10": [
+          "alice_stress_001",
+          "alice_work_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5555555555555556
+      },
+      {
+        "queryId": "emotional_004",
+        "category": "emotional",
+        "expected": [
+          "alice_worry_001",
+          "alice_anxiety_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_worry_001",
+          "alice_anxiety_001",
+          "alice_stress_001",
+          "alice_grief_001",
+          "alice_emotion_change_001",
+          "alice_frustration_001",
+          "alice_work_002",
+          "alice_family_003",
+          "alice_health_002",
+          "alice_high_importance_001"
+        ],
+        "latencyMs": 24,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_worry_001"
+        ],
+        "relevantAt10": [
+          "alice_worry_001",
+          "alice_anxiety_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_005",
+        "category": "emotional",
+        "expected": [
+          "alice_frustration_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_frustration_001",
+          "alice_stress_001",
+          "alice_anxiety_001",
+          "alice_emotion_change_001",
+          "alice_worry_001",
+          "alice_grief_001",
+          "alice_work_002",
+          "alice_coffee_004_correction",
+          "alice_family_003",
+          "alice_new_preference_001"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_frustration_001"
+        ],
+        "relevantAt10": [
+          "alice_frustration_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_006",
+        "category": "emotional",
+        "expected": [
+          "alice_pride_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_pride_001",
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_mixed_emotion_001",
+          "alice_work_001",
+          "alice_travel_001",
+          "alice_health_002",
+          "alice_books_001",
+          "alice_family_003",
+          "alice_oldest_memory_001"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_pride_001"
+        ],
+        "relevantAt10": [
+          "alice_pride_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_007",
+        "category": "emotional",
+        "expected": [
+          "alice_stress_001",
+          "alice_anxiety_001",
+          "alice_work_002"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_anxiety_001",
+          "alice_stress_001",
+          "alice_worry_001",
+          "alice_emotion_change_001",
+          "alice_grief_001",
+          "alice_frustration_001",
+          "alice_work_002",
+          "alice_coffee_002",
+          "alice_family_003",
+          "alice_coffee_004_correction"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_stress_001"
+        ],
+        "relevantAt10": [
+          "alice_stress_001",
+          "alice_anxiety_001",
+          "alice_work_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "emotional_008",
+        "category": "emotional",
+        "expected": [
+          "alice_mixed_emotion_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_mixed_emotion_001",
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_pride_001",
+          "alice_finance_001",
+          "alice_work_001",
+          "alice_work_002",
+          "alice_family_003",
+          "alice_coffee_002",
+          "alice_health_002"
+        ],
+        "latencyMs": 25,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_mixed_emotion_001"
+        ],
+        "relevantAt10": [
+          "alice_mixed_emotion_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_009",
+        "category": "emotional",
+        "expected": [
+          "alice_emotion_change_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_emotion_change_001",
+          "alice_pride_001",
+          "alice_calm_001",
+          "alice_health_002",
+          "alice_coffee_001",
+          "alice_insight_001",
+          "alice_worry_001",
+          "alice_work_002",
+          "alice_anxiety_001",
+          "alice_family_003"
+        ],
+        "latencyMs": 25,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_emotion_change_001"
+        ],
+        "relevantAt10": [
+          "alice_emotion_change_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_010",
+        "category": "emotional",
+        "expected": [
+          "alice_calm_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_calm_001",
+          "alice_anxiety_001",
+          "alice_joy_001",
+          "alice_health_002",
+          "alice_stress_001",
+          "alice_family_003",
+          "alice_travel_001",
+          "alice_emotion_change_001",
+          "alice_grief_001",
+          "alice_mixed_emotion_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_calm_001"
+        ],
+        "relevantAt10": [
+          "alice_calm_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_001",
+        "category": "temporal",
+        "expected": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "forbidden": [
+          "dave_2years_001",
+          "dave_2years_002"
+        ],
+        "resultIds": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "latencyMs": 26,
+        "pageSize": 2,
+        "top5Hits": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "relevantAt10": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.75
+      },
+      {
+        "queryId": "temporal_002",
+        "category": "temporal",
+        "expected": [
+          "dave_today_001"
+        ],
+        "forbidden": [
+          "dave_6months_001",
+          "dave_2years_001"
+        ],
+        "resultIds": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "latencyMs": 18,
+        "pageSize": 2,
+        "top5Hits": [
+          "dave_today_001"
+        ],
+        "relevantAt10": [
+          "dave_today_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_003",
+        "category": "temporal",
+        "expected": [
+          "alice_family_001",
+          "alice_family_003"
+        ],
+        "forbidden": [
+          "bob_family_001"
+        ],
+        "resultIds": [
+          "alice_family_001",
+          "alice_stress_001",
+          "alice_family_003",
+          "alice_work_002",
+          "alice_frustration_001",
+          "alice_yesterday_work_001",
+          "alice_recent_convo_001"
+        ],
+        "latencyMs": 14,
+        "pageSize": 7,
+        "top5Hits": [
+          "alice_family_001"
+        ],
+        "relevantAt10": [
+          "alice_family_001",
+          "alice_family_003"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_004",
+        "category": "temporal",
+        "expected": [
+          "alice_last_week_work_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_health_002",
+          "alice_joy_001",
+          "alice_work_002",
+          "alice_stress_001",
+          "alice_yesterday_work_001",
+          "alice_last_week_work_001",
+          "alice_recent_convo_001",
+          "alice_calm_001",
+          "alice_worry_001",
+          "alice_family_003"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [
+          "alice_last_week_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.16666666666666666
+      },
+      {
+        "queryId": "temporal_005",
+        "category": "temporal",
+        "expected": [
+          "alice_oldest_memory_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_grief_001",
+          "alice_travel_001",
+          "alice_stress_001",
+          "alice_family_002",
+          "alice_identity_project_001",
+          "alice_pride_001",
+          "alice_oldest_memory_001",
+          "alice_joy_001",
+          "alice_family_001",
+          "alice_cooking_001"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [
+          "alice_oldest_memory_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_006",
+        "category": "temporal",
+        "expected": [
+          "alice_recent_convo_001",
+          "alice_yesterday_work_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_work_002",
+          "alice_recent_convo_001",
+          "alice_stress_001",
+          "alice_family_003",
+          "alice_frustration_001",
+          "alice_yesterday_work_001",
+          "alice_family_001"
+        ],
+        "latencyMs": 21,
+        "pageSize": 7,
+        "top5Hits": [
+          "alice_recent_convo_001"
+        ],
+        "relevantAt10": [
+          "alice_recent_convo_001",
+          "alice_yesterday_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "temporal_007",
+        "category": "temporal",
+        "expected": [
+          "alice_yesterday_work_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_yesterday_work_001",
+          "alice_stress_001",
+          "alice_work_002",
+          "alice_recent_convo_001",
+          "alice_frustration_001",
+          "alice_family_003",
+          "alice_family_001"
+        ],
+        "latencyMs": 27,
+        "pageSize": 7,
+        "top5Hits": [
+          "alice_yesterday_work_001"
+        ],
+        "relevantAt10": [
+          "alice_yesterday_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_008",
+        "category": "temporal",
+        "expected": [
+          "alice_new_preference_001",
+          "alice_old_preference_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_new_preference_001",
+          "alice_old_preference_001",
+          "alice_oldest_memory_001",
+          "alice_work_001",
+          "alice_insight_001",
+          "alice_last_week_work_001",
+          "alice_frustration_001",
+          "alice_yesterday_work_001",
+          "alice_identity_project_001",
+          "alice_work_002"
+        ],
+        "latencyMs": 31,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_new_preference_001"
+        ],
+        "relevantAt10": [
+          "alice_new_preference_001",
+          "alice_old_preference_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_009",
+        "category": "temporal",
+        "expected": [
+          "dave_6months_050"
+        ],
+        "forbidden": [
+          "dave_today_001"
+        ],
+        "resultIds": [],
+        "latencyMs": 27,
+        "pageSize": 0,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_010",
+        "category": "temporal",
+        "expected": [
+          "dave_2years_150"
+        ],
+        "forbidden": [
+          "dave_today_001"
+        ],
+        "resultIds": [],
+        "latencyMs": 27,
+        "pageSize": 0,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_011",
+        "category": "temporal",
+        "expected": [
+          "alice_oldest_memory_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_oldest_memory_001",
+          "alice_new_preference_001",
+          "alice_old_preference_001",
+          "alice_pride_001",
+          "alice_insight_001",
+          "alice_identity_project_001",
+          "alice_health_002",
+          "alice_work_001",
+          "alice_stress_001",
+          "alice_work_002"
+        ],
+        "latencyMs": 21,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_oldest_memory_001"
+        ],
+        "relevantAt10": [
+          "alice_oldest_memory_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_001",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_coffee_001"
+        ],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002",
+          "eve_009"
+        ],
+        "resultIds": [
+          "alice_calm_001",
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_003_old",
+          "alice_coffee_004_correction",
+          "alice_joy_001",
+          "alice_emotion_change_001",
+          "alice_cooking_001",
+          "alice_low_importance_001",
+          "alice_travel_001"
+        ],
+        "latencyMs": 29,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_001"
+        ],
+        "relevantAt10": [
+          "alice_coffee_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "rls_002",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_coffee_001"
+        ],
+        "forbidden": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "resultIds": [
+          "bob_coffee_001",
+          "bob_routine_001",
+          "bob_coffee_002",
+          "bob_travel_001",
+          "bob_health_001",
+          "bob_family_001",
+          "bob_family_002",
+          "bob_work_002",
+          "bob_work_001",
+          "bob_books_001"
+        ],
+        "latencyMs": 27,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_coffee_001"
+        ],
+        "relevantAt10": [
+          "bob_coffee_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_003",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_family_001"
+        ],
+        "forbidden": [
+          "bob_family_001",
+          "bob_family_002"
+        ],
+        "resultIds": [
+          "alice_family_001",
+          "alice_cooking_001",
+          "alice_joy_001",
+          "alice_family_003",
+          "alice_finance_001",
+          "alice_travel_001",
+          "alice_family_002",
+          "alice_health_002",
+          "alice_worry_001",
+          "alice_grief_001"
+        ],
+        "latencyMs": 31,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_family_001"
+        ],
+        "relevantAt10": [
+          "alice_family_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_004",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_family_001"
+        ],
+        "forbidden": [
+          "alice_family_001",
+          "alice_family_002",
+          "alice_family_003"
+        ],
+        "resultIds": [
+          "bob_family_001",
+          "bob_family_002",
+          "bob_work_002",
+          "bob_coffee_002",
+          "bob_travel_001",
+          "bob_health_001",
+          "bob_routine_001",
+          "bob_work_001",
+          "bob_coffee_001",
+          "bob_books_001"
+        ],
+        "latencyMs": 20,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_family_001"
+        ],
+        "relevantAt10": [
+          "bob_family_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_005",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_travel_001"
+        ],
+        "forbidden": [
+          "bob_travel_001"
+        ],
+        "resultIds": [
+          "alice_travel_001",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_coffee_004_correction",
+          "alice_family_002",
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_coffee_003_old",
+          "alice_family_001",
+          "alice_coffee_001"
+        ],
+        "latencyMs": 31,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_travel_001"
+        ],
+        "relevantAt10": [
+          "alice_travel_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_006",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_travel_001"
+        ],
+        "forbidden": [
+          "alice_travel_001"
+        ],
+        "resultIds": [
+          "bob_travel_001",
+          "bob_coffee_002",
+          "bob_health_001",
+          "bob_coffee_001",
+          "bob_work_002",
+          "bob_family_002",
+          "bob_books_001",
+          "bob_family_001",
+          "bob_work_001",
+          "bob_routine_001"
+        ],
+        "latencyMs": 20,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_travel_001"
+        ],
+        "relevantAt10": [
+          "bob_travel_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_007",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_work_001"
+        ],
+        "forbidden": [
+          "bob_work_001",
+          "bob_work_002"
+        ],
+        "resultIds": [
+          "alice_work_001",
+          "alice_insight_001",
+          "alice_new_preference_001",
+          "alice_oldest_memory_001",
+          "alice_pride_001",
+          "alice_work_002",
+          "alice_old_preference_001",
+          "alice_identity_project_001",
+          "alice_anxiety_001",
+          "alice_yesterday_work_001"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_work_001"
+        ],
+        "relevantAt10": [
+          "alice_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_008",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_health_001"
+        ],
+        "forbidden": [
+          "bob_health_001"
+        ],
+        "resultIds": [
+          "alice_health_001",
+          "alice_calm_001",
+          "alice_joy_001",
+          "alice_new_preference_001",
+          "alice_health_002",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_anxiety_001",
+          "alice_travel_001",
+          "alice_work_002"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_health_001"
+        ],
+        "relevantAt10": [
+          "alice_health_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_009",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_health_001"
+        ],
+        "forbidden": [
+          "alice_health_001",
+          "alice_health_002"
+        ],
+        "resultIds": [
+          "bob_health_001",
+          "bob_family_001",
+          "bob_travel_001",
+          "bob_family_002",
+          "bob_routine_001",
+          "bob_books_001",
+          "bob_coffee_002",
+          "bob_work_002",
+          "bob_coffee_001",
+          "bob_work_001"
+        ],
+        "latencyMs": 28,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_health_001"
+        ],
+        "relevantAt10": [
+          "bob_health_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_010",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_routine_001"
+        ],
+        "forbidden": [
+          "alice_coffee_002"
+        ],
+        "resultIds": [
+          "bob_routine_001",
+          "bob_family_001",
+          "bob_coffee_002",
+          "bob_coffee_001",
+          "bob_health_001",
+          "bob_work_002",
+          "bob_family_002",
+          "bob_travel_001",
+          "bob_work_001",
+          "bob_books_001"
+        ],
+        "latencyMs": 19,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_routine_001"
+        ],
+        "relevantAt10": [
+          "bob_routine_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_001",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002",
+          "bob_routine_001"
+        ],
+        "resultIds": [
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_calm_001",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_travel_001",
+          "alice_emotion_change_001",
+          "alice_work_001"
+        ],
+        "latencyMs": 53,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_002",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002",
+          "bob_family_001"
+        ],
+        "resultIds": [
+          "alice_high_importance_001",
+          "alice_health_001",
+          "alice_pride_001",
+          "alice_identity_project_001",
+          "alice_family_001",
+          "alice_work_003",
+          "alice_finance_001",
+          "alice_grief_001",
+          "alice_address_001",
+          "alice_phone_001"
+        ],
+        "latencyMs": 24,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_003",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "carol_unicode_001",
+          "carol_short_001"
+        ],
+        "resultIds": [
+          "alice_family_001",
+          "alice_family_002",
+          "alice_mixed_emotion_001",
+          "alice_worry_001",
+          "alice_coffee_004_correction",
+          "alice_recent_convo_001",
+          "alice_work_002",
+          "alice_identity_project_001",
+          "alice_family_003",
+          "alice_travel_002"
+        ],
+        "latencyMs": 27,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_004",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "bob_family_001",
+          "bob_family_002"
+        ],
+        "resultIds": [
+          "alice_mixed_emotion_001",
+          "alice_family_003",
+          "alice_grief_001",
+          "alice_cooking_001",
+          "alice_joy_001",
+          "alice_pride_001",
+          "alice_finance_001",
+          "alice_travel_001",
+          "alice_family_001",
+          "alice_coffee_004_correction"
+        ],
+        "latencyMs": 22,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_005",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "eve_009",
+          "eve_003"
+        ],
+        "resultIds": [
+          "bob_travel_001",
+          "bob_coffee_002",
+          "bob_family_002",
+          "bob_health_001",
+          "bob_family_001",
+          "bob_coffee_001",
+          "bob_books_001",
+          "bob_routine_001",
+          "bob_work_002",
+          "bob_work_001"
+        ],
+        "latencyMs": 28,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_001",
+        "category": "edge_case",
+        "expected": [
+          "eve_003"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "eve_003",
+          "eve_005",
+          "eve_007",
+          "eve_009",
+          "eve_006",
+          "eve_008",
+          "eve_004",
+          "eve_010",
+          "eve_002",
+          "eve_001"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_003"
+        ],
+        "relevantAt10": [
+          "eve_003"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_002",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_family_001",
+          "bob_family_001",
+          "carol_short_001"
+        ],
+        "resultIds": [
+          "eve_003",
+          "eve_005",
+          "eve_007",
+          "eve_006",
+          "eve_004",
+          "eve_002",
+          "eve_009",
+          "eve_010",
+          "eve_008",
+          "eve_001"
+        ],
+        "latencyMs": 19,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_003",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "carol_xss_001",
+          "carol_xss_003",
+          "carol_xss_004",
+          "carol_xss_002",
+          "carol_short_001",
+          "carol_sqli_002",
+          "carol_null_003",
+          "carol_unicode_002",
+          "carol_unicode_004",
+          "carol_special_003"
+        ],
+        "latencyMs": 30,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_004",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001"
+        ],
+        "resultIds": [
+          "carol_sqli_001",
+          "carol_long_001",
+          "carol_unicode_002",
+          "carol_unicode_001",
+          "carol_short_003",
+          "carol_unicode_005",
+          "carol_null_003",
+          "carol_short_001",
+          "carol_short_002",
+          "carol_unicode_004"
+        ],
+        "latencyMs": 20,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_005",
+        "category": "edge_case",
+        "expected": [
+          "carol_unicode_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "carol_unicode_001",
+          "carol_unicode_004",
+          "carol_short_001",
+          "carol_short_003",
+          "carol_unicode_002",
+          "carol_unicode_003",
+          "carol_null_003",
+          "carol_short_002",
+          "carol_xss_002",
+          "carol_unicode_005"
+        ],
+        "latencyMs": 31,
+        "pageSize": 10,
+        "top5Hits": [
+          "carol_unicode_001"
+        ],
+        "relevantAt10": [
+          "carol_unicode_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_006",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [],
+        "resultIds": [],
+        "latencyMs": 0,
+        "pageSize": 0,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_007",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "alice_pride_001",
+          "alice_identity_project_001",
+          "alice_new_preference_001",
+          "alice_work_001",
+          "alice_books_001",
+          "alice_old_preference_001",
+          "alice_stress_001",
+          "alice_travel_001",
+          "alice_work_003",
+          "alice_work_002"
+        ],
+        "latencyMs": 28,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_008",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "carol_unicode_002",
+          "carol_null_003",
+          "carol_short_001",
+          "carol_unicode_003",
+          "carol_short_003",
+          "carol_unicode_004",
+          "carol_xss_002",
+          "carol_unicode_001",
+          "carol_xss_001",
+          "carol_short_002"
+        ],
+        "latencyMs": 20,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_009",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "carol_sqli_003",
+          "carol_sqli_002",
+          "carol_short_001",
+          "carol_short_003",
+          "carol_null_003",
+          "carol_xss_002",
+          "carol_xss_001",
+          "carol_special_001",
+          "carol_short_002",
+          "carol_unicode_003"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_010",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001",
+          "carol_short_001"
+        ],
+        "resultIds": [
+          "alice_identity_project_001",
+          "alice_yesterday_work_001",
+          "alice_books_001",
+          "alice_recent_convo_001",
+          "alice_work_003",
+          "alice_last_week_work_001",
+          "alice_anxiety_001",
+          "alice_new_preference_001",
+          "alice_family_002",
+          "alice_coffee_003_old"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_011",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [],
+        "resultIds": [
+          "alice_pride_001",
+          "alice_joy_001",
+          "alice_work_002",
+          "alice_family_002",
+          "alice_anxiety_001",
+          "alice_family_003",
+          "alice_worry_001",
+          "alice_finance_001",
+          "alice_calm_001",
+          "alice_new_preference_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_012",
+        "category": "edge_case",
+        "expected": [
+          "alice_coffee_001"
+        ],
+        "forbidden": [
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "alice_calm_001",
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_003_old",
+          "alice_coffee_004_correction",
+          "alice_joy_001",
+          "alice_emotion_change_001",
+          "alice_cooking_001",
+          "alice_low_importance_001",
+          "alice_travel_001"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_001"
+        ],
+        "relevantAt10": [
+          "alice_coffee_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "edge_013",
+        "category": "edge_case",
+        "expected": [
+          "alice_phone_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_phone_001",
+          "alice_address_001",
+          "alice_worry_001",
+          "alice_grief_001",
+          "alice_work_002",
+          "alice_anxiety_001",
+          "alice_family_002",
+          "alice_joy_001",
+          "alice_stress_001",
+          "alice_health_002"
+        ],
+        "latencyMs": 26,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_phone_001"
+        ],
+        "relevantAt10": [
+          "alice_phone_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_014",
+        "category": "edge_case",
+        "expected": [
+          "alice_address_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_address_001",
+          "alice_phone_001",
+          "alice_joy_001",
+          "alice_pride_001",
+          "alice_grief_001",
+          "alice_worry_001",
+          "alice_work_002",
+          "alice_identity_project_001",
+          "alice_emotion_change_001",
+          "alice_family_002"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_address_001"
+        ],
+        "relevantAt10": [
+          "alice_address_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_015",
+        "category": "edge_case",
+        "expected": [
+          "eve_004"
+        ],
+        "forbidden": [
+          "alice_work_001",
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "eve_005",
+          "eve_007",
+          "eve_003",
+          "eve_004",
+          "eve_006",
+          "eve_008",
+          "eve_002",
+          "eve_009",
+          "eve_010",
+          "eve_001"
+        ],
+        "latencyMs": 11,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_004"
+        ],
+        "relevantAt10": [
+          "eve_004"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.25
+      },
+      {
+        "queryId": "cross_001",
+        "category": "cross_feature",
+        "expected": [
+          "alice_health_001"
+        ],
+        "forbidden": [
+          "bob_health_001"
+        ],
+        "resultIds": [
+          "alice_health_001",
+          "alice_calm_001",
+          "alice_coffee_002",
+          "alice_emotion_change_001",
+          "alice_stress_001",
+          "alice_coffee_001",
+          "alice_family_003",
+          "alice_coffee_003_old",
+          "alice_cooking_001",
+          "alice_joy_001"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_health_001"
+        ],
+        "relevantAt10": [
+          "alice_health_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_002",
+        "category": "cross_feature",
+        "expected": [
+          "alice_health_002"
+        ],
+        "forbidden": [
+          "bob_routine_001"
+        ],
+        "resultIds": [
+          "alice_health_002",
+          "alice_calm_001",
+          "alice_joy_001",
+          "alice_cooking_001",
+          "alice_insight_001",
+          "alice_family_003",
+          "alice_pride_001",
+          "alice_finance_001",
+          "alice_high_importance_001",
+          "alice_travel_001"
+        ],
+        "latencyMs": 27,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_health_002"
+        ],
+        "relevantAt10": [
+          "alice_health_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_003",
+        "category": "cross_feature",
+        "expected": [
+          "alice_finance_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_finance_001",
+          "alice_worry_001",
+          "alice_mixed_emotion_001",
+          "alice_joy_001",
+          "alice_work_002",
+          "alice_calm_001",
+          "alice_health_002",
+          "alice_anxiety_001",
+          "alice_travel_001",
+          "alice_family_002"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_finance_001"
+        ],
+        "relevantAt10": [
+          "alice_finance_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_004",
+        "category": "cross_feature",
+        "expected": [
+          "alice_family_003"
+        ],
+        "forbidden": [
+          "bob_family_001"
+        ],
+        "resultIds": [
+          "alice_family_003",
+          "alice_joy_001",
+          "alice_cooking_001",
+          "alice_family_001",
+          "alice_mixed_emotion_001",
+          "alice_calm_001",
+          "alice_work_002",
+          "alice_health_002",
+          "alice_finance_001",
+          "alice_worry_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_family_003"
+        ],
+        "relevantAt10": [
+          "alice_family_003"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_005",
+        "category": "cross_feature",
+        "expected": [
+          "bob_family_001"
+        ],
+        "forbidden": [
+          "alice_family_003"
+        ],
+        "resultIds": [
+          "bob_family_001",
+          "bob_routine_001",
+          "bob_coffee_002",
+          "bob_family_002",
+          "bob_work_002",
+          "bob_travel_001",
+          "bob_coffee_001",
+          "bob_work_001",
+          "bob_health_001",
+          "bob_books_001"
+        ],
+        "latencyMs": 12,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_family_001"
+        ],
+        "relevantAt10": [
+          "bob_family_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_006",
+        "category": "cross_feature",
+        "expected": [
+          "alice_identity_project_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_oldest_memory_001",
+          "alice_identity_project_001",
+          "alice_anxiety_001",
+          "alice_pride_001",
+          "alice_last_week_work_001",
+          "alice_yesterday_work_001",
+          "alice_insight_001",
+          "alice_work_001",
+          "alice_high_importance_001",
+          "alice_work_003"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_identity_project_001"
+        ],
+        "relevantAt10": [
+          "alice_identity_project_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "cross_007",
+        "category": "cross_feature",
+        "expected": [
+          "alice_high_importance_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_high_importance_001",
+          "alice_insight_001",
+          "alice_new_preference_001",
+          "alice_anxiety_001",
+          "alice_frustration_001",
+          "alice_work_001",
+          "alice_pride_001",
+          "alice_work_003",
+          "alice_work_002",
+          "alice_old_preference_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_high_importance_001"
+        ],
+        "relevantAt10": [
+          "alice_high_importance_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_008",
+        "category": "cross_feature",
+        "expected": [
+          "alice_insight_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_insight_001",
+          "alice_emotion_change_001",
+          "alice_pride_001",
+          "alice_calm_001",
+          "alice_anxiety_001",
+          "alice_coffee_002",
+          "alice_yesterday_work_001",
+          "alice_stress_001",
+          "alice_coffee_001",
+          "alice_identity_project_001"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_insight_001"
+        ],
+        "relevantAt10": [
+          "alice_insight_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_009",
+        "category": "cross_feature",
+        "expected": [
+          "eve_005"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "eve_005",
+          "eve_007",
+          "eve_003",
+          "eve_009",
+          "eve_004",
+          "eve_001",
+          "eve_002",
+          "eve_008",
+          "eve_006",
+          "eve_010"
+        ],
+        "latencyMs": 11,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_005"
+        ],
+        "relevantAt10": [
+          "eve_005"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_010",
+        "category": "cross_feature",
+        "expected": [
+          "eve_007"
+        ],
+        "forbidden": [
+          "alice_work_001"
+        ],
+        "resultIds": [
+          "eve_007",
+          "eve_003",
+          "eve_005",
+          "eve_002",
+          "eve_001",
+          "eve_010",
+          "eve_004",
+          "eve_009",
+          "eve_006",
+          "eve_008"
+        ],
+        "latencyMs": 12,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_007"
+        ],
+        "relevantAt10": [
+          "eve_007"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_006",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "alice_family_001",
+          "alice_work_001"
+        ],
+        "resultIds": [
+          "bob_work_001",
+          "bob_family_002",
+          "bob_books_001",
+          "bob_coffee_002",
+          "bob_family_001",
+          "bob_health_001",
+          "bob_coffee_001",
+          "bob_work_002",
+          "bob_routine_001",
+          "bob_travel_001"
+        ],
+        "latencyMs": 12,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_007",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "bob_health_001"
+        ],
+        "resultIds": [
+          "alice_calm_001",
+          "alice_joy_001",
+          "alice_worry_001",
+          "alice_health_002",
+          "alice_anxiety_001",
+          "alice_stress_001",
+          "alice_coffee_002",
+          "alice_work_002",
+          "alice_health_001",
+          "alice_family_003"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_008",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "alice_health_001",
+          "alice_health_002"
+        ],
+        "resultIds": [
+          "bob_routine_001",
+          "bob_family_001",
+          "bob_health_001",
+          "bob_family_002",
+          "bob_coffee_002",
+          "bob_work_002",
+          "bob_work_001",
+          "bob_books_001",
+          "bob_coffee_001",
+          "bob_travel_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_009",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "carol_unicode_001",
+          "carol_short_001",
+          "carol_xss_001"
+        ],
+        "resultIds": [
+          "eve_005",
+          "eve_007",
+          "eve_003",
+          "eve_001",
+          "eve_002",
+          "eve_006",
+          "eve_004",
+          "eve_009",
+          "eve_008",
+          "eve_010"
+        ],
+        "latencyMs": 13,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_010",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "resultIds": [
+          "alice_joy_001",
+          "alice_pride_001",
+          "alice_work_002",
+          "alice_coffee_004_correction",
+          "alice_family_002",
+          "alice_grief_001",
+          "alice_calm_001",
+          "alice_emotion_change_001",
+          "alice_yesterday_work_001",
+          "alice_travel_001"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_016",
+        "category": "edge_case",
+        "expected": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "resultIds": [
+          "alice_coffee_001",
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_calm_001",
+          "alice_coffee_002",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_worry_001",
+          "alice_travel_001",
+          "alice_books_001"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "relevantAt10": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.6
+      },
+      {
+        "queryId": "negative_001",
+        "category": "semantic",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001",
+          "carol_short_001",
+          "eve_001"
+        ],
+        "resultIds": [
+          "alice_work_001",
+          "alice_identity_project_001",
+          "alice_new_preference_001",
+          "alice_yesterday_work_001",
+          "alice_coffee_003_old",
+          "alice_family_001",
+          "alice_coffee_004_correction",
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_books_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "negative_002",
+        "category": "semantic",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "carol_short_001"
+        ],
+        "resultIds": [
+          "bob_family_001",
+          "bob_travel_001",
+          "bob_family_002",
+          "bob_books_001",
+          "bob_coffee_001",
+          "bob_health_001",
+          "bob_work_001",
+          "bob_work_002",
+          "bob_coffee_002",
+          "bob_routine_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "minimal_001",
+        "category": "semantic",
+        "expected": [
+          "eve_009"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "eve_003",
+          "eve_005",
+          "eve_007",
+          "eve_009",
+          "eve_002",
+          "eve_001",
+          "eve_004",
+          "eve_006",
+          "eve_008",
+          "eve_010"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_009"
+        ],
+        "relevantAt10": [
+          "eve_009"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.25
+      }
+    ],
+    "repeatedResultIds": {
+      "semantic_001": [
+        "alice_coffee_001",
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_calm_001",
+        "alice_coffee_002",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_worry_001",
+        "alice_travel_001",
+        "alice_books_001"
+      ],
+      "semantic_002": [
+        "alice_coffee_002",
+        "alice_calm_001",
+        "alice_emotion_change_001",
+        "alice_cooking_001",
+        "alice_joy_001",
+        "alice_health_002",
+        "alice_coffee_001",
+        "alice_insight_001",
+        "alice_coffee_004_correction",
+        "alice_stress_001"
+      ],
+      "semantic_003": [
+        "alice_work_001",
+        "alice_new_preference_001",
+        "alice_old_preference_001",
+        "alice_identity_project_001",
+        "alice_coffee_001",
+        "alice_yesterday_work_001",
+        "alice_frustration_001",
+        "alice_last_week_work_001",
+        "alice_work_002",
+        "alice_oldest_memory_001"
+      ],
+      "semantic_004": [
+        "bob_coffee_001",
+        "bob_coffee_002",
+        "bob_routine_001",
+        "bob_travel_001",
+        "bob_health_001",
+        "bob_family_001",
+        "bob_books_001",
+        "bob_family_002",
+        "bob_work_002",
+        "bob_work_001"
+      ],
+      "semantic_005": [
+        "alice_books_001",
+        "alice_health_002",
+        "alice_stress_001",
+        "alice_work_002",
+        "alice_calm_001",
+        "alice_coffee_001",
+        "alice_coffee_004_correction",
+        "alice_travel_001",
+        "alice_joy_001",
+        "alice_emotion_change_001"
+      ],
+      "semantic_006": [
+        "alice_cooking_001",
+        "alice_travel_001",
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_family_001",
+        "alice_emotion_change_001",
+        "alice_joy_001",
+        "alice_old_preference_001",
+        "alice_work_001",
+        "alice_oldest_memory_001"
+      ],
+      "semantic_007": [
+        "alice_finance_001",
+        "alice_worry_001",
+        "alice_health_002",
+        "alice_work_002",
+        "alice_calm_001",
+        "alice_pride_001",
+        "alice_insight_001",
+        "alice_joy_001",
+        "alice_cooking_001",
+        "alice_coffee_002"
+      ],
+      "semantic_008": [
+        "bob_work_001",
+        "bob_coffee_002",
+        "bob_travel_001",
+        "bob_family_001",
+        "bob_health_001",
+        "bob_family_002",
+        "bob_books_001",
+        "bob_routine_001",
+        "bob_work_002",
+        "bob_coffee_001"
+      ],
+      "semantic_009": [
+        "alice_travel_002",
+        "alice_travel_001",
+        "alice_work_003",
+        "alice_emotion_change_001",
+        "alice_cooking_001",
+        "alice_calm_001",
+        "alice_coffee_004_correction",
+        "alice_family_002",
+        "alice_coffee_001",
+        "alice_work_002"
+      ],
+      "semantic_010": [
+        "alice_work_003",
+        "alice_identity_project_001",
+        "alice_insight_001",
+        "alice_work_001",
+        "alice_work_002",
+        "alice_new_preference_001",
+        "alice_anxiety_001",
+        "alice_yesterday_work_001",
+        "alice_pride_001",
+        "alice_last_week_work_001"
+      ],
+      "semantic_011": [
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_coffee_001",
+        "alice_coffee_002",
+        "alice_calm_001",
+        "alice_travel_002",
+        "alice_cooking_001",
+        "alice_worry_001",
+        "alice_emotion_change_001",
+        "alice_work_001"
+      ],
+      "emotional_001": [
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_pride_001",
+        "alice_mixed_emotion_001",
+        "alice_work_001",
+        "alice_family_001",
+        "alice_travel_001",
+        "alice_family_003",
+        "alice_books_001",
+        "alice_finance_001"
+      ],
+      "emotional_002": [
+        "alice_stress_001",
+        "alice_grief_001",
+        "alice_anxiety_001",
+        "alice_emotion_change_001",
+        "alice_worry_001",
+        "alice_frustration_001",
+        "alice_family_003",
+        "alice_work_002",
+        "alice_coffee_004_correction",
+        "alice_health_002"
+      ],
+      "emotional_003": [
+        "alice_stress_001",
+        "alice_anxiety_001",
+        "alice_grief_001",
+        "alice_emotion_change_001",
+        "alice_worry_001",
+        "alice_frustration_001",
+        "alice_family_003",
+        "alice_health_002",
+        "alice_work_002",
+        "alice_coffee_001"
+      ],
+      "emotional_004": [
+        "alice_worry_001",
+        "alice_anxiety_001",
+        "alice_stress_001",
+        "alice_grief_001",
+        "alice_emotion_change_001",
+        "alice_frustration_001",
+        "alice_work_002",
+        "alice_family_003",
+        "alice_health_002",
+        "alice_high_importance_001"
+      ],
+      "emotional_005": [
+        "alice_frustration_001",
+        "alice_stress_001",
+        "alice_anxiety_001",
+        "alice_emotion_change_001",
+        "alice_worry_001",
+        "alice_grief_001",
+        "alice_work_002",
+        "alice_coffee_004_correction",
+        "alice_family_003",
+        "alice_new_preference_001"
+      ],
+      "emotional_006": [
+        "alice_pride_001",
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_mixed_emotion_001",
+        "alice_work_001",
+        "alice_travel_001",
+        "alice_health_002",
+        "alice_books_001",
+        "alice_family_003",
+        "alice_oldest_memory_001"
+      ],
+      "emotional_007": [
+        "alice_anxiety_001",
+        "alice_stress_001",
+        "alice_worry_001",
+        "alice_emotion_change_001",
+        "alice_grief_001",
+        "alice_frustration_001",
+        "alice_work_002",
+        "alice_coffee_002",
+        "alice_family_003",
+        "alice_coffee_004_correction"
+      ],
+      "emotional_008": [
+        "alice_mixed_emotion_001",
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_pride_001",
+        "alice_finance_001",
+        "alice_work_001",
+        "alice_work_002",
+        "alice_family_003",
+        "alice_coffee_002",
+        "alice_health_002"
+      ],
+      "emotional_009": [
+        "alice_emotion_change_001",
+        "alice_pride_001",
+        "alice_calm_001",
+        "alice_health_002",
+        "alice_coffee_001",
+        "alice_insight_001",
+        "alice_worry_001",
+        "alice_work_002",
+        "alice_anxiety_001",
+        "alice_family_003"
+      ],
+      "emotional_010": [
+        "alice_calm_001",
+        "alice_anxiety_001",
+        "alice_joy_001",
+        "alice_health_002",
+        "alice_stress_001",
+        "alice_family_003",
+        "alice_travel_001",
+        "alice_emotion_change_001",
+        "alice_grief_001",
+        "alice_mixed_emotion_001"
+      ],
+      "temporal_001": [
+        "dave_today_001",
+        "dave_today_002"
+      ],
+      "temporal_002": [
+        "dave_today_001",
+        "dave_today_002"
+      ],
+      "temporal_003": [
+        "alice_family_001",
+        "alice_stress_001",
+        "alice_family_003",
+        "alice_work_002",
+        "alice_frustration_001",
+        "alice_yesterday_work_001",
+        "alice_recent_convo_001"
+      ],
+      "temporal_004": [
+        "alice_health_002",
+        "alice_joy_001",
+        "alice_work_002",
+        "alice_stress_001",
+        "alice_yesterday_work_001",
+        "alice_last_week_work_001",
+        "alice_recent_convo_001",
+        "alice_calm_001",
+        "alice_worry_001",
+        "alice_family_003"
+      ],
+      "temporal_005": [
+        "alice_grief_001",
+        "alice_travel_001",
+        "alice_stress_001",
+        "alice_family_002",
+        "alice_identity_project_001",
+        "alice_pride_001",
+        "alice_oldest_memory_001",
+        "alice_joy_001",
+        "alice_family_001",
+        "alice_cooking_001"
+      ],
+      "temporal_006": [
+        "alice_work_002",
+        "alice_recent_convo_001",
+        "alice_stress_001",
+        "alice_family_003",
+        "alice_frustration_001",
+        "alice_yesterday_work_001",
+        "alice_family_001"
+      ],
+      "temporal_007": [
+        "alice_yesterday_work_001",
+        "alice_stress_001",
+        "alice_work_002",
+        "alice_recent_convo_001",
+        "alice_frustration_001",
+        "alice_family_003",
+        "alice_family_001"
+      ],
+      "temporal_008": [
+        "alice_new_preference_001",
+        "alice_old_preference_001",
+        "alice_oldest_memory_001",
+        "alice_work_001",
+        "alice_insight_001",
+        "alice_last_week_work_001",
+        "alice_frustration_001",
+        "alice_yesterday_work_001",
+        "alice_identity_project_001",
+        "alice_work_002"
+      ],
+      "temporal_009": [],
+      "temporal_010": [],
+      "temporal_011": [
+        "alice_oldest_memory_001",
+        "alice_new_preference_001",
+        "alice_old_preference_001",
+        "alice_pride_001",
+        "alice_insight_001",
+        "alice_identity_project_001",
+        "alice_health_002",
+        "alice_work_001",
+        "alice_stress_001",
+        "alice_work_002"
+      ],
+      "rls_001": [
+        "alice_calm_001",
+        "alice_coffee_001",
+        "alice_coffee_002",
+        "alice_coffee_003_old",
+        "alice_coffee_004_correction",
+        "alice_joy_001",
+        "alice_emotion_change_001",
+        "alice_cooking_001",
+        "alice_low_importance_001",
+        "alice_travel_001"
+      ],
+      "rls_002": [
+        "bob_coffee_001",
+        "bob_routine_001",
+        "bob_coffee_002",
+        "bob_travel_001",
+        "bob_health_001",
+        "bob_family_001",
+        "bob_family_002",
+        "bob_work_002",
+        "bob_work_001",
+        "bob_books_001"
+      ],
+      "rls_003": [
+        "alice_family_001",
+        "alice_cooking_001",
+        "alice_joy_001",
+        "alice_family_003",
+        "alice_finance_001",
+        "alice_travel_001",
+        "alice_family_002",
+        "alice_health_002",
+        "alice_worry_001",
+        "alice_grief_001"
+      ],
+      "rls_004": [
+        "bob_family_001",
+        "bob_family_002",
+        "bob_work_002",
+        "bob_coffee_002",
+        "bob_travel_001",
+        "bob_health_001",
+        "bob_routine_001",
+        "bob_work_001",
+        "bob_coffee_001",
+        "bob_books_001"
+      ],
+      "rls_005": [
+        "alice_travel_001",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_coffee_004_correction",
+        "alice_family_002",
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_coffee_003_old",
+        "alice_family_001",
+        "alice_coffee_001"
+      ],
+      "rls_006": [
+        "bob_travel_001",
+        "bob_coffee_002",
+        "bob_health_001",
+        "bob_coffee_001",
+        "bob_work_002",
+        "bob_family_002",
+        "bob_books_001",
+        "bob_family_001",
+        "bob_work_001",
+        "bob_routine_001"
+      ],
+      "rls_007": [
+        "alice_work_001",
+        "alice_insight_001",
+        "alice_new_preference_001",
+        "alice_oldest_memory_001",
+        "alice_pride_001",
+        "alice_work_002",
+        "alice_old_preference_001",
+        "alice_identity_project_001",
+        "alice_anxiety_001",
+        "alice_yesterday_work_001"
+      ],
+      "rls_008": [
+        "alice_health_001",
+        "alice_calm_001",
+        "alice_joy_001",
+        "alice_new_preference_001",
+        "alice_health_002",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_anxiety_001",
+        "alice_travel_001",
+        "alice_work_002"
+      ],
+      "rls_009": [
+        "bob_health_001",
+        "bob_family_001",
+        "bob_travel_001",
+        "bob_family_002",
+        "bob_routine_001",
+        "bob_books_001",
+        "bob_coffee_002",
+        "bob_work_002",
+        "bob_coffee_001",
+        "bob_work_001"
+      ],
+      "rls_010": [
+        "bob_routine_001",
+        "bob_family_001",
+        "bob_coffee_002",
+        "bob_coffee_001",
+        "bob_health_001",
+        "bob_work_002",
+        "bob_family_002",
+        "bob_travel_001",
+        "bob_work_001",
+        "bob_books_001"
+      ],
+      "adversarial_001": [
+        "alice_coffee_001",
+        "alice_coffee_002",
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_calm_001",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_travel_001",
+        "alice_emotion_change_001",
+        "alice_work_001"
+      ],
+      "adversarial_002": [
+        "alice_high_importance_001",
+        "alice_health_001",
+        "alice_pride_001",
+        "alice_identity_project_001",
+        "alice_family_001",
+        "alice_work_003",
+        "alice_finance_001",
+        "alice_grief_001",
+        "alice_address_001",
+        "alice_phone_001"
+      ],
+      "adversarial_003": [
+        "alice_family_001",
+        "alice_family_002",
+        "alice_mixed_emotion_001",
+        "alice_worry_001",
+        "alice_coffee_004_correction",
+        "alice_recent_convo_001",
+        "alice_work_002",
+        "alice_identity_project_001",
+        "alice_family_003",
+        "alice_travel_002"
+      ],
+      "adversarial_004": [
+        "alice_mixed_emotion_001",
+        "alice_family_003",
+        "alice_grief_001",
+        "alice_cooking_001",
+        "alice_joy_001",
+        "alice_pride_001",
+        "alice_finance_001",
+        "alice_travel_001",
+        "alice_family_001",
+        "alice_coffee_004_correction"
+      ],
+      "adversarial_005": [
+        "bob_travel_001",
+        "bob_coffee_002",
+        "bob_family_002",
+        "bob_health_001",
+        "bob_family_001",
+        "bob_coffee_001",
+        "bob_books_001",
+        "bob_routine_001",
+        "bob_work_002",
+        "bob_work_001"
+      ],
+      "edge_001": [
+        "eve_003",
+        "eve_005",
+        "eve_007",
+        "eve_009",
+        "eve_006",
+        "eve_008",
+        "eve_004",
+        "eve_010",
+        "eve_002",
+        "eve_001"
+      ],
+      "edge_002": [
+        "eve_003",
+        "eve_005",
+        "eve_007",
+        "eve_006",
+        "eve_004",
+        "eve_002",
+        "eve_009",
+        "eve_010",
+        "eve_008",
+        "eve_001"
+      ],
+      "edge_003": [
+        "carol_xss_001",
+        "carol_xss_003",
+        "carol_xss_004",
+        "carol_xss_002",
+        "carol_short_001",
+        "carol_sqli_002",
+        "carol_null_003",
+        "carol_unicode_002",
+        "carol_unicode_004",
+        "carol_special_003"
+      ],
+      "edge_004": [
+        "carol_sqli_001",
+        "carol_long_001",
+        "carol_unicode_002",
+        "carol_unicode_001",
+        "carol_short_003",
+        "carol_unicode_005",
+        "carol_null_003",
+        "carol_short_001",
+        "carol_short_002",
+        "carol_unicode_004"
+      ],
+      "edge_005": [
+        "carol_unicode_001",
+        "carol_unicode_004",
+        "carol_short_001",
+        "carol_short_003",
+        "carol_unicode_002",
+        "carol_unicode_003",
+        "carol_null_003",
+        "carol_short_002",
+        "carol_xss_002",
+        "carol_unicode_005"
+      ],
+      "edge_006": [],
+      "edge_007": [
+        "alice_pride_001",
+        "alice_identity_project_001",
+        "alice_new_preference_001",
+        "alice_work_001",
+        "alice_books_001",
+        "alice_old_preference_001",
+        "alice_stress_001",
+        "alice_travel_001",
+        "alice_work_003",
+        "alice_work_002"
+      ],
+      "edge_008": [
+        "carol_unicode_002",
+        "carol_null_003",
+        "carol_short_001",
+        "carol_unicode_003",
+        "carol_short_003",
+        "carol_unicode_004",
+        "carol_xss_002",
+        "carol_unicode_001",
+        "carol_xss_001",
+        "carol_short_002"
+      ],
+      "edge_009": [
+        "carol_sqli_003",
+        "carol_sqli_002",
+        "carol_short_001",
+        "carol_short_003",
+        "carol_null_003",
+        "carol_xss_002",
+        "carol_xss_001",
+        "carol_special_001",
+        "carol_short_002",
+        "carol_unicode_003"
+      ],
+      "edge_010": [
+        "alice_identity_project_001",
+        "alice_yesterday_work_001",
+        "alice_books_001",
+        "alice_recent_convo_001",
+        "alice_work_003",
+        "alice_last_week_work_001",
+        "alice_anxiety_001",
+        "alice_new_preference_001",
+        "alice_family_002",
+        "alice_coffee_003_old"
+      ],
+      "edge_011": [
+        "alice_pride_001",
+        "alice_joy_001",
+        "alice_work_002",
+        "alice_family_002",
+        "alice_anxiety_001",
+        "alice_family_003",
+        "alice_worry_001",
+        "alice_finance_001",
+        "alice_calm_001",
+        "alice_new_preference_001"
+      ],
+      "edge_012": [
+        "alice_calm_001",
+        "alice_coffee_001",
+        "alice_coffee_002",
+        "alice_coffee_003_old",
+        "alice_coffee_004_correction",
+        "alice_joy_001",
+        "alice_emotion_change_001",
+        "alice_cooking_001",
+        "alice_low_importance_001",
+        "alice_travel_001"
+      ],
+      "edge_013": [
+        "alice_phone_001",
+        "alice_address_001",
+        "alice_worry_001",
+        "alice_grief_001",
+        "alice_work_002",
+        "alice_anxiety_001",
+        "alice_family_002",
+        "alice_joy_001",
+        "alice_stress_001",
+        "alice_health_002"
+      ],
+      "edge_014": [
+        "alice_address_001",
+        "alice_phone_001",
+        "alice_joy_001",
+        "alice_pride_001",
+        "alice_grief_001",
+        "alice_worry_001",
+        "alice_work_002",
+        "alice_identity_project_001",
+        "alice_emotion_change_001",
+        "alice_family_002"
+      ],
+      "edge_015": [
+        "eve_005",
+        "eve_007",
+        "eve_003",
+        "eve_004",
+        "eve_006",
+        "eve_008",
+        "eve_002",
+        "eve_009",
+        "eve_010",
+        "eve_001"
+      ],
+      "cross_001": [
+        "alice_health_001",
+        "alice_calm_001",
+        "alice_coffee_002",
+        "alice_emotion_change_001",
+        "alice_stress_001",
+        "alice_coffee_001",
+        "alice_family_003",
+        "alice_coffee_003_old",
+        "alice_cooking_001",
+        "alice_joy_001"
+      ],
+      "cross_002": [
+        "alice_health_002",
+        "alice_calm_001",
+        "alice_joy_001",
+        "alice_cooking_001",
+        "alice_insight_001",
+        "alice_family_003",
+        "alice_pride_001",
+        "alice_finance_001",
+        "alice_high_importance_001",
+        "alice_travel_001"
+      ],
+      "cross_003": [
+        "alice_finance_001",
+        "alice_worry_001",
+        "alice_mixed_emotion_001",
+        "alice_joy_001",
+        "alice_work_002",
+        "alice_calm_001",
+        "alice_health_002",
+        "alice_anxiety_001",
+        "alice_travel_001",
+        "alice_family_002"
+      ],
+      "cross_004": [
+        "alice_family_003",
+        "alice_joy_001",
+        "alice_cooking_001",
+        "alice_family_001",
+        "alice_mixed_emotion_001",
+        "alice_calm_001",
+        "alice_work_002",
+        "alice_health_002",
+        "alice_finance_001",
+        "alice_worry_001"
+      ],
+      "cross_005": [
+        "bob_family_001",
+        "bob_routine_001",
+        "bob_coffee_002",
+        "bob_family_002",
+        "bob_work_002",
+        "bob_travel_001",
+        "bob_coffee_001",
+        "bob_work_001",
+        "bob_health_001",
+        "bob_books_001"
+      ],
+      "cross_006": [
+        "alice_oldest_memory_001",
+        "alice_identity_project_001",
+        "alice_anxiety_001",
+        "alice_pride_001",
+        "alice_last_week_work_001",
+        "alice_yesterday_work_001",
+        "alice_insight_001",
+        "alice_work_001",
+        "alice_high_importance_001",
+        "alice_work_003"
+      ],
+      "cross_007": [
+        "alice_high_importance_001",
+        "alice_insight_001",
+        "alice_new_preference_001",
+        "alice_anxiety_001",
+        "alice_frustration_001",
+        "alice_work_001",
+        "alice_pride_001",
+        "alice_work_003",
+        "alice_work_002",
+        "alice_old_preference_001"
+      ],
+      "cross_008": [
+        "alice_insight_001",
+        "alice_emotion_change_001",
+        "alice_pride_001",
+        "alice_calm_001",
+        "alice_anxiety_001",
+        "alice_coffee_002",
+        "alice_yesterday_work_001",
+        "alice_stress_001",
+        "alice_coffee_001",
+        "alice_identity_project_001"
+      ],
+      "cross_009": [
+        "eve_005",
+        "eve_007",
+        "eve_003",
+        "eve_009",
+        "eve_004",
+        "eve_001",
+        "eve_002",
+        "eve_008",
+        "eve_006",
+        "eve_010"
+      ],
+      "cross_010": [
+        "eve_007",
+        "eve_003",
+        "eve_005",
+        "eve_002",
+        "eve_001",
+        "eve_010",
+        "eve_004",
+        "eve_009",
+        "eve_006",
+        "eve_008"
+      ],
+      "adversarial_006": [
+        "bob_work_001",
+        "bob_family_002",
+        "bob_books_001",
+        "bob_coffee_002",
+        "bob_family_001",
+        "bob_health_001",
+        "bob_coffee_001",
+        "bob_work_002",
+        "bob_routine_001",
+        "bob_travel_001"
+      ],
+      "adversarial_007": [
+        "alice_calm_001",
+        "alice_joy_001",
+        "alice_worry_001",
+        "alice_health_002",
+        "alice_anxiety_001",
+        "alice_stress_001",
+        "alice_coffee_002",
+        "alice_work_002",
+        "alice_health_001",
+        "alice_family_003"
+      ],
+      "adversarial_008": [
+        "bob_routine_001",
+        "bob_family_001",
+        "bob_health_001",
+        "bob_family_002",
+        "bob_coffee_002",
+        "bob_work_002",
+        "bob_work_001",
+        "bob_books_001",
+        "bob_coffee_001",
+        "bob_travel_001"
+      ],
+      "adversarial_009": [
+        "eve_005",
+        "eve_007",
+        "eve_003",
+        "eve_001",
+        "eve_002",
+        "eve_006",
+        "eve_004",
+        "eve_009",
+        "eve_008",
+        "eve_010"
+      ],
+      "adversarial_010": [
+        "alice_joy_001",
+        "alice_pride_001",
+        "alice_work_002",
+        "alice_coffee_004_correction",
+        "alice_family_002",
+        "alice_grief_001",
+        "alice_calm_001",
+        "alice_emotion_change_001",
+        "alice_yesterday_work_001",
+        "alice_travel_001"
+      ],
+      "edge_016": [
+        "alice_coffee_001",
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_calm_001",
+        "alice_coffee_002",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_worry_001",
+        "alice_travel_001",
+        "alice_books_001"
+      ],
+      "negative_001": [
+        "alice_work_001",
+        "alice_identity_project_001",
+        "alice_new_preference_001",
+        "alice_yesterday_work_001",
+        "alice_coffee_003_old",
+        "alice_family_001",
+        "alice_coffee_004_correction",
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_books_001"
+      ],
+      "negative_002": [
+        "bob_family_001",
+        "bob_travel_001",
+        "bob_family_002",
+        "bob_books_001",
+        "bob_coffee_001",
+        "bob_health_001",
+        "bob_work_001",
+        "bob_work_002",
+        "bob_coffee_002",
+        "bob_routine_001"
+      ],
+      "minimal_001": [
+        "eve_003",
+        "eve_005",
+        "eve_007",
+        "eve_009",
+        "eve_002",
+        "eve_001",
+        "eve_004",
+        "eve_006",
+        "eve_008",
+        "eve_010"
+      ]
+    }
+  },
+  "on": {
+    "label": "diversity-on",
+    "summary": {
+      "queryCount": 81,
+      "precisionAt5": 0.967741935483871,
+      "recallAt10": 0.9726027397260274,
+      "mrrAt10": 0.9128159905937683,
+      "falsePositiveInjectionRate": 0,
+      "queriesWithFalsePositiveInjection": 0,
+      "fullPageRate": 0.9125,
+      "minPageSize": 0,
+      "meanPageSize": 9.4375,
+      "latencyP50Ms": 18,
+      "latencyP95Ms": 38,
+      "latencyMeanMs": 21.4625,
+      "_counts": {
+        "mustTop5Count": 62,
+        "top5HitCount": 60,
+        "expectedCount": 73,
+        "relevantAt10Count": 71,
+        "forbiddenCount": 91,
+        "forbiddenHitCount": 0
+      }
+    },
+    "stabilityChangedQueries": [],
+    "queries": [
+      {
+        "queryId": "semantic_001",
+        "category": "semantic",
+        "expected": [
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_004_correction"
+        ],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "resultIds": [
+          "alice_coffee_001",
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_calm_001",
+          "alice_coffee_002",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_worry_001",
+          "alice_travel_001",
+          "alice_books_001"
+        ],
+        "latencyMs": 27,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "relevantAt10": [
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_004_correction"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.6
+      },
+      {
+        "queryId": "semantic_002",
+        "category": "semantic",
+        "expected": [
+          "alice_coffee_002"
+        ],
+        "forbidden": [
+          "bob_routine_001",
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "alice_coffee_002",
+          "alice_calm_001",
+          "alice_emotion_change_001",
+          "alice_cooking_001",
+          "alice_joy_001",
+          "alice_health_002",
+          "alice_coffee_001",
+          "alice_insight_001",
+          "alice_coffee_004_correction",
+          "alice_stress_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_002"
+        ],
+        "relevantAt10": [
+          "alice_coffee_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_003",
+        "category": "semantic",
+        "expected": [
+          "alice_work_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_work_001",
+          "alice_new_preference_001",
+          "alice_old_preference_001",
+          "alice_identity_project_001",
+          "alice_coffee_001",
+          "alice_yesterday_work_001",
+          "alice_frustration_001",
+          "alice_last_week_work_001",
+          "alice_work_002",
+          "alice_oldest_memory_001"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_work_001"
+        ],
+        "relevantAt10": [
+          "alice_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_004",
+        "category": "semantic",
+        "expected": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "forbidden": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "resultIds": [
+          "bob_coffee_001",
+          "bob_coffee_002",
+          "bob_routine_001",
+          "bob_travel_001",
+          "bob_health_001",
+          "bob_family_001",
+          "bob_books_001",
+          "bob_family_002",
+          "bob_work_002",
+          "bob_work_001"
+        ],
+        "latencyMs": 11,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "relevantAt10": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.75
+      },
+      {
+        "queryId": "semantic_005",
+        "category": "semantic",
+        "expected": [
+          "alice_books_001"
+        ],
+        "forbidden": [
+          "bob_books_001"
+        ],
+        "resultIds": [
+          "alice_books_001",
+          "alice_health_002",
+          "alice_stress_001",
+          "alice_work_002",
+          "alice_calm_001",
+          "alice_coffee_001",
+          "alice_coffee_004_correction",
+          "alice_travel_001",
+          "alice_joy_001",
+          "alice_emotion_change_001"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_books_001"
+        ],
+        "relevantAt10": [
+          "alice_books_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_006",
+        "category": "semantic",
+        "expected": [
+          "alice_cooking_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_cooking_001",
+          "alice_travel_001",
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_family_001",
+          "alice_emotion_change_001",
+          "alice_joy_001",
+          "alice_old_preference_001",
+          "alice_work_001",
+          "alice_oldest_memory_001"
+        ],
+        "latencyMs": 13,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_cooking_001"
+        ],
+        "relevantAt10": [
+          "alice_cooking_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_007",
+        "category": "semantic",
+        "expected": [
+          "alice_finance_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_finance_001",
+          "alice_worry_001",
+          "alice_health_002",
+          "alice_work_002",
+          "alice_calm_001",
+          "alice_pride_001",
+          "alice_insight_001",
+          "alice_joy_001",
+          "alice_cooking_001",
+          "alice_coffee_002"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_finance_001"
+        ],
+        "relevantAt10": [
+          "alice_finance_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_008",
+        "category": "semantic",
+        "expected": [
+          "bob_work_001"
+        ],
+        "forbidden": [
+          "alice_work_001"
+        ],
+        "resultIds": [
+          "bob_work_001",
+          "bob_coffee_002",
+          "bob_travel_001",
+          "bob_family_001",
+          "bob_health_001",
+          "bob_family_002",
+          "bob_books_001",
+          "bob_routine_001",
+          "bob_work_002",
+          "bob_coffee_001"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_work_001"
+        ],
+        "relevantAt10": [
+          "bob_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_009",
+        "category": "semantic",
+        "expected": [
+          "alice_travel_002"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_travel_002",
+          "alice_travel_001",
+          "alice_work_003",
+          "alice_emotion_change_001",
+          "alice_cooking_001",
+          "alice_calm_001",
+          "alice_coffee_004_correction",
+          "alice_family_002",
+          "alice_coffee_001",
+          "alice_work_002"
+        ],
+        "latencyMs": 28,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_travel_002"
+        ],
+        "relevantAt10": [
+          "alice_travel_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_010",
+        "category": "semantic",
+        "expected": [
+          "alice_work_003"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_work_003",
+          "alice_identity_project_001",
+          "alice_insight_001",
+          "alice_work_001",
+          "alice_work_002",
+          "alice_new_preference_001",
+          "alice_anxiety_001",
+          "alice_yesterday_work_001",
+          "alice_pride_001",
+          "alice_last_week_work_001"
+        ],
+        "latencyMs": 19,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_work_003"
+        ],
+        "relevantAt10": [
+          "alice_work_003"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "semantic_011",
+        "category": "semantic",
+        "expected": [
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old"
+        ],
+        "forbidden": [
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_calm_001",
+          "alice_travel_002",
+          "alice_cooking_001",
+          "alice_worry_001",
+          "alice_emotion_change_001",
+          "alice_work_001"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_004_correction"
+        ],
+        "relevantAt10": [
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_001",
+        "category": "emotional",
+        "expected": [
+          "alice_joy_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_pride_001",
+          "alice_mixed_emotion_001",
+          "alice_family_001",
+          "alice_travel_001",
+          "alice_family_003",
+          "alice_low_importance_001",
+          "alice_emotion_change_001",
+          "alice_worry_001"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_joy_001"
+        ],
+        "relevantAt10": [
+          "alice_joy_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_002",
+        "category": "emotional",
+        "expected": [
+          "alice_grief_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_stress_001",
+          "alice_grief_001",
+          "alice_anxiety_001",
+          "alice_emotion_change_001",
+          "alice_worry_001",
+          "alice_family_003",
+          "alice_work_002",
+          "alice_coffee_004_correction",
+          "alice_health_002",
+          "alice_calm_001"
+        ],
+        "latencyMs": 19,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_grief_001"
+        ],
+        "relevantAt10": [
+          "alice_grief_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "emotional_003",
+        "category": "emotional",
+        "expected": [
+          "alice_stress_001",
+          "alice_work_002"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_stress_001",
+          "alice_anxiety_001",
+          "alice_grief_001",
+          "alice_emotion_change_001",
+          "alice_family_003",
+          "alice_health_002",
+          "alice_work_002",
+          "alice_coffee_001",
+          "alice_coffee_004_correction",
+          "alice_calm_001"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_stress_001"
+        ],
+        "relevantAt10": [
+          "alice_stress_001",
+          "alice_work_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5714285714285714
+      },
+      {
+        "queryId": "emotional_004",
+        "category": "emotional",
+        "expected": [
+          "alice_worry_001",
+          "alice_anxiety_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_worry_001",
+          "alice_anxiety_001",
+          "alice_stress_001",
+          "alice_grief_001",
+          "alice_work_002",
+          "alice_family_003",
+          "alice_health_002",
+          "alice_high_importance_001",
+          "alice_coffee_001",
+          "alice_mixed_emotion_001"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_worry_001"
+        ],
+        "relevantAt10": [
+          "alice_worry_001",
+          "alice_anxiety_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_005",
+        "category": "emotional",
+        "expected": [
+          "alice_frustration_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_frustration_001",
+          "alice_stress_001",
+          "alice_anxiety_001",
+          "alice_emotion_change_001",
+          "alice_worry_001",
+          "alice_work_002",
+          "alice_coffee_004_correction",
+          "alice_family_003",
+          "alice_new_preference_001",
+          "alice_coffee_002"
+        ],
+        "latencyMs": 20,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_frustration_001"
+        ],
+        "relevantAt10": [
+          "alice_frustration_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_006",
+        "category": "emotional",
+        "expected": [
+          "alice_pride_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_pride_001",
+          "alice_joy_001",
+          "alice_travel_001",
+          "alice_health_002",
+          "alice_books_001",
+          "alice_family_003",
+          "alice_oldest_memory_001",
+          "alice_work_002",
+          "alice_emotion_change_001",
+          "alice_grief_001"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_pride_001"
+        ],
+        "relevantAt10": [
+          "alice_pride_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_007",
+        "category": "emotional",
+        "expected": [
+          "alice_stress_001",
+          "alice_anxiety_001",
+          "alice_work_002"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_anxiety_001",
+          "alice_stress_001",
+          "alice_worry_001",
+          "alice_emotion_change_001",
+          "alice_grief_001",
+          "alice_work_002",
+          "alice_coffee_002",
+          "alice_family_003",
+          "alice_coffee_004_correction",
+          "alice_calm_001"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_stress_001"
+        ],
+        "relevantAt10": [
+          "alice_stress_001",
+          "alice_anxiety_001",
+          "alice_work_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "emotional_008",
+        "category": "emotional",
+        "expected": [
+          "alice_mixed_emotion_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_mixed_emotion_001",
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_pride_001",
+          "alice_finance_001",
+          "alice_work_002",
+          "alice_family_003",
+          "alice_coffee_002",
+          "alice_worry_001",
+          "alice_emotion_change_001"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_mixed_emotion_001"
+        ],
+        "relevantAt10": [
+          "alice_mixed_emotion_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_009",
+        "category": "emotional",
+        "expected": [
+          "alice_emotion_change_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_emotion_change_001",
+          "alice_pride_001",
+          "alice_calm_001",
+          "alice_health_002",
+          "alice_coffee_001",
+          "alice_insight_001",
+          "alice_worry_001",
+          "alice_work_002",
+          "alice_anxiety_001",
+          "alice_family_003"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_emotion_change_001"
+        ],
+        "relevantAt10": [
+          "alice_emotion_change_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "emotional_010",
+        "category": "emotional",
+        "expected": [
+          "alice_calm_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_calm_001",
+          "alice_anxiety_001",
+          "alice_joy_001",
+          "alice_health_002",
+          "alice_stress_001",
+          "alice_family_003",
+          "alice_travel_001",
+          "alice_emotion_change_001",
+          "alice_grief_001",
+          "alice_mixed_emotion_001"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_calm_001"
+        ],
+        "relevantAt10": [
+          "alice_calm_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_001",
+        "category": "temporal",
+        "expected": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "forbidden": [
+          "dave_2years_001",
+          "dave_2years_002"
+        ],
+        "resultIds": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "latencyMs": 19,
+        "pageSize": 2,
+        "top5Hits": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "relevantAt10": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.75
+      },
+      {
+        "queryId": "temporal_002",
+        "category": "temporal",
+        "expected": [
+          "dave_today_001"
+        ],
+        "forbidden": [
+          "dave_6months_001",
+          "dave_2years_001"
+        ],
+        "resultIds": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "latencyMs": 18,
+        "pageSize": 2,
+        "top5Hits": [
+          "dave_today_001"
+        ],
+        "relevantAt10": [
+          "dave_today_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_003",
+        "category": "temporal",
+        "expected": [
+          "alice_family_001",
+          "alice_family_003"
+        ],
+        "forbidden": [
+          "bob_family_001"
+        ],
+        "resultIds": [
+          "alice_family_001",
+          "alice_stress_001",
+          "alice_family_003",
+          "alice_work_002",
+          "alice_frustration_001",
+          "alice_yesterday_work_001",
+          "alice_recent_convo_001"
+        ],
+        "latencyMs": 16,
+        "pageSize": 7,
+        "top5Hits": [
+          "alice_family_001"
+        ],
+        "relevantAt10": [
+          "alice_family_001",
+          "alice_family_003"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_004",
+        "category": "temporal",
+        "expected": [
+          "alice_last_week_work_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_health_002",
+          "alice_joy_001",
+          "alice_work_002",
+          "alice_stress_001",
+          "alice_yesterday_work_001",
+          "alice_last_week_work_001",
+          "alice_recent_convo_001",
+          "alice_calm_001",
+          "alice_worry_001",
+          "alice_family_003"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [
+          "alice_last_week_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.16666666666666666
+      },
+      {
+        "queryId": "temporal_005",
+        "category": "temporal",
+        "expected": [
+          "alice_oldest_memory_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_grief_001",
+          "alice_travel_001",
+          "alice_stress_001",
+          "alice_family_002",
+          "alice_identity_project_001",
+          "alice_pride_001",
+          "alice_oldest_memory_001",
+          "alice_joy_001",
+          "alice_family_001",
+          "alice_cooking_001"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [
+          "alice_oldest_memory_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_006",
+        "category": "temporal",
+        "expected": [
+          "alice_recent_convo_001",
+          "alice_yesterday_work_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_work_002",
+          "alice_recent_convo_001",
+          "alice_stress_001",
+          "alice_family_003",
+          "alice_frustration_001",
+          "alice_yesterday_work_001",
+          "alice_family_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 7,
+        "top5Hits": [
+          "alice_recent_convo_001"
+        ],
+        "relevantAt10": [
+          "alice_recent_convo_001",
+          "alice_yesterday_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "temporal_007",
+        "category": "temporal",
+        "expected": [
+          "alice_yesterday_work_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_yesterday_work_001",
+          "alice_stress_001",
+          "alice_work_002",
+          "alice_recent_convo_001",
+          "alice_frustration_001",
+          "alice_family_003",
+          "alice_family_001"
+        ],
+        "latencyMs": 18,
+        "pageSize": 7,
+        "top5Hits": [
+          "alice_yesterday_work_001"
+        ],
+        "relevantAt10": [
+          "alice_yesterday_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_008",
+        "category": "temporal",
+        "expected": [
+          "alice_new_preference_001",
+          "alice_old_preference_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_new_preference_001",
+          "alice_old_preference_001",
+          "alice_oldest_memory_001",
+          "alice_work_001",
+          "alice_insight_001",
+          "alice_last_week_work_001",
+          "alice_frustration_001",
+          "alice_yesterday_work_001",
+          "alice_identity_project_001",
+          "alice_work_002"
+        ],
+        "latencyMs": 21,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_new_preference_001"
+        ],
+        "relevantAt10": [
+          "alice_new_preference_001",
+          "alice_old_preference_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_009",
+        "category": "temporal",
+        "expected": [
+          "dave_6months_050"
+        ],
+        "forbidden": [
+          "dave_today_001"
+        ],
+        "resultIds": [],
+        "latencyMs": 19,
+        "pageSize": 0,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_010",
+        "category": "temporal",
+        "expected": [
+          "dave_2years_150"
+        ],
+        "forbidden": [
+          "dave_today_001"
+        ],
+        "resultIds": [],
+        "latencyMs": 17,
+        "pageSize": 0,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "temporal_011",
+        "category": "temporal",
+        "expected": [
+          "alice_oldest_memory_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_oldest_memory_001",
+          "alice_new_preference_001",
+          "alice_old_preference_001",
+          "alice_pride_001",
+          "alice_insight_001",
+          "alice_identity_project_001",
+          "alice_health_002",
+          "alice_work_001",
+          "alice_stress_001",
+          "alice_work_002"
+        ],
+        "latencyMs": 24,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_oldest_memory_001"
+        ],
+        "relevantAt10": [
+          "alice_oldest_memory_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_001",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_coffee_001"
+        ],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002",
+          "eve_009"
+        ],
+        "resultIds": [
+          "alice_calm_001",
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_003_old",
+          "alice_coffee_004_correction",
+          "alice_joy_001",
+          "alice_emotion_change_001",
+          "alice_cooking_001",
+          "alice_low_importance_001",
+          "alice_travel_001"
+        ],
+        "latencyMs": 32,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_001"
+        ],
+        "relevantAt10": [
+          "alice_coffee_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "rls_002",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_coffee_001"
+        ],
+        "forbidden": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "resultIds": [
+          "bob_coffee_001",
+          "bob_routine_001",
+          "bob_coffee_002",
+          "bob_travel_001",
+          "bob_health_001",
+          "bob_family_001",
+          "bob_family_002",
+          "bob_work_002",
+          "bob_work_001",
+          "bob_books_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_coffee_001"
+        ],
+        "relevantAt10": [
+          "bob_coffee_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_003",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_family_001"
+        ],
+        "forbidden": [
+          "bob_family_001",
+          "bob_family_002"
+        ],
+        "resultIds": [
+          "alice_family_001",
+          "alice_cooking_001",
+          "alice_joy_001",
+          "alice_family_003",
+          "alice_finance_001",
+          "alice_travel_001",
+          "alice_family_002",
+          "alice_health_002",
+          "alice_worry_001",
+          "alice_grief_001"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_family_001"
+        ],
+        "relevantAt10": [
+          "alice_family_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_004",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_family_001"
+        ],
+        "forbidden": [
+          "alice_family_001",
+          "alice_family_002",
+          "alice_family_003"
+        ],
+        "resultIds": [
+          "bob_family_001",
+          "bob_family_002",
+          "bob_work_002",
+          "bob_coffee_002",
+          "bob_travel_001",
+          "bob_health_001",
+          "bob_routine_001",
+          "bob_work_001",
+          "bob_coffee_001",
+          "bob_books_001"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_family_001"
+        ],
+        "relevantAt10": [
+          "bob_family_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_005",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_travel_001"
+        ],
+        "forbidden": [
+          "bob_travel_001"
+        ],
+        "resultIds": [
+          "alice_travel_001",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_coffee_004_correction",
+          "alice_family_002",
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_coffee_003_old",
+          "alice_family_001",
+          "alice_coffee_001"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_travel_001"
+        ],
+        "relevantAt10": [
+          "alice_travel_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_006",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_travel_001"
+        ],
+        "forbidden": [
+          "alice_travel_001"
+        ],
+        "resultIds": [
+          "bob_travel_001",
+          "bob_coffee_002",
+          "bob_health_001",
+          "bob_coffee_001",
+          "bob_work_002",
+          "bob_family_002",
+          "bob_books_001",
+          "bob_family_001",
+          "bob_work_001",
+          "bob_routine_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_travel_001"
+        ],
+        "relevantAt10": [
+          "bob_travel_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_007",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_work_001"
+        ],
+        "forbidden": [
+          "bob_work_001",
+          "bob_work_002"
+        ],
+        "resultIds": [
+          "alice_work_001",
+          "alice_insight_001",
+          "alice_new_preference_001",
+          "alice_oldest_memory_001",
+          "alice_pride_001",
+          "alice_work_002",
+          "alice_old_preference_001",
+          "alice_identity_project_001",
+          "alice_anxiety_001",
+          "alice_yesterday_work_001"
+        ],
+        "latencyMs": 26,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_work_001"
+        ],
+        "relevantAt10": [
+          "alice_work_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_008",
+        "category": "rls_isolation",
+        "expected": [
+          "alice_health_001"
+        ],
+        "forbidden": [
+          "bob_health_001"
+        ],
+        "resultIds": [
+          "alice_health_001",
+          "alice_calm_001",
+          "alice_joy_001",
+          "alice_new_preference_001",
+          "alice_health_002",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_anxiety_001",
+          "alice_travel_001",
+          "alice_work_002"
+        ],
+        "latencyMs": 20,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_health_001"
+        ],
+        "relevantAt10": [
+          "alice_health_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_009",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_health_001"
+        ],
+        "forbidden": [
+          "alice_health_001",
+          "alice_health_002"
+        ],
+        "resultIds": [
+          "bob_health_001",
+          "bob_family_001",
+          "bob_travel_001",
+          "bob_family_002",
+          "bob_routine_001",
+          "bob_books_001",
+          "bob_coffee_002",
+          "bob_work_002",
+          "bob_coffee_001",
+          "bob_work_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_health_001"
+        ],
+        "relevantAt10": [
+          "bob_health_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "rls_010",
+        "category": "rls_isolation",
+        "expected": [
+          "bob_routine_001"
+        ],
+        "forbidden": [
+          "alice_coffee_002"
+        ],
+        "resultIds": [
+          "bob_routine_001",
+          "bob_family_001",
+          "bob_coffee_002",
+          "bob_coffee_001",
+          "bob_health_001",
+          "bob_work_002",
+          "bob_family_002",
+          "bob_travel_001",
+          "bob_work_001",
+          "bob_books_001"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_routine_001"
+        ],
+        "relevantAt10": [
+          "bob_routine_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_001",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002",
+          "bob_routine_001"
+        ],
+        "resultIds": [
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_calm_001",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_travel_001",
+          "alice_emotion_change_001",
+          "alice_work_001"
+        ],
+        "latencyMs": 19,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_002",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002",
+          "bob_family_001"
+        ],
+        "resultIds": [
+          "alice_high_importance_001",
+          "alice_health_001",
+          "alice_pride_001",
+          "alice_identity_project_001",
+          "alice_family_001",
+          "alice_work_003",
+          "alice_finance_001",
+          "alice_grief_001",
+          "alice_address_001",
+          "alice_phone_001"
+        ],
+        "latencyMs": 19,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_003",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "carol_unicode_001",
+          "carol_short_001"
+        ],
+        "resultIds": [
+          "alice_family_001",
+          "alice_family_002",
+          "alice_mixed_emotion_001",
+          "alice_worry_001",
+          "alice_coffee_004_correction",
+          "alice_recent_convo_001",
+          "alice_work_002",
+          "alice_identity_project_001",
+          "alice_family_003",
+          "alice_travel_002"
+        ],
+        "latencyMs": 19,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_004",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "bob_family_001",
+          "bob_family_002"
+        ],
+        "resultIds": [
+          "alice_mixed_emotion_001",
+          "alice_family_003",
+          "alice_grief_001",
+          "alice_cooking_001",
+          "alice_joy_001",
+          "alice_pride_001",
+          "alice_finance_001",
+          "alice_travel_001",
+          "alice_family_001",
+          "alice_coffee_004_correction"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_005",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "eve_009",
+          "eve_003"
+        ],
+        "resultIds": [
+          "bob_travel_001",
+          "bob_coffee_002",
+          "bob_family_002",
+          "bob_health_001",
+          "bob_family_001",
+          "bob_coffee_001",
+          "bob_books_001",
+          "bob_routine_001",
+          "bob_work_002",
+          "bob_work_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_001",
+        "category": "edge_case",
+        "expected": [
+          "eve_003"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "eve_003",
+          "eve_005",
+          "eve_007",
+          "eve_009",
+          "eve_006",
+          "eve_008",
+          "eve_004",
+          "eve_010",
+          "eve_002",
+          "eve_001"
+        ],
+        "latencyMs": 12,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_003"
+        ],
+        "relevantAt10": [
+          "eve_003"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_002",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_family_001",
+          "bob_family_001",
+          "carol_short_001"
+        ],
+        "resultIds": [
+          "eve_003",
+          "eve_005",
+          "eve_007",
+          "eve_006",
+          "eve_004",
+          "eve_002",
+          "eve_009",
+          "eve_010",
+          "eve_008",
+          "eve_001"
+        ],
+        "latencyMs": 12,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_003",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "carol_xss_001",
+          "carol_xss_003",
+          "carol_xss_004",
+          "carol_xss_002",
+          "carol_short_001",
+          "carol_sqli_002",
+          "carol_null_003",
+          "carol_unicode_002",
+          "carol_unicode_004",
+          "carol_special_003"
+        ],
+        "latencyMs": 16,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_004",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001"
+        ],
+        "resultIds": [
+          "carol_sqli_001",
+          "carol_long_001",
+          "carol_unicode_002",
+          "carol_unicode_001",
+          "carol_short_003",
+          "carol_unicode_005",
+          "carol_null_003",
+          "carol_short_001",
+          "carol_short_002",
+          "carol_unicode_004"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_005",
+        "category": "edge_case",
+        "expected": [
+          "carol_unicode_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "carol_unicode_001",
+          "carol_unicode_004",
+          "carol_short_001",
+          "carol_short_003",
+          "carol_unicode_002",
+          "carol_unicode_003",
+          "carol_null_003",
+          "carol_short_002",
+          "carol_xss_002",
+          "carol_unicode_005"
+        ],
+        "latencyMs": 14,
+        "pageSize": 10,
+        "top5Hits": [
+          "carol_unicode_001"
+        ],
+        "relevantAt10": [
+          "carol_unicode_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_006",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [],
+        "resultIds": [],
+        "latencyMs": 0,
+        "pageSize": 0,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_007",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "alice_pride_001",
+          "alice_identity_project_001",
+          "alice_new_preference_001",
+          "alice_work_001",
+          "alice_books_001",
+          "alice_old_preference_001",
+          "alice_stress_001",
+          "alice_travel_001",
+          "alice_work_003",
+          "alice_work_002"
+        ],
+        "latencyMs": 20,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_008",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "carol_unicode_002",
+          "carol_null_003",
+          "carol_short_001",
+          "carol_unicode_003",
+          "carol_short_003",
+          "carol_unicode_004",
+          "carol_xss_002",
+          "carol_unicode_001",
+          "carol_xss_001",
+          "carol_short_002"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_009",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "carol_sqli_003",
+          "carol_sqli_002",
+          "carol_short_001",
+          "carol_short_003",
+          "carol_null_003",
+          "carol_xss_002",
+          "carol_xss_001",
+          "carol_special_001",
+          "carol_short_002",
+          "carol_unicode_003"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_010",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001",
+          "carol_short_001"
+        ],
+        "resultIds": [
+          "alice_identity_project_001",
+          "alice_yesterday_work_001",
+          "alice_books_001",
+          "alice_recent_convo_001",
+          "alice_work_003",
+          "alice_last_week_work_001",
+          "alice_anxiety_001",
+          "alice_new_preference_001",
+          "alice_family_002",
+          "alice_coffee_003_old"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_011",
+        "category": "edge_case",
+        "expected": [],
+        "forbidden": [],
+        "resultIds": [
+          "alice_pride_001",
+          "alice_joy_001",
+          "alice_work_002",
+          "alice_family_002",
+          "alice_anxiety_001",
+          "alice_family_003",
+          "alice_worry_001",
+          "alice_finance_001",
+          "alice_calm_001",
+          "alice_new_preference_001"
+        ],
+        "latencyMs": 15,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_012",
+        "category": "edge_case",
+        "expected": [
+          "alice_coffee_001"
+        ],
+        "forbidden": [
+          "bob_coffee_001"
+        ],
+        "resultIds": [
+          "alice_calm_001",
+          "alice_coffee_001",
+          "alice_coffee_002",
+          "alice_coffee_003_old",
+          "alice_coffee_004_correction",
+          "alice_joy_001",
+          "alice_emotion_change_001",
+          "alice_cooking_001",
+          "alice_low_importance_001",
+          "alice_travel_001"
+        ],
+        "latencyMs": 17,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_001"
+        ],
+        "relevantAt10": [
+          "alice_coffee_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "edge_013",
+        "category": "edge_case",
+        "expected": [
+          "alice_phone_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_phone_001",
+          "alice_address_001",
+          "alice_worry_001",
+          "alice_grief_001",
+          "alice_work_002",
+          "alice_anxiety_001",
+          "alice_family_002",
+          "alice_joy_001",
+          "alice_stress_001",
+          "alice_health_002"
+        ],
+        "latencyMs": 21,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_phone_001"
+        ],
+        "relevantAt10": [
+          "alice_phone_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_014",
+        "category": "edge_case",
+        "expected": [
+          "alice_address_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_address_001",
+          "alice_phone_001",
+          "alice_joy_001",
+          "alice_pride_001",
+          "alice_grief_001",
+          "alice_worry_001",
+          "alice_work_002",
+          "alice_identity_project_001",
+          "alice_emotion_change_001",
+          "alice_family_002"
+        ],
+        "latencyMs": 36,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_address_001"
+        ],
+        "relevantAt10": [
+          "alice_address_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_015",
+        "category": "edge_case",
+        "expected": [
+          "eve_004"
+        ],
+        "forbidden": [
+          "alice_work_001",
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "eve_005",
+          "eve_007",
+          "eve_003",
+          "eve_004",
+          "eve_006",
+          "eve_008",
+          "eve_002",
+          "eve_009",
+          "eve_010",
+          "eve_001"
+        ],
+        "latencyMs": 27,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_004"
+        ],
+        "relevantAt10": [
+          "eve_004"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.25
+      },
+      {
+        "queryId": "cross_001",
+        "category": "cross_feature",
+        "expected": [
+          "alice_health_001"
+        ],
+        "forbidden": [
+          "bob_health_001"
+        ],
+        "resultIds": [
+          "alice_health_001",
+          "alice_calm_001",
+          "alice_coffee_002",
+          "alice_emotion_change_001",
+          "alice_stress_001",
+          "alice_coffee_001",
+          "alice_family_003",
+          "alice_coffee_003_old",
+          "alice_cooking_001",
+          "alice_joy_001"
+        ],
+        "latencyMs": 29,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_health_001"
+        ],
+        "relevantAt10": [
+          "alice_health_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_002",
+        "category": "cross_feature",
+        "expected": [
+          "alice_health_002"
+        ],
+        "forbidden": [
+          "bob_routine_001"
+        ],
+        "resultIds": [
+          "alice_health_002",
+          "alice_calm_001",
+          "alice_joy_001",
+          "alice_cooking_001",
+          "alice_insight_001",
+          "alice_family_003",
+          "alice_pride_001",
+          "alice_finance_001",
+          "alice_high_importance_001",
+          "alice_travel_001"
+        ],
+        "latencyMs": 29,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_health_002"
+        ],
+        "relevantAt10": [
+          "alice_health_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_003",
+        "category": "cross_feature",
+        "expected": [
+          "alice_finance_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_finance_001",
+          "alice_worry_001",
+          "alice_mixed_emotion_001",
+          "alice_joy_001",
+          "alice_work_002",
+          "alice_calm_001",
+          "alice_health_002",
+          "alice_anxiety_001",
+          "alice_travel_001",
+          "alice_family_002"
+        ],
+        "latencyMs": 36,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_finance_001"
+        ],
+        "relevantAt10": [
+          "alice_finance_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_004",
+        "category": "cross_feature",
+        "expected": [
+          "alice_family_003"
+        ],
+        "forbidden": [
+          "bob_family_001"
+        ],
+        "resultIds": [
+          "alice_family_003",
+          "alice_joy_001",
+          "alice_cooking_001",
+          "alice_family_001",
+          "alice_mixed_emotion_001",
+          "alice_calm_001",
+          "alice_work_002",
+          "alice_health_002",
+          "alice_finance_001",
+          "alice_worry_001"
+        ],
+        "latencyMs": 37,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_family_003"
+        ],
+        "relevantAt10": [
+          "alice_family_003"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_005",
+        "category": "cross_feature",
+        "expected": [
+          "bob_family_001"
+        ],
+        "forbidden": [
+          "alice_family_003"
+        ],
+        "resultIds": [
+          "bob_family_001",
+          "bob_routine_001",
+          "bob_coffee_002",
+          "bob_family_002",
+          "bob_work_002",
+          "bob_travel_001",
+          "bob_coffee_001",
+          "bob_work_001",
+          "bob_health_001",
+          "bob_books_001"
+        ],
+        "latencyMs": 33,
+        "pageSize": 10,
+        "top5Hits": [
+          "bob_family_001"
+        ],
+        "relevantAt10": [
+          "bob_family_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_006",
+        "category": "cross_feature",
+        "expected": [
+          "alice_identity_project_001"
+        ],
+        "forbidden": [
+          "bob_work_001"
+        ],
+        "resultIds": [
+          "alice_oldest_memory_001",
+          "alice_identity_project_001",
+          "alice_anxiety_001",
+          "alice_pride_001",
+          "alice_last_week_work_001",
+          "alice_yesterday_work_001",
+          "alice_insight_001",
+          "alice_work_001",
+          "alice_high_importance_001",
+          "alice_work_003"
+        ],
+        "latencyMs": 45,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_identity_project_001"
+        ],
+        "relevantAt10": [
+          "alice_identity_project_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.5
+      },
+      {
+        "queryId": "cross_007",
+        "category": "cross_feature",
+        "expected": [
+          "alice_high_importance_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_high_importance_001",
+          "alice_insight_001",
+          "alice_new_preference_001",
+          "alice_anxiety_001",
+          "alice_frustration_001",
+          "alice_work_001",
+          "alice_pride_001",
+          "alice_work_003",
+          "alice_work_002",
+          "alice_old_preference_001"
+        ],
+        "latencyMs": 37,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_high_importance_001"
+        ],
+        "relevantAt10": [
+          "alice_high_importance_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_008",
+        "category": "cross_feature",
+        "expected": [
+          "alice_insight_001"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "alice_insight_001",
+          "alice_emotion_change_001",
+          "alice_pride_001",
+          "alice_calm_001",
+          "alice_anxiety_001",
+          "alice_coffee_002",
+          "alice_yesterday_work_001",
+          "alice_stress_001",
+          "alice_coffee_001",
+          "alice_identity_project_001"
+        ],
+        "latencyMs": 41,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_insight_001"
+        ],
+        "relevantAt10": [
+          "alice_insight_001"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_009",
+        "category": "cross_feature",
+        "expected": [
+          "eve_005"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "eve_005",
+          "eve_007",
+          "eve_003",
+          "eve_009",
+          "eve_004",
+          "eve_001",
+          "eve_002",
+          "eve_008",
+          "eve_006",
+          "eve_010"
+        ],
+        "latencyMs": 31,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_005"
+        ],
+        "relevantAt10": [
+          "eve_005"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "cross_010",
+        "category": "cross_feature",
+        "expected": [
+          "eve_007"
+        ],
+        "forbidden": [
+          "alice_work_001"
+        ],
+        "resultIds": [
+          "eve_007",
+          "eve_003",
+          "eve_005",
+          "eve_002",
+          "eve_001",
+          "eve_010",
+          "eve_004",
+          "eve_009",
+          "eve_006",
+          "eve_008"
+        ],
+        "latencyMs": 30,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_007"
+        ],
+        "relevantAt10": [
+          "eve_007"
+        ],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_006",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "alice_family_001",
+          "alice_work_001"
+        ],
+        "resultIds": [
+          "bob_work_001",
+          "bob_family_002",
+          "bob_books_001",
+          "bob_coffee_002",
+          "bob_family_001",
+          "bob_health_001",
+          "bob_coffee_001",
+          "bob_work_002",
+          "bob_routine_001",
+          "bob_travel_001"
+        ],
+        "latencyMs": 23,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_007",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "bob_health_001"
+        ],
+        "resultIds": [
+          "alice_calm_001",
+          "alice_joy_001",
+          "alice_worry_001",
+          "alice_health_002",
+          "alice_anxiety_001",
+          "alice_stress_001",
+          "alice_coffee_002",
+          "alice_work_002",
+          "alice_health_001",
+          "alice_family_003"
+        ],
+        "latencyMs": 38,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_008",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "alice_health_001",
+          "alice_health_002"
+        ],
+        "resultIds": [
+          "bob_routine_001",
+          "bob_family_001",
+          "bob_health_001",
+          "bob_family_002",
+          "bob_coffee_002",
+          "bob_work_002",
+          "bob_work_001",
+          "bob_books_001",
+          "bob_coffee_001",
+          "bob_travel_001"
+        ],
+        "latencyMs": 34,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_009",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "carol_unicode_001",
+          "carol_short_001",
+          "carol_xss_001"
+        ],
+        "resultIds": [
+          "eve_005",
+          "eve_007",
+          "eve_003",
+          "eve_001",
+          "eve_002",
+          "eve_006",
+          "eve_004",
+          "eve_009",
+          "eve_008",
+          "eve_010"
+        ],
+        "latencyMs": 22,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "adversarial_010",
+        "category": "adversarial",
+        "expected": [],
+        "forbidden": [
+          "dave_today_001",
+          "dave_today_002"
+        ],
+        "resultIds": [
+          "alice_joy_001",
+          "alice_pride_001",
+          "alice_work_002",
+          "alice_coffee_004_correction",
+          "alice_family_002",
+          "alice_grief_001",
+          "alice_calm_001",
+          "alice_emotion_change_001",
+          "alice_yesterday_work_001",
+          "alice_travel_001"
+        ],
+        "latencyMs": 28,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "edge_016",
+        "category": "edge_case",
+        "expected": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "forbidden": [
+          "bob_coffee_001",
+          "bob_coffee_002"
+        ],
+        "resultIds": [
+          "alice_coffee_001",
+          "alice_coffee_004_correction",
+          "alice_coffee_003_old",
+          "alice_calm_001",
+          "alice_coffee_002",
+          "alice_cooking_001",
+          "alice_travel_002",
+          "alice_worry_001",
+          "alice_travel_001",
+          "alice_books_001"
+        ],
+        "latencyMs": 38,
+        "pageSize": 10,
+        "top5Hits": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "relevantAt10": [
+          "alice_coffee_001",
+          "alice_coffee_002"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.6
+      },
+      {
+        "queryId": "negative_001",
+        "category": "semantic",
+        "expected": [],
+        "forbidden": [
+          "bob_coffee_001",
+          "carol_short_001",
+          "eve_001"
+        ],
+        "resultIds": [
+          "alice_work_001",
+          "alice_identity_project_001",
+          "alice_new_preference_001",
+          "alice_yesterday_work_001",
+          "alice_coffee_003_old",
+          "alice_family_001",
+          "alice_coffee_004_correction",
+          "alice_joy_001",
+          "alice_calm_001",
+          "alice_books_001"
+        ],
+        "latencyMs": 38,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "negative_002",
+        "category": "semantic",
+        "expected": [],
+        "forbidden": [
+          "alice_coffee_001",
+          "carol_short_001"
+        ],
+        "resultIds": [
+          "bob_family_001",
+          "bob_travel_001",
+          "bob_family_002",
+          "bob_books_001",
+          "bob_coffee_001",
+          "bob_health_001",
+          "bob_work_001",
+          "bob_work_002",
+          "bob_coffee_002",
+          "bob_routine_001"
+        ],
+        "latencyMs": 33,
+        "pageSize": 10,
+        "top5Hits": [],
+        "relevantAt10": [],
+        "forbiddenHits": [],
+        "mrr": 1
+      },
+      {
+        "queryId": "minimal_001",
+        "category": "semantic",
+        "expected": [
+          "eve_009"
+        ],
+        "forbidden": [],
+        "resultIds": [
+          "eve_003",
+          "eve_005",
+          "eve_007",
+          "eve_009",
+          "eve_002",
+          "eve_001",
+          "eve_004",
+          "eve_006",
+          "eve_008",
+          "eve_010"
+        ],
+        "latencyMs": 18,
+        "pageSize": 10,
+        "top5Hits": [
+          "eve_009"
+        ],
+        "relevantAt10": [
+          "eve_009"
+        ],
+        "forbiddenHits": [],
+        "mrr": 0.25
+      }
+    ],
+    "repeatedResultIds": {
+      "semantic_001": [
+        "alice_coffee_001",
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_calm_001",
+        "alice_coffee_002",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_worry_001",
+        "alice_travel_001",
+        "alice_books_001"
+      ],
+      "semantic_002": [
+        "alice_coffee_002",
+        "alice_calm_001",
+        "alice_emotion_change_001",
+        "alice_cooking_001",
+        "alice_joy_001",
+        "alice_health_002",
+        "alice_coffee_001",
+        "alice_insight_001",
+        "alice_coffee_004_correction",
+        "alice_stress_001"
+      ],
+      "semantic_003": [
+        "alice_work_001",
+        "alice_new_preference_001",
+        "alice_old_preference_001",
+        "alice_identity_project_001",
+        "alice_coffee_001",
+        "alice_yesterday_work_001",
+        "alice_frustration_001",
+        "alice_last_week_work_001",
+        "alice_work_002",
+        "alice_oldest_memory_001"
+      ],
+      "semantic_004": [
+        "bob_coffee_001",
+        "bob_coffee_002",
+        "bob_routine_001",
+        "bob_travel_001",
+        "bob_health_001",
+        "bob_family_001",
+        "bob_books_001",
+        "bob_family_002",
+        "bob_work_002",
+        "bob_work_001"
+      ],
+      "semantic_005": [
+        "alice_books_001",
+        "alice_health_002",
+        "alice_stress_001",
+        "alice_work_002",
+        "alice_calm_001",
+        "alice_coffee_001",
+        "alice_coffee_004_correction",
+        "alice_travel_001",
+        "alice_joy_001",
+        "alice_emotion_change_001"
+      ],
+      "semantic_006": [
+        "alice_cooking_001",
+        "alice_travel_001",
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_family_001",
+        "alice_emotion_change_001",
+        "alice_joy_001",
+        "alice_old_preference_001",
+        "alice_work_001",
+        "alice_oldest_memory_001"
+      ],
+      "semantic_007": [
+        "alice_finance_001",
+        "alice_worry_001",
+        "alice_health_002",
+        "alice_work_002",
+        "alice_calm_001",
+        "alice_pride_001",
+        "alice_insight_001",
+        "alice_joy_001",
+        "alice_cooking_001",
+        "alice_coffee_002"
+      ],
+      "semantic_008": [
+        "bob_work_001",
+        "bob_coffee_002",
+        "bob_travel_001",
+        "bob_family_001",
+        "bob_health_001",
+        "bob_family_002",
+        "bob_books_001",
+        "bob_routine_001",
+        "bob_work_002",
+        "bob_coffee_001"
+      ],
+      "semantic_009": [
+        "alice_travel_002",
+        "alice_travel_001",
+        "alice_work_003",
+        "alice_emotion_change_001",
+        "alice_cooking_001",
+        "alice_calm_001",
+        "alice_coffee_004_correction",
+        "alice_family_002",
+        "alice_coffee_001",
+        "alice_work_002"
+      ],
+      "semantic_010": [
+        "alice_work_003",
+        "alice_identity_project_001",
+        "alice_insight_001",
+        "alice_work_001",
+        "alice_work_002",
+        "alice_new_preference_001",
+        "alice_anxiety_001",
+        "alice_yesterday_work_001",
+        "alice_pride_001",
+        "alice_last_week_work_001"
+      ],
+      "semantic_011": [
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_coffee_001",
+        "alice_coffee_002",
+        "alice_calm_001",
+        "alice_travel_002",
+        "alice_cooking_001",
+        "alice_worry_001",
+        "alice_emotion_change_001",
+        "alice_work_001"
+      ],
+      "emotional_001": [
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_pride_001",
+        "alice_mixed_emotion_001",
+        "alice_family_001",
+        "alice_travel_001",
+        "alice_family_003",
+        "alice_low_importance_001",
+        "alice_emotion_change_001",
+        "alice_worry_001"
+      ],
+      "emotional_002": [
+        "alice_stress_001",
+        "alice_grief_001",
+        "alice_anxiety_001",
+        "alice_emotion_change_001",
+        "alice_worry_001",
+        "alice_family_003",
+        "alice_work_002",
+        "alice_coffee_004_correction",
+        "alice_health_002",
+        "alice_calm_001"
+      ],
+      "emotional_003": [
+        "alice_stress_001",
+        "alice_anxiety_001",
+        "alice_grief_001",
+        "alice_emotion_change_001",
+        "alice_family_003",
+        "alice_health_002",
+        "alice_work_002",
+        "alice_coffee_001",
+        "alice_coffee_004_correction",
+        "alice_calm_001"
+      ],
+      "emotional_004": [
+        "alice_worry_001",
+        "alice_anxiety_001",
+        "alice_stress_001",
+        "alice_grief_001",
+        "alice_work_002",
+        "alice_family_003",
+        "alice_health_002",
+        "alice_high_importance_001",
+        "alice_coffee_001",
+        "alice_mixed_emotion_001"
+      ],
+      "emotional_005": [
+        "alice_frustration_001",
+        "alice_stress_001",
+        "alice_anxiety_001",
+        "alice_emotion_change_001",
+        "alice_worry_001",
+        "alice_work_002",
+        "alice_coffee_004_correction",
+        "alice_family_003",
+        "alice_new_preference_001",
+        "alice_coffee_002"
+      ],
+      "emotional_006": [
+        "alice_pride_001",
+        "alice_joy_001",
+        "alice_travel_001",
+        "alice_health_002",
+        "alice_books_001",
+        "alice_family_003",
+        "alice_oldest_memory_001",
+        "alice_work_002",
+        "alice_emotion_change_001",
+        "alice_grief_001"
+      ],
+      "emotional_007": [
+        "alice_anxiety_001",
+        "alice_stress_001",
+        "alice_worry_001",
+        "alice_emotion_change_001",
+        "alice_grief_001",
+        "alice_work_002",
+        "alice_coffee_002",
+        "alice_family_003",
+        "alice_coffee_004_correction",
+        "alice_calm_001"
+      ],
+      "emotional_008": [
+        "alice_mixed_emotion_001",
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_pride_001",
+        "alice_finance_001",
+        "alice_work_002",
+        "alice_family_003",
+        "alice_coffee_002",
+        "alice_worry_001",
+        "alice_emotion_change_001"
+      ],
+      "emotional_009": [
+        "alice_emotion_change_001",
+        "alice_pride_001",
+        "alice_calm_001",
+        "alice_health_002",
+        "alice_coffee_001",
+        "alice_insight_001",
+        "alice_worry_001",
+        "alice_work_002",
+        "alice_anxiety_001",
+        "alice_family_003"
+      ],
+      "emotional_010": [
+        "alice_calm_001",
+        "alice_anxiety_001",
+        "alice_joy_001",
+        "alice_health_002",
+        "alice_stress_001",
+        "alice_family_003",
+        "alice_travel_001",
+        "alice_emotion_change_001",
+        "alice_grief_001",
+        "alice_mixed_emotion_001"
+      ],
+      "temporal_001": [
+        "dave_today_001",
+        "dave_today_002"
+      ],
+      "temporal_002": [
+        "dave_today_001",
+        "dave_today_002"
+      ],
+      "temporal_003": [
+        "alice_family_001",
+        "alice_stress_001",
+        "alice_family_003",
+        "alice_work_002",
+        "alice_frustration_001",
+        "alice_yesterday_work_001",
+        "alice_recent_convo_001"
+      ],
+      "temporal_004": [
+        "alice_health_002",
+        "alice_joy_001",
+        "alice_work_002",
+        "alice_stress_001",
+        "alice_yesterday_work_001",
+        "alice_last_week_work_001",
+        "alice_recent_convo_001",
+        "alice_calm_001",
+        "alice_worry_001",
+        "alice_family_003"
+      ],
+      "temporal_005": [
+        "alice_grief_001",
+        "alice_travel_001",
+        "alice_stress_001",
+        "alice_family_002",
+        "alice_identity_project_001",
+        "alice_pride_001",
+        "alice_oldest_memory_001",
+        "alice_joy_001",
+        "alice_family_001",
+        "alice_cooking_001"
+      ],
+      "temporal_006": [
+        "alice_work_002",
+        "alice_recent_convo_001",
+        "alice_stress_001",
+        "alice_family_003",
+        "alice_frustration_001",
+        "alice_yesterday_work_001",
+        "alice_family_001"
+      ],
+      "temporal_007": [
+        "alice_yesterday_work_001",
+        "alice_stress_001",
+        "alice_work_002",
+        "alice_recent_convo_001",
+        "alice_frustration_001",
+        "alice_family_003",
+        "alice_family_001"
+      ],
+      "temporal_008": [
+        "alice_new_preference_001",
+        "alice_old_preference_001",
+        "alice_oldest_memory_001",
+        "alice_work_001",
+        "alice_insight_001",
+        "alice_last_week_work_001",
+        "alice_frustration_001",
+        "alice_yesterday_work_001",
+        "alice_identity_project_001",
+        "alice_work_002"
+      ],
+      "temporal_009": [],
+      "temporal_010": [],
+      "temporal_011": [
+        "alice_oldest_memory_001",
+        "alice_new_preference_001",
+        "alice_old_preference_001",
+        "alice_pride_001",
+        "alice_insight_001",
+        "alice_identity_project_001",
+        "alice_health_002",
+        "alice_work_001",
+        "alice_stress_001",
+        "alice_work_002"
+      ],
+      "rls_001": [
+        "alice_calm_001",
+        "alice_coffee_001",
+        "alice_coffee_002",
+        "alice_coffee_003_old",
+        "alice_coffee_004_correction",
+        "alice_joy_001",
+        "alice_emotion_change_001",
+        "alice_cooking_001",
+        "alice_low_importance_001",
+        "alice_travel_001"
+      ],
+      "rls_002": [
+        "bob_coffee_001",
+        "bob_routine_001",
+        "bob_coffee_002",
+        "bob_travel_001",
+        "bob_health_001",
+        "bob_family_001",
+        "bob_family_002",
+        "bob_work_002",
+        "bob_work_001",
+        "bob_books_001"
+      ],
+      "rls_003": [
+        "alice_family_001",
+        "alice_cooking_001",
+        "alice_joy_001",
+        "alice_family_003",
+        "alice_finance_001",
+        "alice_travel_001",
+        "alice_family_002",
+        "alice_health_002",
+        "alice_worry_001",
+        "alice_grief_001"
+      ],
+      "rls_004": [
+        "bob_family_001",
+        "bob_family_002",
+        "bob_work_002",
+        "bob_coffee_002",
+        "bob_travel_001",
+        "bob_health_001",
+        "bob_routine_001",
+        "bob_work_001",
+        "bob_coffee_001",
+        "bob_books_001"
+      ],
+      "rls_005": [
+        "alice_travel_001",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_coffee_004_correction",
+        "alice_family_002",
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_coffee_003_old",
+        "alice_family_001",
+        "alice_coffee_001"
+      ],
+      "rls_006": [
+        "bob_travel_001",
+        "bob_coffee_002",
+        "bob_health_001",
+        "bob_coffee_001",
+        "bob_work_002",
+        "bob_family_002",
+        "bob_books_001",
+        "bob_family_001",
+        "bob_work_001",
+        "bob_routine_001"
+      ],
+      "rls_007": [
+        "alice_work_001",
+        "alice_insight_001",
+        "alice_new_preference_001",
+        "alice_oldest_memory_001",
+        "alice_pride_001",
+        "alice_work_002",
+        "alice_old_preference_001",
+        "alice_identity_project_001",
+        "alice_anxiety_001",
+        "alice_yesterday_work_001"
+      ],
+      "rls_008": [
+        "alice_health_001",
+        "alice_calm_001",
+        "alice_joy_001",
+        "alice_new_preference_001",
+        "alice_health_002",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_anxiety_001",
+        "alice_travel_001",
+        "alice_work_002"
+      ],
+      "rls_009": [
+        "bob_health_001",
+        "bob_family_001",
+        "bob_travel_001",
+        "bob_family_002",
+        "bob_routine_001",
+        "bob_books_001",
+        "bob_coffee_002",
+        "bob_work_002",
+        "bob_coffee_001",
+        "bob_work_001"
+      ],
+      "rls_010": [
+        "bob_routine_001",
+        "bob_family_001",
+        "bob_coffee_002",
+        "bob_coffee_001",
+        "bob_health_001",
+        "bob_work_002",
+        "bob_family_002",
+        "bob_travel_001",
+        "bob_work_001",
+        "bob_books_001"
+      ],
+      "adversarial_001": [
+        "alice_coffee_001",
+        "alice_coffee_002",
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_calm_001",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_travel_001",
+        "alice_emotion_change_001",
+        "alice_work_001"
+      ],
+      "adversarial_002": [
+        "alice_high_importance_001",
+        "alice_health_001",
+        "alice_pride_001",
+        "alice_identity_project_001",
+        "alice_family_001",
+        "alice_work_003",
+        "alice_finance_001",
+        "alice_grief_001",
+        "alice_address_001",
+        "alice_phone_001"
+      ],
+      "adversarial_003": [
+        "alice_family_001",
+        "alice_family_002",
+        "alice_mixed_emotion_001",
+        "alice_worry_001",
+        "alice_coffee_004_correction",
+        "alice_recent_convo_001",
+        "alice_work_002",
+        "alice_identity_project_001",
+        "alice_family_003",
+        "alice_travel_002"
+      ],
+      "adversarial_004": [
+        "alice_mixed_emotion_001",
+        "alice_family_003",
+        "alice_grief_001",
+        "alice_cooking_001",
+        "alice_joy_001",
+        "alice_pride_001",
+        "alice_finance_001",
+        "alice_travel_001",
+        "alice_family_001",
+        "alice_coffee_004_correction"
+      ],
+      "adversarial_005": [
+        "bob_travel_001",
+        "bob_coffee_002",
+        "bob_family_002",
+        "bob_health_001",
+        "bob_family_001",
+        "bob_coffee_001",
+        "bob_books_001",
+        "bob_routine_001",
+        "bob_work_002",
+        "bob_work_001"
+      ],
+      "edge_001": [
+        "eve_003",
+        "eve_005",
+        "eve_007",
+        "eve_009",
+        "eve_006",
+        "eve_008",
+        "eve_004",
+        "eve_010",
+        "eve_002",
+        "eve_001"
+      ],
+      "edge_002": [
+        "eve_003",
+        "eve_005",
+        "eve_007",
+        "eve_006",
+        "eve_004",
+        "eve_002",
+        "eve_009",
+        "eve_010",
+        "eve_008",
+        "eve_001"
+      ],
+      "edge_003": [
+        "carol_xss_001",
+        "carol_xss_003",
+        "carol_xss_004",
+        "carol_xss_002",
+        "carol_short_001",
+        "carol_sqli_002",
+        "carol_null_003",
+        "carol_unicode_002",
+        "carol_unicode_004",
+        "carol_special_003"
+      ],
+      "edge_004": [
+        "carol_sqli_001",
+        "carol_long_001",
+        "carol_unicode_002",
+        "carol_unicode_001",
+        "carol_short_003",
+        "carol_unicode_005",
+        "carol_null_003",
+        "carol_short_001",
+        "carol_short_002",
+        "carol_unicode_004"
+      ],
+      "edge_005": [
+        "carol_unicode_001",
+        "carol_unicode_004",
+        "carol_short_001",
+        "carol_short_003",
+        "carol_unicode_002",
+        "carol_unicode_003",
+        "carol_null_003",
+        "carol_short_002",
+        "carol_xss_002",
+        "carol_unicode_005"
+      ],
+      "edge_006": [],
+      "edge_007": [
+        "alice_pride_001",
+        "alice_identity_project_001",
+        "alice_new_preference_001",
+        "alice_work_001",
+        "alice_books_001",
+        "alice_old_preference_001",
+        "alice_stress_001",
+        "alice_travel_001",
+        "alice_work_003",
+        "alice_work_002"
+      ],
+      "edge_008": [
+        "carol_unicode_002",
+        "carol_null_003",
+        "carol_short_001",
+        "carol_unicode_003",
+        "carol_short_003",
+        "carol_unicode_004",
+        "carol_xss_002",
+        "carol_unicode_001",
+        "carol_xss_001",
+        "carol_short_002"
+      ],
+      "edge_009": [
+        "carol_sqli_003",
+        "carol_sqli_002",
+        "carol_short_001",
+        "carol_short_003",
+        "carol_null_003",
+        "carol_xss_002",
+        "carol_xss_001",
+        "carol_special_001",
+        "carol_short_002",
+        "carol_unicode_003"
+      ],
+      "edge_010": [
+        "alice_identity_project_001",
+        "alice_yesterday_work_001",
+        "alice_books_001",
+        "alice_recent_convo_001",
+        "alice_work_003",
+        "alice_last_week_work_001",
+        "alice_anxiety_001",
+        "alice_new_preference_001",
+        "alice_family_002",
+        "alice_coffee_003_old"
+      ],
+      "edge_011": [
+        "alice_pride_001",
+        "alice_joy_001",
+        "alice_work_002",
+        "alice_family_002",
+        "alice_anxiety_001",
+        "alice_family_003",
+        "alice_worry_001",
+        "alice_finance_001",
+        "alice_calm_001",
+        "alice_new_preference_001"
+      ],
+      "edge_012": [
+        "alice_calm_001",
+        "alice_coffee_001",
+        "alice_coffee_002",
+        "alice_coffee_003_old",
+        "alice_coffee_004_correction",
+        "alice_joy_001",
+        "alice_emotion_change_001",
+        "alice_cooking_001",
+        "alice_low_importance_001",
+        "alice_travel_001"
+      ],
+      "edge_013": [
+        "alice_phone_001",
+        "alice_address_001",
+        "alice_worry_001",
+        "alice_grief_001",
+        "alice_work_002",
+        "alice_anxiety_001",
+        "alice_family_002",
+        "alice_joy_001",
+        "alice_stress_001",
+        "alice_health_002"
+      ],
+      "edge_014": [
+        "alice_address_001",
+        "alice_phone_001",
+        "alice_joy_001",
+        "alice_pride_001",
+        "alice_grief_001",
+        "alice_worry_001",
+        "alice_work_002",
+        "alice_identity_project_001",
+        "alice_emotion_change_001",
+        "alice_family_002"
+      ],
+      "edge_015": [
+        "eve_005",
+        "eve_007",
+        "eve_003",
+        "eve_004",
+        "eve_006",
+        "eve_008",
+        "eve_002",
+        "eve_009",
+        "eve_010",
+        "eve_001"
+      ],
+      "cross_001": [
+        "alice_health_001",
+        "alice_calm_001",
+        "alice_coffee_002",
+        "alice_emotion_change_001",
+        "alice_stress_001",
+        "alice_coffee_001",
+        "alice_family_003",
+        "alice_coffee_003_old",
+        "alice_cooking_001",
+        "alice_joy_001"
+      ],
+      "cross_002": [
+        "alice_health_002",
+        "alice_calm_001",
+        "alice_joy_001",
+        "alice_cooking_001",
+        "alice_insight_001",
+        "alice_family_003",
+        "alice_pride_001",
+        "alice_finance_001",
+        "alice_high_importance_001",
+        "alice_travel_001"
+      ],
+      "cross_003": [
+        "alice_finance_001",
+        "alice_worry_001",
+        "alice_mixed_emotion_001",
+        "alice_joy_001",
+        "alice_work_002",
+        "alice_calm_001",
+        "alice_health_002",
+        "alice_anxiety_001",
+        "alice_travel_001",
+        "alice_family_002"
+      ],
+      "cross_004": [
+        "alice_family_003",
+        "alice_joy_001",
+        "alice_cooking_001",
+        "alice_family_001",
+        "alice_mixed_emotion_001",
+        "alice_calm_001",
+        "alice_work_002",
+        "alice_health_002",
+        "alice_finance_001",
+        "alice_worry_001"
+      ],
+      "cross_005": [
+        "bob_family_001",
+        "bob_routine_001",
+        "bob_coffee_002",
+        "bob_family_002",
+        "bob_work_002",
+        "bob_travel_001",
+        "bob_coffee_001",
+        "bob_work_001",
+        "bob_health_001",
+        "bob_books_001"
+      ],
+      "cross_006": [
+        "alice_oldest_memory_001",
+        "alice_identity_project_001",
+        "alice_anxiety_001",
+        "alice_pride_001",
+        "alice_last_week_work_001",
+        "alice_yesterday_work_001",
+        "alice_insight_001",
+        "alice_work_001",
+        "alice_high_importance_001",
+        "alice_work_003"
+      ],
+      "cross_007": [
+        "alice_high_importance_001",
+        "alice_insight_001",
+        "alice_new_preference_001",
+        "alice_anxiety_001",
+        "alice_frustration_001",
+        "alice_work_001",
+        "alice_pride_001",
+        "alice_work_003",
+        "alice_work_002",
+        "alice_old_preference_001"
+      ],
+      "cross_008": [
+        "alice_insight_001",
+        "alice_emotion_change_001",
+        "alice_pride_001",
+        "alice_calm_001",
+        "alice_anxiety_001",
+        "alice_coffee_002",
+        "alice_yesterday_work_001",
+        "alice_stress_001",
+        "alice_coffee_001",
+        "alice_identity_project_001"
+      ],
+      "cross_009": [
+        "eve_005",
+        "eve_007",
+        "eve_003",
+        "eve_009",
+        "eve_004",
+        "eve_001",
+        "eve_002",
+        "eve_008",
+        "eve_006",
+        "eve_010"
+      ],
+      "cross_010": [
+        "eve_007",
+        "eve_003",
+        "eve_005",
+        "eve_002",
+        "eve_001",
+        "eve_010",
+        "eve_004",
+        "eve_009",
+        "eve_006",
+        "eve_008"
+      ],
+      "adversarial_006": [
+        "bob_work_001",
+        "bob_family_002",
+        "bob_books_001",
+        "bob_coffee_002",
+        "bob_family_001",
+        "bob_health_001",
+        "bob_coffee_001",
+        "bob_work_002",
+        "bob_routine_001",
+        "bob_travel_001"
+      ],
+      "adversarial_007": [
+        "alice_calm_001",
+        "alice_joy_001",
+        "alice_worry_001",
+        "alice_health_002",
+        "alice_anxiety_001",
+        "alice_stress_001",
+        "alice_coffee_002",
+        "alice_work_002",
+        "alice_health_001",
+        "alice_family_003"
+      ],
+      "adversarial_008": [
+        "bob_routine_001",
+        "bob_family_001",
+        "bob_health_001",
+        "bob_family_002",
+        "bob_coffee_002",
+        "bob_work_002",
+        "bob_work_001",
+        "bob_books_001",
+        "bob_coffee_001",
+        "bob_travel_001"
+      ],
+      "adversarial_009": [
+        "eve_005",
+        "eve_007",
+        "eve_003",
+        "eve_001",
+        "eve_002",
+        "eve_006",
+        "eve_004",
+        "eve_009",
+        "eve_008",
+        "eve_010"
+      ],
+      "adversarial_010": [
+        "alice_joy_001",
+        "alice_pride_001",
+        "alice_work_002",
+        "alice_coffee_004_correction",
+        "alice_family_002",
+        "alice_grief_001",
+        "alice_calm_001",
+        "alice_emotion_change_001",
+        "alice_yesterday_work_001",
+        "alice_travel_001"
+      ],
+      "edge_016": [
+        "alice_coffee_001",
+        "alice_coffee_004_correction",
+        "alice_coffee_003_old",
+        "alice_calm_001",
+        "alice_coffee_002",
+        "alice_cooking_001",
+        "alice_travel_002",
+        "alice_worry_001",
+        "alice_travel_001",
+        "alice_books_001"
+      ],
+      "negative_001": [
+        "alice_work_001",
+        "alice_identity_project_001",
+        "alice_new_preference_001",
+        "alice_yesterday_work_001",
+        "alice_coffee_003_old",
+        "alice_family_001",
+        "alice_coffee_004_correction",
+        "alice_joy_001",
+        "alice_calm_001",
+        "alice_books_001"
+      ],
+      "negative_002": [
+        "bob_family_001",
+        "bob_travel_001",
+        "bob_family_002",
+        "bob_books_001",
+        "bob_coffee_001",
+        "bob_health_001",
+        "bob_work_001",
+        "bob_work_002",
+        "bob_coffee_002",
+        "bob_routine_001"
+      ],
+      "minimal_001": [
+        "eve_003",
+        "eve_005",
+        "eve_007",
+        "eve_009",
+        "eve_002",
+        "eve_001",
+        "eve_004",
+        "eve_006",
+        "eve_008",
+        "eve_010"
+      ]
+    }
+  },
+  "comparison": {
+    "top5Gains": [],
+    "top5Losses": [],
+    "rankingChanges": [
+      "emotional_001",
+      "emotional_002",
+      "emotional_003",
+      "emotional_004",
+      "emotional_005",
+      "emotional_006",
+      "emotional_007",
+      "emotional_008"
+    ]
+  }
+}

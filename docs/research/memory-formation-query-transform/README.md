@@ -20,6 +20,9 @@ interventions in Engram's memory lifecycle:
 | 2 | [`02-research-memo.md`](02-research-memo.md) | Literature review (formation + query-transform), blind-spot pass, promising-vs-hype read, cited primary sources |
 | 3 | [`03-experiment-spec.md`](03-experiment-spec.md) | A–E ablation matrix, graduated corpora, retrieval + downstream metrics, reproducibility controls, budgets |
 | 4 | [`04-finding-tie-domination.md`](04-finding-tie-domination.md) | **Blocking finding.** Retrieval ranking is decided by array order among tied scores, not by score. Changes the required sequencing. |
+| 5 | [`05-finding-band-inversion.md`](05-finding-band-inversion.md) | Rerank-scale mixing finding and scale-fix ablation. |
+| 6 | [`06-candidate-depth-diversity-results.md`](06-candidate-depth-diversity-results.md) | Candidate-depth control and near-duplicate diversity ablation that breaks the 14/20 ceiling. |
+| 7 | [`07-diversity-production-gate.md`](07-diversity-production-gate.md) | Corrected 81-query real-embedding safety gate for candidate diversity, including issue #326 controls and graduated-corpus gaps. |
 
 ## Executive summary
 

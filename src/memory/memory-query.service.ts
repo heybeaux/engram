@@ -49,6 +49,10 @@ import {
   meetsLexicalCoverageFloor,
   ILIKE_RESCUE_BAND_BOTTOM,
 } from './memory-ranking.util';
+import { selectNearDuplicateDiverse } from './memory-diversity.util';
+
+const MAX_CONFIGURED_CANDIDATE_POOL_DEPTH = 200;
+const CLUSTER_ONLY_SCAN_DEPTH = 50;
 
 @Injectable()
 export class MemoryQueryService {
@@ -119,6 +123,48 @@ export class MemoryQueryService {
    */
   private readonly rescueSqlTiebreak =
     process.env.RECALL_RESCUE_SQL_TIEBREAK === 'true';
+
+  /**
+   * RESEARCH FLAGS — default OFF. These decouple candidate depth from the
+   * caller-visible final top-K so depth/diversity can be ablated safely.
+   */
+  private readonly candidatePoolDepth = this.positiveEnvInt(
+    'RECALL_CANDIDATE_POOL_DEPTH',
+  );
+  private readonly nearDuplicateClusterLimit = this.positiveEnvInt(
+    'RECALL_NEAR_DUPLICATE_CLUSTER_LIMIT',
+  );
+
+  /**
+   * Candidate controls depend on the scale fix because diversity must operate
+   * on one consistently-scaled total order. Configured depth is a minimum pool
+   * size, never a cap below the caller's requested page. Cluster-only mode gets
+   * a bounded 50-row scan so it stays independently useful without processing
+   * an unbounded rescue pool.
+   */
+  private effectiveCandidatePoolDepth(limit: number): number | undefined {
+    if (!this.rerankScaleFix) return undefined;
+    if (this.candidatePoolDepth) {
+      return Math.max(
+        limit,
+        Math.min(
+          this.candidatePoolDepth,
+          MAX_CONFIGURED_CANDIDATE_POOL_DEPTH,
+        ),
+      );
+    }
+    if (this.nearDuplicateClusterLimit) {
+      return Math.max(limit, CLUSTER_ONLY_SCAN_DEPTH);
+    }
+    return undefined;
+  }
+
+  private positiveEnvInt(name: string): number | undefined {
+    const raw = process.env[name];
+    if (!raw) return undefined;
+    const value = Number(raw);
+    return Number.isInteger(value) && value > 0 ? value : undefined;
+  }
 
   /**
    * `, <col> ASC` fragment appended to rescue `ORDER BY` clauses, or the empty
@@ -904,15 +950,24 @@ export class MemoryQueryService {
 
     // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
     const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
+    // Research depth control: preserve final `limit`, but cap the candidates
+    // exposed to reranking. Unset means byte-for-byte existing behaviour.
+    const effectiveCandidateDepth = this.effectiveCandidatePoolDepth(limit);
+    const rerankCandidates = effectiveCandidateDepth
+      ? scoredMemories.slice(0, effectiveCandidateDepth)
+      : scoredMemories;
+    const rerankCandidateIds = effectiveCandidateDepth
+      ? new Set(rerankCandidates.map((memory) => memory.id))
+      : undefined;
     // Scale-fix mode ranks the entire pool rather than truncating at `limit`.
     // The reranker already scores every candidate (`candidates = memories`);
     // `limit` only controlled the final `slice`. Ranking the whole pool is what
     // makes the sticky re-add a no-op and the page prefix-stable in `limit`.
     const rerankDepth = this.rerankScaleFix
-      ? Math.max(limit, scoredMemories.length)
+      ? Math.max(limit, rerankCandidates.length)
       : limit;
     scoredMemories = await this.rankingService.applyReranking(
-      scoredMemories,
+      rerankCandidates,
       rerankQuery,
       rerankDepth,
     );
@@ -944,7 +999,11 @@ export class MemoryQueryService {
       Number.POSITIVE_INFINITY,
     );
     const missingKeywordHits = [...keywordRescueMap.entries()]
-      .filter(([id]) => !scoredMemories.some((m) => m.id === id))
+      .filter(
+        ([id]) =>
+          (!rerankCandidateIds || rerankCandidateIds.has(id)) &&
+          !scoredMemories.some((m) => m.id === id),
+      )
       .map(([, mem], i) => {
         if (!this.rerankScaleFix) {
           return {
@@ -968,14 +1027,20 @@ export class MemoryQueryService {
       // pool depth above, so this is the single point where `limit` is applied.
       // Truncating a total order (compareByRankKeys) at K is what gives the
       // prefix property across different values of `limit`.
-      scoredMemories = (
+      const consistentlyScaled = (
         missingKeywordHits.length > 0
           ? [...missingKeywordHits, ...scoredMemories]
           : scoredMemories
       )
         .slice()
-        .sort(compareByRankKeys)
-        .slice(0, limit);
+        .sort(compareByRankKeys);
+      scoredMemories = this.nearDuplicateClusterLimit
+        ? selectNearDuplicateDiverse(
+            consistentlyScaled,
+            limit,
+            this.nearDuplicateClusterLimit,
+          )
+        : consistentlyScaled.slice(0, limit);
     } else if (missingKeywordHits.length > 0) {
       scoredMemories = [...missingKeywordHits, ...scoredMemories]
         .sort(compareByRankKeys)
