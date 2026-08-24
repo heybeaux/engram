@@ -9,10 +9,6 @@ import {
   ILIKE_RESCUE_BAND_TOP,
   ILIKE_RESCUE_BAND_BOTTOM,
   RankableMemory,
-  relativeRescueScore,
-  RELATIVE_FTS_MAX_BOOST,
-  RELATIVE_ILIKE_MAX_BOOST,
-  RELATIVE_LEXICAL_ONLY_ANCHOR,
 } from './memory-ranking.util';
 
 describe('memory-ranking.util', () => {
@@ -216,100 +212,6 @@ describe('memory-ranking.util', () => {
         -Math.sign(compareByRankKeys(y, x)),
       );
       expect(compareByRankKeys(x, x)).toBe(0);
-    });
-  });
-
-  // PROTOTYPE (RECALL_RELATIVE_RESCUE=true). Default behaviour is unaffected.
-  describe('relativeRescueScore', () => {
-    it('never exceeds the cosine ceiling by more than the boost', () => {
-      const s = relativeRescueScore(1.0, 1, 0, RELATIVE_FTS_MAX_BOOST, 1.0);
-      expect(s).toBeLessThanOrEqual(1 + RELATIVE_FTS_MAX_BOOST + 1e-6);
-    });
-
-    it('is monotonically increasing in cosine at equal lexical quality', () => {
-      const weakSemantic = relativeRescueScore(
-        0.4,
-        1,
-        0,
-        RELATIVE_FTS_MAX_BOOST,
-        0.9,
-      );
-      const strongSemantic = relativeRescueScore(
-        0.9,
-        1,
-        5,
-        RELATIVE_FTS_MAX_BOOST,
-        0.9,
-      );
-      // This is the property the band inverts: under the band the rank-0
-      // lexical hit wins regardless of cosine.
-      expect(strongSemantic).toBeGreaterThan(weakSemantic);
-    });
-
-    it('lets a strong semantic hit beat a perfect lexical hit on a weak one', () => {
-      // Best-possible FTS agreement on a 0.60-cosine candidate...
-      const lexicalWinnerOnWeakDoc = relativeRescueScore(
-        0.6,
-        1,
-        0,
-        RELATIVE_FTS_MAX_BOOST,
-        0.95,
-      );
-      // ...still loses to a plain 0.95-cosine candidate with no lexical hit.
-      expect(lexicalWinnerOnWeakDoc).toBeLessThan(0.95);
-    });
-
-    it('still promotes: a lexical hit outranks the same cosine without one', () => {
-      const cosine = 0.7;
-      const boosted = relativeRescueScore(
-        cosine,
-        1,
-        0,
-        RELATIVE_ILIKE_MAX_BOOST,
-        0.9,
-      );
-      expect(boosted).toBeGreaterThan(cosine);
-      expect(boosted).toBeCloseTo(cosine * (1 + RELATIVE_ILIKE_MAX_BOOST), 5);
-    });
-
-    it('anchors lexical-only candidates below the best semantic hit', () => {
-      const bestVector = 0.82;
-      const lexicalOnly = relativeRescueScore(
-        null,
-        1,
-        0,
-        RELATIVE_FTS_MAX_BOOST,
-        bestVector,
-      );
-      expect(lexicalOnly).toBeLessThan(bestVector);
-      expect(lexicalOnly).toBeCloseTo(
-        bestVector * RELATIVE_LEXICAL_ONLY_ANCHOR,
-        5,
-      );
-    });
-
-    it('breaks exact ties strictly by lexical rank', () => {
-      const a = relativeRescueScore(0.5, 1, 0, RELATIVE_FTS_MAX_BOOST, 0.5);
-      const b = relativeRescueScore(0.5, 1, 1, RELATIVE_FTS_MAX_BOOST, 0.5);
-      expect(a).toBeGreaterThan(b);
-    });
-
-    it('scales lexical quality: full coverage beats partial at equal cosine', () => {
-      const full = relativeRescueScore(
-        0.6,
-        1,
-        0,
-        RELATIVE_ILIKE_MAX_BOOST,
-        0.9,
-      );
-      const partial = relativeRescueScore(
-        0.6,
-        0.33,
-        0,
-        RELATIVE_ILIKE_MAX_BOOST,
-        0.9,
-      );
-      expect(full).toBeGreaterThan(partial);
     });
   });
 });

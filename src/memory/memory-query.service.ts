@@ -47,28 +47,11 @@ import {
   ftsRescueScore,
   ilikeRescueScore,
   ILIKE_RESCUE_BAND_BOTTOM,
-  relativeRescueScore,
-  RELATIVE_FTS_MAX_BOOST,
-  RELATIVE_ILIKE_MAX_BOOST,
-  RELATIVE_IDENTITY_MAX_BOOST,
 } from './memory-ranking.util';
 
 @Injectable()
 export class MemoryQueryService {
   private readonly logger = new Logger(MemoryQueryService.name);
-
-  /**
-   * PROTOTYPE FLAG — default OFF, no change to shipped behaviour.
-   *
-   * `RECALL_RELATIVE_RESCUE=true` switches the keyword-rescue paths from the
-   * absolute score bands (FTS in (1.10,1.25], ILIKE in (1.00,1.10], identity a
-   * flat 1.15 — all of which sit above the cosine ceiling of 1.0 and therefore
-   * categorically outrank every semantic hit) to a bounded boost applied to the
-   * candidate's own cosine similarity. See
-   * docs/research/memory-formation-query-transform/05-finding-band-inversion.md.
-   */
-  private readonly relativeRescue =
-    process.env.RECALL_RELATIVE_RESCUE === 'true';
 
   /**
    * RESEARCH FLAG — default OFF, no change to shipped behaviour.
@@ -518,26 +501,14 @@ export class MemoryQueryService {
         // Rows arrive ordered by ts_rank DESC, so row 0 carries the max.
         const maxTsRank =
           ftsResults.length > 0 ? Number(ftsResults[0].ts_rank) : 0;
-        // Relative mode only: the best cosine in this query's vector pool, used
-        // to anchor lexical-only candidates below the best semantic hit.
-        const bestVector = vectorResults.reduce(
-          (best, r) => (r.score > best ? r.score : best),
-          0,
-        );
         let ftsAdded = 0;
         for (let ftsRank = 0; ftsRank < ftsResults.length; ftsRank++) {
           const row = ftsResults[ftsRank];
-          const quality =
-            maxTsRank > 0 ? Math.min(1, Number(row.ts_rank) / maxTsRank) : 1;
-          const bandedScore = this.relativeRescue
-            ? relativeRescueScore(
-                cosineMap.get(row.id),
-                quality,
-                ftsRank,
-                RELATIVE_FTS_MAX_BOOST,
-                bestVector,
-              )
-            : ftsRescueScore(Number(row.ts_rank), maxTsRank, ftsRank);
+          const bandedScore = ftsRescueScore(
+            Number(row.ts_rank),
+            maxTsRank,
+            ftsRank,
+          );
           ftsResultIds.add(row.id);
           keywordRescueIds.add(row.id);
           if (!scoreMap.has(row.id)) {
@@ -645,23 +616,11 @@ export class MemoryQueryService {
               ilikeRank++
             ) {
               const row = ilikeResults[ilikeRank];
-              const coverage =
-                words.length > 0
-                  ? Math.min(1, Number(row.match_count) / words.length)
-                  : 1;
-              const bandedScore = this.relativeRescue
-                ? relativeRescueScore(
-                    cosineMap.get(row.id),
-                    coverage,
-                    ilikeRank,
-                    RELATIVE_ILIKE_MAX_BOOST,
-                    bestVector,
-                  )
-                : ilikeRescueScore(
-                    Number(row.match_count),
-                    words.length,
-                    ilikeRank,
-                  );
+              const bandedScore = ilikeRescueScore(
+                Number(row.match_count),
+                words.length,
+                ilikeRank,
+              );
               ftsResultIds.add(row.id);
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
@@ -720,37 +679,20 @@ export class MemoryQueryService {
               select: { id: true },
             });
             let identityAdded = 0;
-            for (
-              let identityRank = 0;
-              identityRank < identityResults.length;
-              identityRank++
-            ) {
-              const row = identityResults[identityRank];
-              // DEFAULT MODE: flat 1.15 — the same flat-constant defect the FTS
-              // and ILIKE paths had. 1.15 sits *inside* the FTS band
-              // (1.10, 1.25], so identity hits interleave with FTS hits and all
-              // ten identity rows tie with each other. Left unchanged here so
-              // the flag measures exactly one variable; the relative branch
-              // below is the fix.
-              const identityScore = this.relativeRescue
-                ? relativeRescueScore(
-                    cosineMap.get(row.id),
-                    1,
-                    identityRank,
-                    RELATIVE_IDENTITY_MAX_BOOST,
-                    bestVector,
-                  )
-                : 1.15;
+            // NOTE (research finding, not yet fixed): this flat 1.15 is the
+            // same flat-constant defect c905438 removed from the FTS and ILIKE
+            // paths. 1.15 sits *inside* the FTS band (1.10, 1.25], so identity
+            // hits interleave with FTS hits and all ten identity rows tie with
+            // each other. Left as-is deliberately — see
+            // docs/research/memory-formation-query-transform/05-finding-band-inversion.md.
+            for (const row of identityResults) {
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
-                scoreMap.set(row.id, identityScore);
+                scoreMap.set(row.id, 1.15);
                 memoryIds.push(row.id);
                 identityAdded++;
               } else {
-                scoreMap.set(
-                  row.id,
-                  Math.max(scoreMap.get(row.id)!, identityScore),
-                );
+                scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.15));
               }
             }
             if (identityAdded > 0) {
@@ -937,17 +879,17 @@ export class MemoryQueryService {
     const missingKeywordHits = [...keywordRescueMap.entries()]
       .filter(([id]) => !scoredMemories.some((m) => m.id === id))
       .map(([, mem], i) => {
-        if (!this.relativeRescue && !this.rerankScaleFix) {
+        if (!this.rerankScaleFix) {
           return {
             ...mem,
             score: mem.score ?? ILIKE_RESCUE_BAND_BOTTOM,
           } as MemoryWithScore;
         }
-        // Relative / scale-fix mode: honour the "sticky" intent (an exact-match
-        // write must not vanish from the result set) without letting a
-        // pre-rerank score outrank post-rerank ones. Re-added hits are appended
-        // just below the lowest rescaled score, ordered among themselves by
-        // their own rescue score.
+        // Scale-fix mode: honour the "sticky" intent (an exact-match write must
+        // not vanish from the result set) without letting a pre-rerank score
+        // outrank post-rerank ones. Re-added hits are appended just below the
+        // lowest rescaled score, ordered among themselves by their own rescue
+        // score.
         const floor = Number.isFinite(rescaledFloor) ? rescaledFloor : 0;
         return {
           ...mem,

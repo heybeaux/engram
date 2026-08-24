@@ -10,6 +10,41 @@ mnemon-v02-noise-prefix`
 
 ---
 
+> ## ⚠️ UPDATE (2026-08-23, later the same day): the `RECALL_RELATIVE_RESCUE` prototype was REMOVED
+>
+> **The analysis in this document is still valid and is exactly why the prototype
+> was killed. Only the prototype code is gone — `relativeRescueScore()`, the
+> `RECALL_RELATIVE_RESCUE` flag and its branches, its unit tests, and
+> `scripts/research/run-rescue-ab.sh`.**
+>
+> The 5-arm ablation that followed this write-up (20 tasks, noisy prefix corpus,
+> `limit=10`, usage counters reset per arm) settled it:
+>
+> | arm | gold@1 | gold@5 | gold@10 | MRR@10 |
+> | --- | --- | --- | --- | --- |
+> | default | 0 | 6 | 6 | 0.150 |
+> | scalefix (`RECALL_RERANK_SCALE_FIX`) | 0 | **14** | **14** | **0.350** |
+> | relative (`RECALL_RELATIVE_RESCUE`) | 0 | 7 | 8 | 0.174 |
+> | both | 0 | 7 | 8 | 0.174 |
+> | vector-only (`RECALL_NO_RESCUE`) | 6 | 7 | 8 | 0.331 |
+>
+> The kill signal is that **`both` is numerically identical to `relative`**.
+> `relativeRescueScore()` rewrites candidate scores into the rescaled scale
+> *upstream*, so by the time `RECALL_RERANK_SCALE_FIX` runs there is no scale
+> mismatch left for it to correct — the scale fix becomes a no-op. Enabling
+> relative rescue therefore does not compose with the scale fix, it *replaces*
+> it, dragging 14/20 gold@5 back down to 7/20. The two flags are mutually
+> exclusive by construction, and the scale fix is strictly better on every
+> metric.
+>
+> Keeping the prototype in the tree would only have tempted someone into a
+> net-negative configuration. The sections below describe the removed code in the
+> present tense; read them as a record of what was measured, not of what ships.
+> The surviving fix is `RECALL_RERANK_SCALE_FIX` (commit `7cdf49d`, branch
+> `fix/recall-rerank-scale-mixing`).
+
+---
+
 ## TL;DR
 
 1. **Gold is never missing from the candidate pool.** 20/20 tasks retrieve the

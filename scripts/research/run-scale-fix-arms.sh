@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# Five-arm retrieval A/B on the noisy mnemon corpus.
+# Three-arm retrieval A/B on the noisy mnemon corpus.
 #
 #   default   — shipped behaviour (banded rescue + raw-score sticky re-add)
 #   scalefix  — RECALL_RERANK_SCALE_FIX=true  (rank full pool, no raw re-add)
-#   relative  — RECALL_RELATIVE_RESCUE=true   (prior prototype)
-#   both      — scalefix + relative
 #   norescue  — RECALL_NO_RESCUE=true         (vector-only control)
+#
+# Originally five arms: the RECALL_RELATIVE_RESCUE prototype ("relative") and
+# its combination with the scale fix ("both") have been removed along with the
+# flag. `both` scored identically to `relative` (7/20 gold@5) because relative
+# rescue rewrote candidate scores into the rescaled scale upstream, leaving the
+# scale fix nothing to correct and dragging 14/20 back down to 7/20. See
+# docs/research/memory-formation-query-transform/05-finding-band-inversion.md.
 #
 # Retrieval-only. No LLM, no generation. Restarts the research Engram instance
 # once per arm and resets usage counters (retrieval_count / used_count /
@@ -36,12 +41,11 @@ reset_usage() {
 }
 
 start_server() {
-  local arm="$1" scalefix="$2" relative="$3" norescue="$4"
+  local arm="$1" scalefix="$2" norescue="$3"
   pkill -f "node dist/main.js" 2>/dev/null || true
   sleep 2
   cd "$REPO"
   RECALL_RERANK_SCALE_FIX="$scalefix" \
-  RECALL_RELATIVE_RESCUE="$relative" \
   RECALL_NO_RESCUE="$norescue" \
     nohup node dist/main.js >"/tmp/engram-arm-${arm}.log" 2>&1 &
   for _ in $(seq 1 60); do
@@ -51,19 +55,17 @@ start_server() {
   echo "server did not come up (arm=$arm)" >&2; exit 1
 }
 
-# arm : scalefix : relative : norescue
+# arm : scalefix : norescue
 ARMS=(
-  "default:false:false:false"
-  "scalefix:true:false:false"
-  "relative:false:true:false"
-  "both:true:true:false"
-  "norescue:false:false:true"
+  "default:false:false"
+  "scalefix:true:false"
+  "norescue:false:true"
 )
 
 for SPEC in "${ARMS[@]}"; do
-  IFS=: read -r ARM SF REL NR <<<"$SPEC"
-  echo "### arm=$ARM  scalefix=$SF relative=$REL norescue=$NR"
-  start_server "$ARM" "$SF" "$REL" "$NR"
+  IFS=: read -r ARM SF NR <<<"$SPEC"
+  echo "### arm=$ARM  scalefix=$SF norescue=$NR"
+  start_server "$ARM" "$SF" "$NR"
   reset_usage
   PROBE_API_KEY="$KEY" node "$REPO/scripts/research/retrieval-probe.mjs" \
     --limit 10 --label "$ARM" --out "/tmp/arm-${ARM}.json" \
@@ -71,5 +73,4 @@ for SPEC in "${ARMS[@]}"; do
 done
 
 node "$REPO/scripts/research/score-arms.mjs" \
-  /tmp/arm-default.json /tmp/arm-scalefix.json /tmp/arm-relative.json \
-  /tmp/arm-both.json /tmp/arm-norescue.json
+  /tmp/arm-default.json /tmp/arm-scalefix.json /tmp/arm-norescue.json

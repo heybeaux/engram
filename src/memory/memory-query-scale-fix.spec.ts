@@ -189,7 +189,6 @@ describe('recall ranking: limit-monotonicity (RECALL_RERANK_SCALE_FIX)', () => {
   describe('default (all research flags off) — shipped behaviour', () => {
     beforeEach(() => {
       delete process.env.RECALL_RERANK_SCALE_FIX;
-      delete process.env.RECALL_RELATIVE_RESCUE;
       delete process.env.RECALL_NO_RESCUE;
     });
 
@@ -215,7 +214,6 @@ describe('recall ranking: limit-monotonicity (RECALL_RERANK_SCALE_FIX)', () => {
   describe('RECALL_RERANK_SCALE_FIX=true', () => {
     beforeEach(() => {
       process.env.RECALL_RERANK_SCALE_FIX = 'true';
-      delete process.env.RECALL_RELATIVE_RESCUE;
       delete process.env.RECALL_NO_RESCUE;
     });
 
@@ -263,7 +261,6 @@ describe('recall ranking: limit-monotonicity (RECALL_RERANK_SCALE_FIX)', () => {
     beforeEach(() => {
       process.env.RECALL_NO_RESCUE = 'true';
       delete process.env.RECALL_RERANK_SCALE_FIX;
-      delete process.env.RECALL_RELATIVE_RESCUE;
     });
 
     it('issues no lexical rescue SQL at all', async () => {
