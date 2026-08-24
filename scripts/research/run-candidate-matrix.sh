@@ -2,11 +2,26 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DB="${PROBE_DB_URL:-postgresql://engram:engram@localhost:5432/engram_ablation_prefix}"
+DB="${PROBE_DB_URL:?Set PROBE_DB_URL to a dedicated local engram_ablation_* database}"
 RUN_PORT="${PROBE_PORT:-3017}"
-KEY="${PROBE_API_KEY:-eng_candidate_depth_research_20260823}"
+KEY="${PROBE_API_KEY:?Set PROBE_API_KEY for the isolated research fixture}"
 OUT_DIR="${CANDIDATE_OUT_DIR:-$REPO/docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated}"
 mkdir -p "$OUT_DIR"
+
+DB_HOST="$(node -e 'process.stdout.write(new URL(process.argv[1]).hostname)' "$DB")"
+DB_NAME="$(psql "$DB" -Atqc 'SELECT current_database()')"
+if [[ "$DB_HOST" != "localhost" && "$DB_HOST" != "127.0.0.1" && "$DB_HOST" != "::1" ]]; then
+  echo "candidate matrix refuses non-local database host: $DB_HOST" >&2
+  exit 1
+fi
+if [[ "$DB_NAME" != engram_ablation_* ]]; then
+  echo "candidate matrix requires a dedicated engram_ablation_* database; got $DB_NAME" >&2
+  exit 1
+fi
+if ! psql "$DB" -Atqc "SELECT to_regclass('zz_probe_usage_snapshot') IS NOT NULL" | grep -qx t; then
+  echo "required usage snapshot zz_probe_usage_snapshot is missing" >&2
+  exit 1
+fi
 
 reset_usage() {
   psql "$DB" -q -c "
@@ -34,13 +49,7 @@ start_server() {
   stop_server
   (
     cd "$REPO"
-    set -a
-    # Provider credentials live in the primary checkout; the research .env
-    # loaded second restores the dedicated throwaway DB and port-safe config.
-    source /Users/beauxwalton/projects/engram/.env
-    source .env
-    set +a
-    PORT="$RUN_PORT" \
+    DATABASE_URL="$DB" PORT="$RUN_PORT" \
     RECALL_RERANK_SCALE_FIX=true \
     RECALL_LEXICAL_COVERAGE_FLOOR=true \
     RECALL_RESCUE_SQL_TIEBREAK=true \

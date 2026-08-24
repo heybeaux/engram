@@ -18,6 +18,7 @@ const FINAL_LIMIT = 10;
 const SNAPSHOT = 'zz_diversity_gate_usage_snapshot_20260823';
 
 type AppContext = Awaited<ReturnType<typeof createTestApp>>;
+type SeededCorpus = Awaited<ReturnType<typeof seedCorpus>>;
 
 interface QueryRun {
   queryId: string;
@@ -65,6 +66,24 @@ async function resetUsage(ctx: AppContext): Promise<void> {
       FROM ${SNAPSHOT} s
      WHERE m.id = s.id
   `);
+}
+
+async function assertIsolatedLocalDatabase(ctx: AppContext): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL is required');
+  const parsed = new URL(databaseUrl);
+  if (!['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) {
+    throw new Error('diversity gate refuses non-local DATABASE_URL');
+  }
+  const rows = await ctx.prisma.$queryRawUnsafe<Array<{ database: string }>>(
+    'SELECT current_database() AS database',
+  );
+  const database = rows[0]?.database ?? '';
+  if (!/^engram_diversity_gate_[a-z0-9_]+$/i.test(database)) {
+    throw new Error(
+      `diversity gate requires a dedicated engram_diversity_gate_* database; got ${database}`,
+    );
+  }
 }
 
 async function restoreDeclaredFixtureFields(
@@ -297,38 +316,45 @@ function compare(off: ArmResult, on: ArmResult) {
 }
 
 async function main(): Promise<void> {
-  configureArm(false);
-  const offContext = await createTestApp(false);
-  const corpus = await seedCorpus(offContext.prisma);
-  const fixtureIntegrity = await restoreDeclaredFixtureFields(
-    offContext,
-    corpus,
-  );
-  await offContext.prisma.account.updateMany({
-    where: { id: { in: corpus.seededUsers.map((user) => user.accountId) } },
-    data: { plan: 'SCALE' },
-  });
-  const users = new Map(corpus.seededUsers.map((user) => [user.name, user]));
-  const generator = offContext.app.get(EmbeddingGeneratorService);
-  await generateCorpusEmbeddings(offContext.prisma, generator, corpus);
-  await offContext.prisma.$executeRawUnsafe(
-    `
-    CREATE TABLE ${SNAPSHOT} AS
-    SELECT id, retrieval_count, used_count, unused_count,
-           last_retrieved_at, last_used_at
-      FROM memories
-     WHERE user_id IN (${corpus.seededUsers.map((_, i) => `$${i + 1}`).join(',')})
-  `,
-    ...corpus.seededUsers.map((user) => user.userId),
-  );
-  const off = await runArm('diversity-off', offContext, users);
-  await offContext.app.close();
+  let offContext: AppContext | undefined;
+  let onContext: AppContext | undefined;
+  let corpus: SeededCorpus | undefined;
+  let snapshotCreated = false;
+  try {
+    configureArm(false);
+    offContext = await createTestApp(false);
+    await assertIsolatedLocalDatabase(offContext);
+    corpus = await seedCorpus(offContext.prisma);
+    const fixtureIntegrity = await restoreDeclaredFixtureFields(
+      offContext,
+      corpus,
+    );
+    await offContext.prisma.account.updateMany({
+      where: { id: { in: corpus.seededUsers.map((user) => user.accountId) } },
+      data: { plan: 'SCALE' },
+    });
+    const users = new Map(corpus.seededUsers.map((user) => [user.name, user]));
+    const generator = offContext.app.get(EmbeddingGeneratorService);
+    await generateCorpusEmbeddings(offContext.prisma, generator, corpus);
+    await offContext.prisma.$executeRawUnsafe(
+      `
+      CREATE TABLE ${SNAPSHOT} AS
+      SELECT id, retrieval_count, used_count, unused_count,
+             last_retrieved_at, last_used_at
+        FROM memories
+       WHERE user_id IN (${corpus.seededUsers.map((_, i) => `$${i + 1}`).join(',')})
+    `,
+      ...corpus.seededUsers.map((user) => user.userId),
+    );
+    snapshotCreated = true;
+    const off = await runArm('diversity-off', offContext, users);
 
-  configureArm(true);
-  const onContext = await createTestApp(false);
-  const on = await runArm('diversity-on', onContext, users);
-  const comparison = compare(off, on);
-  const artifact = {
+    configureArm(true);
+    onContext = await createTestApp(false);
+    await assertIsolatedLocalDatabase(onContext);
+    const on = await runArm('diversity-on', onContext, users);
+    const comparison = compare(off, on);
+    const artifact = {
     generatedAt: new Date().toISOString(),
     config: {
       finalLimit: FINAL_LIMIT,
@@ -351,14 +377,22 @@ async function main(): Promise<void> {
     off,
     on,
     comparison,
-  };
-  writeFileSync(OUTPUT_PATH, JSON.stringify(artifact, null, 2));
-  await onContext.prisma.$executeRawUnsafe(`DROP TABLE ${SNAPSHOT}`);
-  await corpus.cleanup();
-  await onContext.app.close();
-  console.log(
-    JSON.stringify({ off: off.summary, on: on.summary, comparison }, null, 2),
-  );
+    };
+    writeFileSync(OUTPUT_PATH, JSON.stringify(artifact, null, 2));
+    console.log(
+      JSON.stringify({ off: off.summary, on: on.summary, comparison }, null, 2),
+    );
+  } finally {
+    const cleanupContext = onContext ?? offContext;
+    if (snapshotCreated && cleanupContext) {
+      await cleanupContext.prisma
+        .$executeRawUnsafe(`DROP TABLE IF EXISTS ${SNAPSHOT}`)
+        .catch(() => undefined);
+    }
+    if (corpus) await corpus.cleanup().catch(() => undefined);
+    if (onContext) await onContext.app.close().catch(() => undefined);
+    if (offContext) await offContext.app.close().catch(() => undefined);
+  }
 }
 
 main().catch((error) => {

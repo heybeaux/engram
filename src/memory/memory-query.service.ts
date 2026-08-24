@@ -51,6 +51,9 @@ import {
 } from './memory-ranking.util';
 import { selectNearDuplicateDiverse } from './memory-diversity.util';
 
+const MAX_CONFIGURED_CANDIDATE_POOL_DEPTH = 200;
+const CLUSTER_ONLY_SCAN_DEPTH = 50;
+
 @Injectable()
 export class MemoryQueryService {
   private readonly logger = new Logger(MemoryQueryService.name);
@@ -131,6 +134,30 @@ export class MemoryQueryService {
   private readonly nearDuplicateClusterLimit = this.positiveEnvInt(
     'RECALL_NEAR_DUPLICATE_CLUSTER_LIMIT',
   );
+
+  /**
+   * Candidate controls depend on the scale fix because diversity must operate
+   * on one consistently-scaled total order. Configured depth is a minimum pool
+   * size, never a cap below the caller's requested page. Cluster-only mode gets
+   * a bounded 50-row scan so it stays independently useful without processing
+   * an unbounded rescue pool.
+   */
+  private effectiveCandidatePoolDepth(limit: number): number | undefined {
+    if (!this.rerankScaleFix) return undefined;
+    if (this.candidatePoolDepth) {
+      return Math.max(
+        limit,
+        Math.min(
+          this.candidatePoolDepth,
+          MAX_CONFIGURED_CANDIDATE_POOL_DEPTH,
+        ),
+      );
+    }
+    if (this.nearDuplicateClusterLimit) {
+      return Math.max(limit, CLUSTER_ONLY_SCAN_DEPTH);
+    }
+    return undefined;
+  }
 
   private positiveEnvInt(name: string): number | undefined {
     const raw = process.env[name];
@@ -925,10 +952,11 @@ export class MemoryQueryService {
     const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
     // Research depth control: preserve final `limit`, but cap the candidates
     // exposed to reranking. Unset means byte-for-byte existing behaviour.
-    const rerankCandidates = this.candidatePoolDepth
-      ? scoredMemories.slice(0, this.candidatePoolDepth)
+    const effectiveCandidateDepth = this.effectiveCandidatePoolDepth(limit);
+    const rerankCandidates = effectiveCandidateDepth
+      ? scoredMemories.slice(0, effectiveCandidateDepth)
       : scoredMemories;
-    const rerankCandidateIds = this.candidatePoolDepth
+    const rerankCandidateIds = effectiveCandidateDepth
       ? new Set(rerankCandidates.map((memory) => memory.id))
       : undefined;
     // Scale-fix mode ranks the entire pool rather than truncating at `limit`.

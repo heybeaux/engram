@@ -31,6 +31,7 @@ function candidateId(i: number): string {
 interface Harness {
   service: MemoryQueryService;
   prisma: any;
+  rankingService: MemoryQueryRankingService;
 }
 
 /**
@@ -57,10 +58,15 @@ function fakeReranker(): any {
  * (the tail of the pool), which is the situation the corpus actually exhibits:
  * off-topic distractors that happen to restate the query's vocabulary.
  */
-function harness(opts: { reranker?: boolean } = {}): Harness {
+function harness(opts: { reranker?: boolean; clustered?: boolean } = {}): Harness {
   const memories = Array.from({ length: POOL_SIZE }, (_, i) => ({
     id: candidateId(i),
-    raw: `memory ${i} about ${QUERY}`,
+    raw:
+      opts.clustered && i !== 10
+        ? `memory ${i} ${QUERY} archived neighboring service contract with imports units key formats argument order return types async behavior validation pagination metadata and response semantics`
+        : i === 10 && opts.clustered
+          ? `memory ${i} current contract: db.queryUsers returns the validated page and pageSize with items and total`
+          : `memory ${i} about ${QUERY}`,
     userId: 'user-1',
     importanceScore: 0.5,
     effectiveScore: 0.5,
@@ -140,7 +146,7 @@ function harness(opts: { reranker?: boolean } = {}): Harness {
     contextService,
   );
 
-  return { service, prisma };
+  return { service, prisma, rankingService };
 }
 
 async function page(
@@ -255,6 +261,73 @@ describe('recall ranking: limit-monotonicity (RECALL_RERANK_SCALE_FIX)', () => {
         expect(deep).toContain(candidateId(i));
       }
     });
+
+    describe('candidate depth and near-duplicate diversity wiring', () => {
+      it('treats configured depth as a floor and never truncates limit > depth', async () => {
+        process.env.RECALL_CANDIDATE_POOL_DEPTH = '12';
+        const { service, rankingService } = harness({ reranker: true });
+        const rerank = jest.spyOn(rankingService, 'applyReranking');
+
+        expect(await pageIds(service, 20)).toHaveLength(20);
+        expect((rerank.mock.calls[0]?.[0] as unknown[]).length).toBe(20);
+      });
+
+      it('uses configured surplus depth when limit <= depth', async () => {
+        process.env.RECALL_CANDIDATE_POOL_DEPTH = '12';
+        const { service, rankingService } = harness({ reranker: true });
+        const rerank = jest.spyOn(rankingService, 'applyReranking');
+
+        expect(await pageIds(service, 5)).toHaveLength(5);
+        expect((rerank.mock.calls[0]?.[0] as unknown[]).length).toBe(12);
+      });
+
+      it('keeps depth filtering sticky: rescue cannot re-add rows outside the bounded pool', async () => {
+        process.env.RECALL_CANDIDATE_POOL_DEPTH = '12';
+        const { service } = harness({ reranker: true });
+
+        const ids = await pageIds(service, 10);
+        expect(ids).toHaveLength(10);
+        // Raw rescue ordering puts m030..m039 plus semantic m000/m001 in the
+        // 12-row pool. The sticky re-add may retain those rows, but must not
+        // expand beyond that bounded set.
+        expect(ids).toEqual([
+          candidateId(0),
+          candidateId(1),
+          ...Array.from({ length: 8 }, (_, i) => candidateId(30 + i)),
+        ]);
+      });
+
+      it('supports the cluster flag independently with a bounded scan and full backfill', async () => {
+        delete process.env.RECALL_CANDIDATE_POOL_DEPTH;
+        process.env.RECALL_NEAR_DUPLICATE_CLUSTER_LIMIT = '2';
+        const { service, rankingService } = harness({
+          reranker: true,
+          clustered: true,
+        });
+        const rerank = jest.spyOn(rankingService, 'applyReranking');
+
+        const ids = await pageIds(service, 10);
+        expect(ids).toHaveLength(10);
+        expect(ids.slice(0, 3)).toEqual([
+          candidateId(0),
+          candidateId(1),
+          candidateId(10),
+        ]);
+        // Pool is 40, below the explicit cluster-only scan bound of 50.
+        expect((rerank.mock.calls[0]?.[0] as unknown[]).length).toBe(40);
+      });
+    });
+  });
+
+  it('ignores candidate controls without their scale-fix dependency', async () => {
+    delete process.env.RECALL_RERANK_SCALE_FIX;
+    process.env.RECALL_CANDIDATE_POOL_DEPTH = '12';
+    process.env.RECALL_NEAR_DUPLICATE_CLUSTER_LIMIT = '2';
+    const { service, rankingService } = harness({ reranker: true });
+    const rerank = jest.spyOn(rankingService, 'applyReranking');
+
+    await pageIds(service, 5);
+    expect((rerank.mock.calls[0]?.[0] as unknown[]).length).toBe(POOL_SIZE);
   });
 
   describe('RECALL_NO_RESCUE=true (vector-only control)', () => {

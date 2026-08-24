@@ -52,6 +52,14 @@ most two members from any token-set Jaccard cluster at similarity >= 0.90.
 Suppressed rows are then backfilled in original relevance order so the API
 still returns a complete top-10 page. It does not delete or mutate memories.
 
+The candidate controls explicitly depend on `RECALL_RERANK_SCALE_FIX=true`:
+diversifying a mixture of raw rescue-band and post-rerank scores is undefined,
+so both controls are ignored when the scale fix is off. Configured candidate
+depth is a **minimum**, not a maximum: the effective depth is
+`max(caller limit, configured depth)`, so a caller asking for more than 12 rows
+is never truncated. If the cluster cap is enabled without an explicit depth,
+the service uses a bounded 50-row scan (or the caller limit when larger).
+
 The threshold is conservative for this failure mode: sampled decoy-to-decoy
 similarity is 0.951 while gold-to-decoy similarity is 0.178. The mechanism
 does not inspect benchmark IDs, `archived` wording, or gold labels.
