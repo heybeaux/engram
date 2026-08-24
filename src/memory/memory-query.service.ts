@@ -70,6 +70,40 @@ export class MemoryQueryService {
   private readonly relativeRescue =
     process.env.RECALL_RELATIVE_RESCUE === 'true';
 
+  /**
+   * RESEARCH FLAG — default OFF, no change to shipped behaviour.
+   *
+   * `RECALL_RERANK_SCALE_FIX=true` removes the score-scale mixing between the
+   * reranker and the sticky keyword re-add (see the long comment at the re-add
+   * site below). Two coupled changes, both required for the invariant:
+   *
+   *  1. `applyReranking` is asked to rank the WHOLE candidate pool instead of
+   *     truncating at `limit`. Every keyword-rescued candidate therefore
+   *     survives reranking *in the rescaled scale*, so "sticky" is satisfied
+   *     structurally rather than by re-injecting a pre-rerank score.
+   *  2. Anything that still has to be re-added (defensive path only, e.g. a
+   *     candidate dropped by a downstream stage) is placed just below the
+   *     lowest rescaled score instead of at its raw 1.25 / 1.15 / 1.05 band
+   *     value, so raw and rescaled values are never sorted against each other.
+   *
+   * Consequence — the property the old code violated: ranking becomes
+   * MONOTONIC IN `limit`. The top-K of a `limit=K` query is exactly the prefix
+   * of the top-K of a `limit=N` query (N > K) for the same candidate pool.
+   */
+  private readonly rerankScaleFix =
+    process.env.RECALL_RERANK_SCALE_FIX === 'true';
+
+  /**
+   * RESEARCH FLAG — default OFF. Control arm.
+   *
+   * `RECALL_NO_RESCUE=true` disables every lexical rescue path (FTS/BM25,
+   * ILIKE coverage, identity profile) so recall is vector-only. This is the
+   * honest baseline for "what can the embedding do on its own", against which
+   * any rescue policy — banded, relative, or scale-fixed — has to justify
+   * itself.
+   */
+  private readonly noRescue = process.env.RECALL_NO_RESCUE === 'true';
+
   constructor(
     private prisma: PrismaService,
     private embedding: EmbeddingService,
@@ -419,9 +453,11 @@ export class MemoryQueryService {
           : [];
       try {
         type FtsRow = { id: string; ts_rank: number };
-        const ftsResults = poolOnlyMode
-          ? await this.prisma.$queryRawUnsafe<FtsRow[]>(
-              `SELECT m.id,
+        const ftsResults = this.noRescue
+          ? []
+          : poolOnlyMode
+            ? await this.prisma.$queryRawUnsafe<FtsRow[]>(
+                `SELECT m.id,
                       ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) AS ts_rank
                FROM memories m
                WHERE m.id IN (
@@ -436,12 +472,12 @@ export class MemoryQueryService {
                  AND m.is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC
                LIMIT 100`,
-              poolIds,
-              searchQuery,
-            )
-          : resolvedUserIds.length > 0
-            ? await this.prisma.$queryRawUnsafe<FtsRow[]>(
-                `SELECT id,
+                poolIds,
+                searchQuery,
+              )
+            : resolvedUserIds.length > 0
+              ? await this.prisma.$queryRawUnsafe<FtsRow[]>(
+                  `SELECT id,
                         ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) AS ts_rank
                FROM memories
                WHERE user_id = ANY($1::text[])
@@ -453,11 +489,11 @@ export class MemoryQueryService {
                  AND is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
                LIMIT 100`,
-                resolvedUserIds,
-                searchQuery,
-              )
-            : await this.prisma.$queryRawUnsafe<FtsRow[]>(
-                `SELECT id,
+                  resolvedUserIds,
+                  searchQuery,
+                )
+              : await this.prisma.$queryRawUnsafe<FtsRow[]>(
+                  `SELECT id,
                         ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) AS ts_rank
                FROM memories
                WHERE to_tsvector('english', raw) @@ websearch_to_tsquery('english', $1)
@@ -468,8 +504,8 @@ export class MemoryQueryService {
                  AND is_duplicate_of IS NULL
                ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
                LIMIT 100`,
-                searchQuery,
-              );
+                  searchQuery,
+                );
         // Continuous FTS rescue band. Previously every FTS-rescued candidate
         // was assigned the constant 1.25, which is what made 18/20 benchmark
         // queries end in a 5-way tie at the top score. The score now varies
@@ -522,7 +558,9 @@ export class MemoryQueryService {
         // websearch_to_tsquery can be too strict for natural questions (for
         // example requiring filler terms such as "tell" or "need"), while a
         // curated ILIKE pass catches exact domain words like medication/roast.
-        const words = this.extractLexicalRescueTerms(searchQuery);
+        const words = this.noRescue
+          ? []
+          : this.extractLexicalRescueTerms(searchQuery);
         if (words.length > 0) {
           try {
             const hasResolvedUsers = resolvedUserIds.length > 0;
@@ -649,7 +687,11 @@ export class MemoryQueryService {
           }
         }
 
-        if (this.isIdentityProfileQuery(searchQuery) && !poolOnlyMode) {
+        if (
+          !this.noRescue &&
+          this.isIdentityProfileQuery(searchQuery) &&
+          !poolOnlyMode
+        ) {
           try {
             const identityResults = await this.prisma.memory.findMany({
               where: {
@@ -853,10 +895,17 @@ export class MemoryQueryService {
 
     // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
     const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
+    // Scale-fix mode ranks the entire pool rather than truncating at `limit`.
+    // The reranker already scores every candidate (`candidates = memories`);
+    // `limit` only controlled the final `slice`. Ranking the whole pool is what
+    // makes the sticky re-add a no-op and the page prefix-stable in `limit`.
+    const rerankDepth = this.rerankScaleFix
+      ? Math.max(limit, scoredMemories.length)
+      : limit;
     scoredMemories = await this.rankingService.applyReranking(
       scoredMemories,
       rerankQuery,
-      limit,
+      rerankDepth,
     );
 
     // Exact keyword/ILIKE rescued memories are deterministic high-signal hits.
@@ -888,24 +937,37 @@ export class MemoryQueryService {
     const missingKeywordHits = [...keywordRescueMap.entries()]
       .filter(([id]) => !scoredMemories.some((m) => m.id === id))
       .map(([, mem], i) => {
-        if (!this.relativeRescue) {
+        if (!this.relativeRescue && !this.rerankScaleFix) {
           return {
             ...mem,
             score: mem.score ?? ILIKE_RESCUE_BAND_BOTTOM,
           } as MemoryWithScore;
         }
-        // Relative mode: honour the "sticky" intent (an exact-match write must
-        // not vanish from the result set) without letting a pre-rerank score
-        // outrank post-rerank ones. Re-added hits are appended just below the
-        // lowest rescaled score, ordered among themselves by their own rescue
-        // score.
+        // Relative / scale-fix mode: honour the "sticky" intent (an exact-match
+        // write must not vanish from the result set) without letting a
+        // pre-rerank score outrank post-rerank ones. Re-added hits are appended
+        // just below the lowest rescaled score, ordered among themselves by
+        // their own rescue score.
         const floor = Number.isFinite(rescaledFloor) ? rescaledFloor : 0;
         return {
           ...mem,
           score: Math.min(mem.score ?? 0, floor) - 1e-9 * (i + 1),
         } as MemoryWithScore;
       });
-    if (missingKeywordHits.length > 0) {
+    if (this.rerankScaleFix) {
+      // Always re-sort and truncate here: `applyReranking` was given the full
+      // pool depth above, so this is the single point where `limit` is applied.
+      // Truncating a total order (compareByRankKeys) at K is what gives the
+      // prefix property across different values of `limit`.
+      scoredMemories = (
+        missingKeywordHits.length > 0
+          ? [...missingKeywordHits, ...scoredMemories]
+          : scoredMemories
+      )
+        .slice()
+        .sort(compareByRankKeys)
+        .slice(0, limit);
+    } else if (missingKeywordHits.length > 0) {
       scoredMemories = [...missingKeywordHits, ...scoredMemories]
         .sort(compareByRankKeys)
         .slice(0, limit);
