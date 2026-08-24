@@ -122,6 +122,86 @@ export function ilikeRescueScore(
   );
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+ * PROTOTYPE (feature-flagged, OFF by default): relative lexical rescue.
+ *
+ * See docs/research/memory-formation-query-transform/05-finding-band-inversion.md.
+ *
+ * The band design above places every lexical-rescue hit ABOVE the cosine
+ * ceiling of 1.0. That makes the priority *categorical*: a weak lexical match
+ * always outranks a strong semantic match, and the candidate's own cosine is
+ * discarded as an ordering signal even when it is available. On a corpus whose
+ * distractors restate the query verbatim, the entire band is distractors.
+ *
+ * Relative mode instead treats lexical agreement as a *bounded boost on the
+ * semantic score* rather than a separate stratum:
+ *
+ *   score = cosine * (1 + maxBoost * quality)
+ *
+ * Consequences:
+ *  - a lexical hit can promote a candidate, but a candidate with a much better
+ *    cosine can still beat it (the boost is bounded by `maxBoost`);
+ *  - the cosine ordering inside the rescued set is preserved instead of being
+ *    overwritten by ts_rank, which is what the band does today;
+ *  - all scores stay in the same numeric scale, so downstream stages
+ *    (usage weighting, the fallback blend, the cross-encoder) compare like
+ *    with like.
+ *
+ * Lexical-only candidates (matched by FTS/ILIKE but absent from the vector
+ * pool) have no cosine to anchor to. They are admitted just below the best
+ * observed cosine, so they enter the candidate pool but cannot displace the
+ * best semantic hit.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** Maximum multiplicative promotion an FTS/BM25 agreement may buy. */
+export const RELATIVE_FTS_MAX_BOOST = 0.2;
+/** Maximum multiplicative promotion an ILIKE coverage agreement may buy. */
+export const RELATIVE_ILIKE_MAX_BOOST = 0.1;
+/** Maximum multiplicative promotion the identity-profile rescue may buy. */
+export const RELATIVE_IDENTITY_MAX_BOOST = 0.15;
+/**
+ * A lexical-only candidate (no vector hit) is anchored at this fraction of the
+ * best observed cosine, so it can never outrank the best semantic hit.
+ */
+export const RELATIVE_LEXICAL_ONLY_ANCHOR = 0.9;
+
+/**
+ * Relative-mode rescue score.
+ *
+ * @param cosine    the candidate's own cosine similarity, or null/undefined if
+ *                  it was not in the vector pool
+ * @param quality   normalised lexical agreement in [0, 1] (ts_rank / max
+ *                  ts_rank for FTS, matched/total terms for ILIKE)
+ * @param rankIndex position in the lexical result set, used only as a strict
+ *                  tie-break so two candidates never collide
+ * @param maxBoost  the ceiling on the promotion this signal may buy
+ * @param bestVector the best cosine observed in this query's vector pool,
+ *                  used to anchor lexical-only candidates
+ */
+export function relativeRescueScore(
+  cosine: number | null | undefined,
+  quality: number,
+  rankIndex: number,
+  maxBoost: number,
+  bestVector: number,
+): number {
+  const q = Number.isFinite(quality) ? Math.min(1, Math.max(0, quality)) : 0;
+  // Positional term is deliberately tiny: it exists only to break exact ties.
+  const positional = 1e-6 * rrfNorm(rankIndex);
+
+  if (cosine != null && Number.isFinite(cosine) && cosine > 0) {
+    return cosine * (1 + maxBoost * q) + positional;
+  }
+
+  // Lexical-only: no semantic evidence at all. Anchor strictly below the best
+  // semantic hit so it is admitted to the pool but cannot win on lexical
+  // agreement alone.
+  const anchor =
+    (Number.isFinite(bestVector) && bestVector > 0 ? bestVector : 0.5) *
+    RELATIVE_LEXICAL_ONLY_ANCHOR;
+  return anchor * (0.5 + 0.5 * q) + positional;
+}
+
 /** Minimal shape the comparator needs. Deliberately structural, not `Memory`. */
 export interface RankableMemory {
   id?: string;

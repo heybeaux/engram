@@ -47,11 +47,29 @@ import {
   ftsRescueScore,
   ilikeRescueScore,
   ILIKE_RESCUE_BAND_BOTTOM,
+  relativeRescueScore,
+  RELATIVE_FTS_MAX_BOOST,
+  RELATIVE_ILIKE_MAX_BOOST,
+  RELATIVE_IDENTITY_MAX_BOOST,
 } from './memory-ranking.util';
 
 @Injectable()
 export class MemoryQueryService {
   private readonly logger = new Logger(MemoryQueryService.name);
+
+  /**
+   * PROTOTYPE FLAG — default OFF, no change to shipped behaviour.
+   *
+   * `RECALL_RELATIVE_RESCUE=true` switches the keyword-rescue paths from the
+   * absolute score bands (FTS in (1.10,1.25], ILIKE in (1.00,1.10], identity a
+   * flat 1.15 — all of which sit above the cosine ceiling of 1.0 and therefore
+   * categorically outrank every semantic hit) to a bounded boost applied to the
+   * candidate's own cosine similarity. See
+   * docs/research/memory-formation-query-transform/05-finding-band-inversion.md.
+   */
+  private readonly relativeRescue =
+    process.env.RECALL_RELATIVE_RESCUE === 'true';
+
   constructor(
     private prisma: PrismaService,
     private embedding: EmbeddingService,
@@ -464,14 +482,26 @@ export class MemoryQueryService {
         // Rows arrive ordered by ts_rank DESC, so row 0 carries the max.
         const maxTsRank =
           ftsResults.length > 0 ? Number(ftsResults[0].ts_rank) : 0;
+        // Relative mode only: the best cosine in this query's vector pool, used
+        // to anchor lexical-only candidates below the best semantic hit.
+        const bestVector = vectorResults.reduce(
+          (best, r) => (r.score > best ? r.score : best),
+          0,
+        );
         let ftsAdded = 0;
         for (let ftsRank = 0; ftsRank < ftsResults.length; ftsRank++) {
           const row = ftsResults[ftsRank];
-          const bandedScore = ftsRescueScore(
-            Number(row.ts_rank),
-            maxTsRank,
-            ftsRank,
-          );
+          const quality =
+            maxTsRank > 0 ? Math.min(1, Number(row.ts_rank) / maxTsRank) : 1;
+          const bandedScore = this.relativeRescue
+            ? relativeRescueScore(
+                cosineMap.get(row.id),
+                quality,
+                ftsRank,
+                RELATIVE_FTS_MAX_BOOST,
+                bestVector,
+              )
+            : ftsRescueScore(Number(row.ts_rank), maxTsRank, ftsRank);
           ftsResultIds.add(row.id);
           keywordRescueIds.add(row.id);
           if (!scoreMap.has(row.id)) {
@@ -577,11 +607,23 @@ export class MemoryQueryService {
               ilikeRank++
             ) {
               const row = ilikeResults[ilikeRank];
-              const bandedScore = ilikeRescueScore(
-                Number(row.match_count),
-                words.length,
-                ilikeRank,
-              );
+              const coverage =
+                words.length > 0
+                  ? Math.min(1, Number(row.match_count) / words.length)
+                  : 1;
+              const bandedScore = this.relativeRescue
+                ? relativeRescueScore(
+                    cosineMap.get(row.id),
+                    coverage,
+                    ilikeRank,
+                    RELATIVE_ILIKE_MAX_BOOST,
+                    bestVector,
+                  )
+                : ilikeRescueScore(
+                    Number(row.match_count),
+                    words.length,
+                    ilikeRank,
+                  );
               ftsResultIds.add(row.id);
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
@@ -636,14 +678,37 @@ export class MemoryQueryService {
               select: { id: true },
             });
             let identityAdded = 0;
-            for (const row of identityResults) {
+            for (
+              let identityRank = 0;
+              identityRank < identityResults.length;
+              identityRank++
+            ) {
+              const row = identityResults[identityRank];
+              // DEFAULT MODE: flat 1.15 — the same flat-constant defect the FTS
+              // and ILIKE paths had. 1.15 sits *inside* the FTS band
+              // (1.10, 1.25], so identity hits interleave with FTS hits and all
+              // ten identity rows tie with each other. Left unchanged here so
+              // the flag measures exactly one variable; the relative branch
+              // below is the fix.
+              const identityScore = this.relativeRescue
+                ? relativeRescueScore(
+                    cosineMap.get(row.id),
+                    1,
+                    identityRank,
+                    RELATIVE_IDENTITY_MAX_BOOST,
+                    bestVector,
+                  )
+                : 1.15;
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
-                scoreMap.set(row.id, 1.15);
+                scoreMap.set(row.id, identityScore);
                 memoryIds.push(row.id);
                 identityAdded++;
               } else {
-                scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.15));
+                scoreMap.set(
+                  row.id,
+                  Math.max(scoreMap.get(row.id)!, identityScore),
+                );
               }
             }
             if (identityAdded > 0) {
@@ -701,6 +766,15 @@ export class MemoryQueryService {
         const mem = memoryMap.get(id);
         if (mem) keywordRescueMap.set(id, mem);
       }
+      // NOTE (research finding, unrelated to the flag): this loop is
+      // unreachable. `topIds` and `memoryMap` are both built from `sorted`, so
+      // `!topIds.has(id)` implies `memoryMap.get(id) === undefined` and the
+      // inner `if (mem)` never fires. `forcedFts` is therefore always empty and
+      // the flat `0.75` below is dead code — it is not a live scoring path.
+      // Deliberately left as-is: making it live would inject FTS-only
+      // candidates at a flat constant, i.e. reintroduce the exact defect
+      // c905438 removed. Fixing it properly means sourcing those memories from
+      // a second findMany, which is out of scope for this experiment.
       const forcedFts: MemoryWithScore[] = [];
       for (const id of ftsResultIds) {
         if (!topIds.has(id)) {
@@ -792,15 +866,45 @@ export class MemoryQueryService {
     // to a flat 1.1 here would re-flatten exactly the scores the FTS/ILIKE
     // bands above made continuous; the band bottom is only a floor for the
     // pathological case of a rescued memory arriving with no score at all.
+    //
+    // RESEARCH FINDING — this is where the score scales get mixed.
+    //
+    // `applyReranking` rescales EVERY surviving candidate: with the
+    // cross-encoder it becomes `normalisedRerankScore * 0.85 + importance *
+    // 0.15` (≤ ~1.0); without it, the fallback blend is `(score * 0.85 +
+    // importance * 0.15) * importanceMultiplier * sentimentPenalty`. Either
+    // way the output lives well below 1.0. The candidates re-added below,
+    // however, carry their *pre-rerank* rescue score — 1.25 / 1.15 / 1.05 —
+    // straight from `keywordRescueMap`. Those raw band values are then sorted
+    // against rescaled values and win categorically, so the final top-N is
+    // whatever the lexical rescue produced and the reranker's judgement is
+    // discarded. It also makes results non-monotonic in `limit`: at limit=5
+    // the page is 5 band hits, at limit=50 the same query returns pure
+    // reranked scores because nothing was "missing" to re-add.
+    const rescaledFloor = scoredMemories.reduce(
+      (min, m) => Math.min(min, m.score ?? 0),
+      Number.POSITIVE_INFINITY,
+    );
     const missingKeywordHits = [...keywordRescueMap.entries()]
       .filter(([id]) => !scoredMemories.some((m) => m.id === id))
-      .map(
-        ([, mem]) =>
-          ({
+      .map(([, mem], i) => {
+        if (!this.relativeRescue) {
+          return {
             ...mem,
             score: mem.score ?? ILIKE_RESCUE_BAND_BOTTOM,
-          }) as MemoryWithScore,
-      );
+          } as MemoryWithScore;
+        }
+        // Relative mode: honour the "sticky" intent (an exact-match write must
+        // not vanish from the result set) without letting a pre-rerank score
+        // outrank post-rerank ones. Re-added hits are appended just below the
+        // lowest rescaled score, ordered among themselves by their own rescue
+        // score.
+        const floor = Number.isFinite(rescaledFloor) ? rescaledFloor : 0;
+        return {
+          ...mem,
+          score: Math.min(mem.score ?? 0, floor) - 1e-9 * (i + 1),
+        } as MemoryWithScore;
+      });
     if (missingKeywordHits.length > 0) {
       scoredMemories = [...missingKeywordHits, ...scoredMemories]
         .sort(compareByRankKeys)
