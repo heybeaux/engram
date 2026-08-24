@@ -1,0 +1,1915 @@
+{
+  "summary": {
+    "label": "depth50-r2",
+    "baseUrl": "http://127.0.0.1:3017",
+    "limit": 10,
+    "headers": {},
+    "tasks": 20,
+    "goldTop1": "14/20",
+    "goldTop5": "14/20",
+    "goldTop10": "14/20",
+    "goldAnywhereInPool": "20/20"
+  },
+  "rows": [
+    {
+      "task": "create-user-endpoint",
+      "query": "MNEMON benchmark project fact for user creation API endpoint schema and validation rules",
+      "goldId": "cmt6a4ifu00008kc9vqa8ho5y",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 67,
+      "deepLatencyMs": 44,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4ifu00008kc9vqa8ho5y",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4igr00018kc99i5i66qg",
+          "score": 0.3911175556876966,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4ih000028kc9zgolat1x",
+          "score": 0.39104985599491626,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4ih800038kc92mlwuyz0",
+          "score": 0.3909842719175353,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4ihe00048kc9mk3ybqz7",
+          "score": 0.3909207058117661,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4ihm00058kc98q0cfifn",
+          "score": 0.39085906595162634,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4ii500068kc94p54l6us",
+          "score": 0.3907992660873115,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4iij00078kc97oobusxn",
+          "score": 0.3907412250425354,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4iiu00088kc99ll6eucq",
+          "score": 0.39068486634688315,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4ij700098kc9vkuejjt5",
+          "score": 0.3906301178996782,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for user creation API endpoint schema an"
+        }
+      ]
+    },
+    {
+      "task": "order-refund-handler",
+      "query": "MNEMON benchmark project fact for order refund policy and payment integration",
+      "goldId": "cmt6a4iqw001i8kc90boz30m3",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 49,
+      "deepLatencyMs": 46,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4iqw001i8kc90boz30m3",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4is9001q8kc9a2pi74zh",
+          "score": 0.39051347273442555,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4its001v8kc9rgqblp9z",
+          "score": 0.39044577304164524,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4ivd00268kc920p3n8by",
+          "score": 0.3903801889642643,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4ix2002g8kc9u9l725hn",
+          "score": 0.390316622858495,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4izq002y8kc9kp14k0kd",
+          "score": 0.39025498299835526,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4j1n00378kc92cb8o1bt",
+          "score": 0.39019518313404045,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4j42003g8kc9l6ssvs7e",
+          "score": 0.39013714208926425,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4j5s003w8kc9x6vfi012",
+          "score": 0.3900807833936121,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4j7m004c8kc9gzgak8rf",
+          "score": 0.39002603494640714,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order refund policy and payment inte"
+        }
+      ]
+    },
+    {
+      "task": "paginated-list-endpoint",
+      "query": "MNEMON benchmark project fact for pagination conventions for list endpoints",
+      "goldId": "cmt6a4jag00518kc97v7aiok2",
+      "rankInPage": -1,
+      "rankInPool": 10,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 41,
+      "deepLatencyMs": 42,
+      "goldScore": 0.3899548569950754,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4jda005f8kc9nfxhqm6w",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4jff005q8kc97t0j8vnu",
+          "score": 0.3911800806451613,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4jhm00688kc9xw9ptguj",
+          "score": 0.3911123809523809,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4jkc006l8kc9ponujkl5",
+          "score": 0.391046796875,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4jls006x8kc91oadpvrl",
+          "score": 0.3909832307692307,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4jnb00758kc96gy9bm5e",
+          "score": 0.3909215909090909,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4jp6007g8kc90gyasol5",
+          "score": 0.3908617910447762,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4jr0007x8kc93wu05ca0",
+          "score": 0.39080374999999995,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4jt1008d8kc94097tif0",
+          "score": 0.39074739130434777,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4jto008j8kc97a8czmex",
+          "score": 0.39069264285714284,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for pagination conventions for list endp"
+        }
+      ]
+    },
+    {
+      "task": "webhook-processor",
+      "query": "MNEMON benchmark project fact for webhook signature verification and idempotency",
+      "goldId": "cmt6a4jws00938kc9l5d2ca5p",
+      "rankInPage": -1,
+      "rankInPool": 10,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 44,
+      "deepLatencyMs": 46,
+      "goldScore": 0.39057304910160945,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4jys009g8kc9wxqg1fko",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4k13009t8kc900ke6ho7",
+          "score": 0.3911800806451613,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4k2w00a58kc9z1g4vyfw",
+          "score": 0.3911123809523809,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4k4t00ag8kc9t77s2i0v",
+          "score": 0.391046796875,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4k7300ap8kc9j8s6a7ph",
+          "score": 0.3909832307692307,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4k8u00b08kc96fofub7c",
+          "score": 0.3909215909090909,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4kb200bh8kc9hwuctcam",
+          "score": 0.3908617910447762,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4kdf00bx8kc9l7lzqexm",
+          "score": 0.39080374999999995,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4kf500cc8kc9nqyij4wr",
+          "score": 0.39074739130434777,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4khg00cm8kc9fbhjpmhe",
+          "score": 0.39069264285714284,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for webhook signature verification and i"
+        }
+      ]
+    },
+    {
+      "task": "rate-limiter-middleware",
+      "query": "MNEMON benchmark project fact for rate limiting middleware and Redis keys",
+      "goldId": "cmt6a4kjv00cv8kc98db9crcq",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 42,
+      "deepLatencyMs": 49,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4kjv00cv8kc98db9crcq",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4kmb00d98kc9rpyel6ek",
+          "score": 0.39101744035555924,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4koz00di8kc929xjhng2",
+          "score": 0.39094974066277893,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4krl00dw8kc9yr4lzubd",
+          "score": 0.390884156585398,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4ktt00e98kc94vzdbj5l",
+          "score": 0.3908205904796287,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4kvm00eh8kc98krt5d9u",
+          "score": 0.39075895061948884,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4kxm00et8kc9loh5udgt",
+          "score": 0.39069915075517414,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4kzl00f48kc9s21r5xgw",
+          "score": 0.39064110971039795,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4l1q00fe8kc9osu7dtxd",
+          "score": 0.3905847510147458,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4l3r00fn8kc97ksn5zix",
+          "score": 0.3905300025675409,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for rate limiting middleware and Redis k"
+        }
+      ]
+    },
+    {
+      "task": "session-token-rotation",
+      "query": "MNEMON benchmark project fact for session token rotation and the session store",
+      "goldId": "cmt6a4l8k00gq8kc927matnui",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 42,
+      "deepLatencyMs": 46,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4l8k00gq8kc927matnui",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4lb700h88kc9aib7w2zi",
+          "score": 0.3906091176694033,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4ldt00hp8kc9f8qo4wuy",
+          "score": 0.39054141797662295,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4lg200hy8kc9m8rvphyd",
+          "score": 0.390475833899242,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4lhw00i68kc9ddlcehh8",
+          "score": 0.3904122677934728,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4ljw00in8kc95cdh899r",
+          "score": 0.39035062793333286,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4lm200j38kc94oeavgoe",
+          "score": 0.39029082806901816,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4lo300ji8kc9ljkg7ohc",
+          "score": 0.390232787024242,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4lqf00jw8kc93ayv7ozj",
+          "score": 0.39017642832858984,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4lsd00kc8kc96ozo34ls",
+          "score": 0.39012167988138485,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for session token rotation and the sessi"
+        }
+      ]
+    },
+    {
+      "task": "session-cache-ttl",
+      "query": "MNEMON benchmark project fact for the session cache TTL and cache keys",
+      "goldId": "cmt6a4lwj00l68kc9630ig6ps",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 43,
+      "deepLatencyMs": 43,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4lwj00l68kc9630ig6ps",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4lz800li8kc9dwlpbbdd",
+          "score": 0.39064810062240457,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4m2400lv8kc9ixf4c7py",
+          "score": 0.3905804009296243,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4m4s00m58kc94bex455y",
+          "score": 0.3905148168522434,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4m6r00mi8kc920yq42k2",
+          "score": 0.39045125074647413,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4m8o00mu8kc9qkx5691b",
+          "score": 0.3903896108863343,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4mar00nb8kc9u2chds0s",
+          "score": 0.39032981102201947,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4mcv00nm8kc918ur3qzh",
+          "score": 0.39027176997724333,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4men00o38kc9hyhhuvvl",
+          "score": 0.3902154112815912,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4mgj00od8kc9kvoukeul",
+          "score": 0.39016066283438616,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for the session cache TTL and cache keys"
+        }
+      ]
+    },
+    {
+      "task": "inventory-reservation",
+      "query": "MNEMON benchmark project fact for inventory reservation and the inventory client",
+      "goldId": "cmt6a4mjz00p88kc9jgz2p1n4",
+      "rankInPage": -1,
+      "rankInPool": 10,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 41,
+      "deepLatencyMs": 41,
+      "goldScore": 0.39016156237845945,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4mm000pm8kc92fj1hs5z",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4mnx00ps8kc9bdc3pwo1",
+          "score": 0.3911800806451613,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4mov00pz8kc9dh4a38uv",
+          "score": 0.3911123809523809,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4mrr00qf8kc9qx7fgh5j",
+          "score": 0.391046796875,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4mtv00qw8kc905vn58e0",
+          "score": 0.3909832307692307,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4mvs00rc8kc95bmgsh8s",
+          "score": 0.3909215909090909,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4mxo00ro8kc9znl9k5gm",
+          "score": 0.3908617910447762,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4mzt00s38kc9kwhd0e5d",
+          "score": 0.39080374999999995,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4n1r00se8kc9rpfauix3",
+          "score": 0.39074739130434777,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4n3u00ss8kc9dib989cz",
+          "score": 0.39069264285714284,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for inventory reservation and the invent"
+        }
+      ]
+    },
+    {
+      "task": "welcome-email-dispatch",
+      "query": "MNEMON benchmark project fact for welcome email templates and mailer dispatch",
+      "goldId": "cmt6a4n6600t08kc9rw3glzh1",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 33,
+      "deepLatencyMs": 43,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4n6600t08kc9rw3glzh1",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4n8700ta8kc90kfr5ot1",
+          "score": 0.3907762404269247,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4naf00tn8kc92rsa2hx2",
+          "score": 0.39070854073414435,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4ncr00tz8kc9pf9a4aq4",
+          "score": 0.39064295665676335,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4nex00ua8kc9p3mck7g7",
+          "score": 0.39057939055099417,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4nh100uk8kc92xnuwjck",
+          "score": 0.39051775069085426,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4nj900uy8kc953g9fita",
+          "score": 0.39045795082653945,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4nk900va8kc9q3gappr9",
+          "score": 0.3903999097817634,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4nmo00vj8kc9dj4snykt",
+          "score": 0.39034355108611124,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4nog00vr8kc9ffabvuw1",
+          "score": 0.3902888026389062,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for welcome email templates and mailer d"
+        }
+      ]
+    },
+    {
+      "task": "beta-checkout-flag",
+      "query": "MNEMON benchmark project fact for feature flag keys and evaluation",
+      "goldId": "cmt6a4nsl00wm8kc9n5vpspnt",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 28,
+      "deepLatencyMs": 32,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4nsl00wm8kc9n5vpspnt",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: fl"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4nun00x08kc9qai7ljeo",
+          "score": 0.3894723093773669,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4nx500xa8kc945wf7hyl",
+          "score": 0.3894046096845865,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4ny400xj8kc9jzkl5qna",
+          "score": 0.38933902560720557,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4o0z00xs8kc9jli2ifys",
+          "score": 0.3892754595014364,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4o3n00y98kc9buruqc3u",
+          "score": 0.3892138196412964,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4o5t00yp8kc9w3pou4vh",
+          "score": 0.3891540197769817,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4o7v00z18kc9f8zq8p2f",
+          "score": 0.3890959787322056,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4oae00z98kc9d0ysxkkt",
+          "score": 0.38903962003655335,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4ocw00zo8kc9rn1tf6l3",
+          "score": 0.3889848715893484,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for feature flag keys and evaluation: ar"
+        }
+      ]
+    },
+    {
+      "task": "audit-event-logging",
+      "query": "MNEMON benchmark project fact for audit event logging and timestamps",
+      "goldId": "cmt6a4oh2010d8kc9yuqgzna0",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 32,
+      "deepLatencyMs": 42,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4oh2010d8kc9yuqgzna0",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4oj9010q8kc9sy3436kx",
+          "score": 0.3908669099612743,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4oli01108kc978sjx0aj",
+          "score": 0.39079921026849396,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4ons01198kc912nr0z28",
+          "score": 0.390733626191113,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4oq5011q8kc9hc7h43hn",
+          "score": 0.39067006008534383,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4os701228kc9so3aa2hm",
+          "score": 0.39060842022520387,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4oua012e8kc9av5xfeu3",
+          "score": 0.39054862036088916,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4ovz012p8kc9citpt7lg",
+          "score": 0.3904905793161131,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4oxr01358kc90vpm1fot",
+          "score": 0.39043422062046085,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4ozv013d8kc9r8iyyigl",
+          "score": 0.3903794721732559,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for audit event logging and timestamps: "
+        }
+      ]
+    },
+    {
+      "task": "currency-conversion",
+      "query": "MNEMON benchmark project fact for currency conversion and money units",
+      "goldId": "cmt6a4p4s01468kc93dp1x5it",
+      "rankInPage": -1,
+      "rankInPool": 10,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 31,
+      "deepLatencyMs": 32,
+      "goldScore": 0.38992495978753283,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4p77014j8kc9p908y6bw",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4p99014v8kc94jkfm9ug",
+          "score": 0.3911800806451613,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4pb801558kc9f8u9drwv",
+          "score": 0.3911123809523809,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4pdf015e8kc95vxobnb0",
+          "score": 0.391046796875,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4pfd015p8kc9n18vdebi",
+          "score": 0.3909832307692307,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4pha015x8kc97dp6bht1",
+          "score": 0.3909215909090909,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4pjr016e8kc972r4dsdd",
+          "score": 0.3908617910447762,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4plo016u8kc9mqiefwx5",
+          "score": 0.39080374999999995,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4pns01748kc943hu0yb7",
+          "score": 0.39074739130434777,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4pq2017j8kc9ybviz9x0",
+          "score": 0.39069264285714284,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for currency conversion and money units:"
+        }
+      ]
+    },
+    {
+      "task": "report-object-upload",
+      "query": "MNEMON benchmark project fact for report uploads and object storage keys",
+      "goldId": "cmt6a4prv017s8kc9nuqjqz7p",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 32,
+      "deepLatencyMs": 34,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4prv017s8kc9nuqjqz7p",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4pu501868kc92sprr4us",
+          "score": 0.3907990553720136,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4pwa018j8kc90rna5t84",
+          "score": 0.3907313556792333,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4pyg018v8kc9lxsii3k8",
+          "score": 0.39066577160185234,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4q0m01968kc9zhiuyflh",
+          "score": 0.39060220549608315,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4q2n019g8kc9c3nd5xdv",
+          "score": 0.39054056563594325,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4q4u019u8kc97y1zeyt4",
+          "score": 0.3904807657716285,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4q5y01ab8kc9cegkd5px",
+          "score": 0.3904227247268524,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4q8g01ak8kc9zrw1uq5s",
+          "score": 0.39036636603120023,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4qal01b08kc9zaauphup",
+          "score": 0.3903116175839953,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for report uploads and object storage ke"
+        }
+      ]
+    },
+    {
+      "task": "user-export-job",
+      "query": "MNEMON benchmark project fact for export jobs and queue naming",
+      "goldId": "cmt6a4qek01bn8kc9t5eq96rt",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 41,
+      "deepLatencyMs": 32,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4qek01bn8kc9t5eq96rt",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: queued"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4qgf01c48kc93n81kil6",
+          "score": 0.3891985963601694,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4qii01cc8kc9b1v63xh6",
+          "score": 0.3891308966673891,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4qkg01cq8kc9eyz8e9ko",
+          "score": 0.3890653125900081,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4qm101d08kc9ffos26u0",
+          "score": 0.38900174648423885,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4qo201df8kc9tmcivrgh",
+          "score": 0.38894010662409895,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4qpd01dq8kc97pccpqza",
+          "score": 0.3888803067597842,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4qsc01e88kc9w6h9v4ut",
+          "score": 0.38882226571500805,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4qum01en8kc9y60xdxwt",
+          "score": 0.3887659070193559,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4qx601f28kc9fppghxkl",
+          "score": 0.38871115857215094,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for export jobs and queue naming: archiv"
+        }
+      ]
+    },
+    {
+      "task": "http-metrics-recording",
+      "query": "MNEMON benchmark project fact for HTTP metrics names and labels",
+      "goldId": "cmt6a4r1f01fs8kc9vl4jfh34",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 39,
+      "deepLatencyMs": 41,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4r1f01fs8kc9vl4jfh34",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: use m"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4r3l01g68kc9hrxp8a70",
+          "score": 0.3892271725293768,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4r5m01gj8kc9mp1zet2u",
+          "score": 0.38915947283659647,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4r8301gs8kc9dxpf3pif",
+          "score": 0.38909388875921547,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4ral01h98kc9pd96etpr",
+          "score": 0.3890303226534463,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4rd701hp8kc9d4u093d9",
+          "score": 0.38896868279330643,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4rfc01i18kc9pi81uiuq",
+          "score": 0.38890888292899173,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4rhe01ig8kc9lg89fv19",
+          "score": 0.3888508418842156,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4rja01ir8kc9n6sg4kf4",
+          "score": 0.3887944831885633,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4rlo01iw8kc9659pegeb",
+          "score": 0.38873973474135837,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP metrics names and labels: archi"
+        }
+      ]
+    },
+    {
+      "task": "tenant-scoped-projects",
+      "query": "MNEMON benchmark project fact for tenant scoping and TenantId handling",
+      "goldId": "cmt6a4rpe01jn8kc9hf03r7k1",
+      "rankInPage": -1,
+      "rankInPool": 10,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 32,
+      "deepLatencyMs": 41,
+      "goldScore": 0.39035138596571384,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4rrv01k18kc90st7s18f",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4rtx01ke8kc9m5jo5kqv",
+          "score": 0.3911800806451613,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4rwb01kq8kc9uqg1772w",
+          "score": 0.3911123809523809,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4rys01l18kc9l04qh9ye",
+          "score": 0.391046796875,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4s0w01la8kc9nppaweia",
+          "score": 0.3909832307692307,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4s3f01lj8kc90dtbvule",
+          "score": 0.3909215909090909,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4s5i01m18kc9sjsa0eax",
+          "score": 0.3908617910447762,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4s7h01m98kc9m56acdxs",
+          "score": 0.39080374999999995,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4s9k01mp8kc915oipcnw",
+          "score": 0.39074739130434777,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4sbv01n48kc9xjtg7rlm",
+          "score": 0.39069264285714284,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for tenant scoping and TenantId handling"
+        }
+      ]
+    },
+    {
+      "task": "alias-domain-errors",
+      "query": "MNEMON benchmark project fact for alias domain errors and error codes",
+      "goldId": "cmt6a4sdz01nd8kc9s77mfmke",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 32,
+      "deepLatencyMs": 30,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4sdz01nd8kc9s77mfmke",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4sgd01nl8kc9v0o3vuxw",
+          "score": 0.39068844465040437,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4siw01nz8kc9i9nv9mwp",
+          "score": 0.390620744957624,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4sl801oc8kc9x8vgrjnq",
+          "score": 0.390555160880243,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4snd01oo8kc97gaeth7f",
+          "score": 0.3904915947744738,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4spr01oz8kc96kdotl8e",
+          "score": 0.39042995491433397,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4srr01p98kc9pxef9hga",
+          "score": 0.39037015505001915,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4stt01pi8kc9fut1jcg5",
+          "score": 0.390312114005243,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4sw301pw8kc92o8p8xxx",
+          "score": 0.3902557553095909,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4sxa01qa8kc913es7ahw",
+          "score": 0.3902010068623859,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for alias domain errors and error codes:"
+        }
+      ]
+    },
+    {
+      "task": "app-config-parsing",
+      "query": "MNEMON benchmark project fact for app config environment variables and defaults",
+      "goldId": "cmt6a4t1u01r78kc9x7wq726e",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 45,
+      "deepLatencyMs": 31,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4t1u01r78kc9x7wq726e",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4t3m01rm8kc9dg4yj9wi",
+          "score": 0.3901682523904256,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4t5701s08kc9vbktx1g4",
+          "score": 0.39010055269764526,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4t7701sd8kc9zbc9bwny",
+          "score": 0.3900349686202642,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4t9b01sp8kc99rzsggvp",
+          "score": 0.389971402514495,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4tba01sx8kc994jysyge",
+          "score": 0.3899097626543551,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4tde01t88kc96zbvl1l6",
+          "score": 0.38984996279004036,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4tfq01tp8kc9keld9ddf",
+          "score": 0.3897919217452642,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4thi01ty8kc9jmksusx6",
+          "score": 0.3897355630496121,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4tju01u88kc9tsh17i6r",
+          "score": 0.3896808146024071,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for app config environment variables and"
+        }
+      ]
+    },
+    {
+      "task": "http-request-logging",
+      "query": "MNEMON benchmark project fact for HTTP request logging levels and events",
+      "goldId": "cmt6a4tnr01v38kc9wqh5jy0s",
+      "rankInPage": 0,
+      "rankInPool": 0,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 38,
+      "deepLatencyMs": 30,
+      "goldScore": 0.39125,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4tnr01v38kc9wqh5jy0s",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": true,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4tps01vc8kc93myzaxo4",
+          "score": 0.3904631819276935,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4trv01vq8kc9j2yx754d",
+          "score": 0.39039548223491316,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4ttw01w38kc9mllywmkx",
+          "score": 0.3903298981575323,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4twh01wf8kc9bo7pidd8",
+          "score": 0.39026633205176303,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4tyt01wn8kc988x5ub9i",
+          "score": 0.3902046921916232,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4u0j01wy8kc9yldiydnt",
+          "score": 0.39014489232730837,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4u2z01x88kc9vpxgh0zq",
+          "score": 0.39008685128253223,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4u4z01xl8kc9detw51zy",
+          "score": 0.39003049258688005,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4u6501y28kc9acq00emn",
+          "score": 0.3899757441396751,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for HTTP request logging levels and even"
+        }
+      ]
+    },
+    {
+      "task": "order-dto-mapping",
+      "query": "MNEMON benchmark project fact for order DTO mapping and money units",
+      "goldId": "cmt6a4uau01yq8kc9ara0a13p",
+      "rankInPage": -1,
+      "rankInPool": 10,
+      "pageSize": 10,
+      "poolSize": 50,
+      "pageLatencyMs": 39,
+      "deepLatencyMs": 31,
+      "goldScore": 0.39050281163664174,
+      "goldBand": "vector<=1.00",
+      "top": [
+        {
+          "i": 0,
+          "id": "cmt6a4uct01z48kc9dm08xdm6",
+          "score": 0.39125,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 1,
+          "id": "cmt6a4uew01zh8kc9b980pivm",
+          "score": 0.3911800806451613,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 2,
+          "id": "cmt6a4ugx01zt8kc9pszz46u3",
+          "score": 0.3911123809523809,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 3,
+          "id": "cmt6a4uj3020a8kc9zbxuak8h",
+          "score": 0.391046796875,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 4,
+          "id": "cmt6a4ulm020l8kc9qe3xmp1k",
+          "score": 0.3909832307692307,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 5,
+          "id": "cmt6a4unt020y8kc9prz0pzcg",
+          "score": 0.3909215909090909,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 6,
+          "id": "cmt6a4uoy021f8kc900ys09mr",
+          "score": 0.3908617910447762,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 7,
+          "id": "cmt6a4urv021m8kc9pbjcu2z1",
+          "score": 0.39080374999999995,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 8,
+          "id": "cmt6a4uu202248kc9qn2kesdo",
+          "score": 0.39074739130434777,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        },
+        {
+          "i": 9,
+          "id": "cmt6a4uw9022f8kc9jcjzuvpq",
+          "score": 0.39069264285714284,
+          "band": "vector<=1.00",
+          "gold": false,
+          "text": "MNEMON benchmark project fact for order DTO mapping and money units: a"
+        }
+      ]
+    }
+  ]
+}

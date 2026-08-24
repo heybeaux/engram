@@ -20,14 +20,22 @@
  */
 
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const MNEMON = process.env.PROBE_MNEMON ?? '/Users/beauxwalton/projects/mnemon';
-const BASE = (process.env.PROBE_BASE_URL ?? 'http://127.0.0.1:3007').replace(/\/+$/, '');
+const BASE = (process.env.PROBE_BASE_URL ?? 'http://127.0.0.1:3007').replace(
+  /\/+$/,
+  '',
+);
 const KEY = process.env.PROBE_API_KEY;
 const USER = process.env.PROBE_USER_ID ?? 'mnemon-v02-noise-prefix';
-const TASKS = process.env.PROBE_TASKS_DIR ?? join(MNEMON, '.mnemon/noisy-tasks-prefix');
-const RECEIPT = process.env.PROBE_RECEIPT ?? join(MNEMON, '.mnemon/noisy-corpus-receipt-prefix.json');
+const TASKS =
+  process.env.PROBE_TASKS_DIR ?? join(MNEMON, '.mnemon/noisy-tasks-prefix');
+const RECEIPT =
+  process.env.PROBE_RECEIPT ??
+  join(MNEMON, '.mnemon/noisy-corpus-receipt-prefix.json');
+const RESET_DB = process.env.PROBE_RESET_DB_URL;
 
 if (!KEY) {
   process.stderr.write('PROBE_API_KEY is required\n');
@@ -46,7 +54,9 @@ const EXTRA_HEADERS = {};
 const flagHeader = arg('header', null); // e.g. --header 'X-Engram-Rescue-Mode: relative'
 if (flagHeader) {
   const idx = flagHeader.indexOf(':');
-  EXTRA_HEADERS[flagHeader.slice(0, idx).trim()] = flagHeader.slice(idx + 1).trim();
+  EXTRA_HEADERS[flagHeader.slice(0, idx).trim()] = flagHeader
+    .slice(idx + 1)
+    .trim();
 }
 
 const receipt = JSON.parse(readFileSync(RECEIPT, 'utf8'));
@@ -79,7 +89,31 @@ async function recall(query, limit) {
   const text = await res.text();
   if (!res.ok) throw new Error(`recall ${res.status}: ${text.slice(0, 400)}`);
   const data = JSON.parse(text);
-  return data.memories ?? [];
+  return {
+    memories: data.memories ?? [],
+    latencyMs: Number(data.latencyMs ?? 0),
+  };
+}
+
+function resetUsage() {
+  if (!RESET_DB) return;
+  execFileSync(
+    'psql',
+    [
+      RESET_DB,
+      '-q',
+      '-c',
+      `UPDATE memories m
+          SET retrieval_count = s.retrieval_count,
+              used_count = s.used_count,
+              unused_count = s.unused_count,
+              last_retrieved_at = s.last_retrieved_at,
+              last_used_at = s.last_used_at
+         FROM zz_probe_usage_snapshot s
+        WHERE m.id = s.id;`,
+    ],
+    { stdio: 'ignore' },
+  );
 }
 
 const rows = [];
@@ -97,9 +131,13 @@ for (const file of taskFiles) {
   }
 
   // Ranked page the benchmark would actually consume.
-  const page = await recall(task.query, LIMIT);
+  resetUsage();
+  const pageResponse = await recall(task.query, LIMIT);
+  const page = pageResponse.memories;
   // Deep page: is the gold anywhere in the candidate pool at all?
-  const deep = await recall(task.query, 250);
+  resetUsage();
+  const deepResponse = await recall(task.query, 250);
+  const deep = deepResponse.memories;
 
   const rank = page.findIndex((m) => m.id === gold); // -1 = absent
   const deepRank = deep.findIndex((m) => m.id === gold);
@@ -116,7 +154,10 @@ for (const file of taskFiles) {
     goldId: gold,
     rankInPage: rank,
     rankInPool: deepRank,
+    pageSize: page.length,
     poolSize: deep.length,
+    pageLatencyMs: pageResponse.latencyMs,
+    deepLatencyMs: deepResponse.latencyMs,
     goldScore: goldRow ? goldRow.score : null,
     goldBand: goldRow ? band(goldRow.score) : 'ABSENT',
     top: page.slice(0, 10).map((m, i) => ({
@@ -165,7 +206,9 @@ for (const r of rows) {
     );
   }
 }
-process.stdout.write(`\n--- summary ---\n${JSON.stringify(summary, null, 2)}\n`);
+process.stdout.write(
+  `\n--- summary ---\n${JSON.stringify(summary, null, 2)}\n`,
+);
 
 if (OUT) {
   writeFileSync(OUT, JSON.stringify({ summary, rows }, null, 2));

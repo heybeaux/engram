@@ -1,0 +1,92 @@
+┌─────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────┬────┬─────────┬─────────┬──────────┬─────────┬───────────┬───────────┬──────────────┬──────────────┐
+│ (index) │ artifact                                                                                                          │ arm              │ n  │ goldAt1 │ goldAt5 │ goldAt10 │ mrrAt10 │ pageSizes │ poolSizes │ latencyP50Ms │ latencyP95Ms │
+├─────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────┼────┼─────────┼─────────┼──────────┼─────────┼───────────┼───────────┼──────────────┼──────────────┤
+│ 0       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated/depth10-r1.json'              │ 'depth10-r1'     │ 20 │ 14      │ 14      │ 14       │ 0.7     │ '10'      │ '10'      │ 39           │ 73           │
+│ 1       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated/depth10-r2.json'              │ 'depth10-r2'     │ 20 │ 14      │ 14      │ 14       │ 0.7     │ '10'      │ '10'      │ 43           │ 69           │
+│ 2       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated/depth12-r1.json'              │ 'depth12-r1'     │ 20 │ 14      │ 14      │ 14       │ 0.7     │ '10'      │ '12'      │ 43           │ 72           │
+│ 3       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated/depth12-r2.json'              │ 'depth12-r2'     │ 20 │ 14      │ 14      │ 14       │ 0.7     │ '10'      │ '12'      │ 42           │ 70           │
+│ 4       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated/depth20-r1.json'              │ 'depth20-r1'     │ 20 │ 14      │ 14      │ 14       │ 0.7     │ '10'      │ '20'      │ 42           │ 69           │
+│ 5       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated/depth20-r2.json'              │ 'depth20-r2'     │ 20 │ 14      │ 14      │ 14       │ 0.7     │ '10'      │ '20'      │ 41           │ 69           │
+│ 6       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated/depth50-r1.json'              │ 'depth50-r1'     │ 20 │ 14      │ 14      │ 14       │ 0.7     │ '10'      │ '50'      │ 42           │ 66           │
+│ 7       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated/depth50-r2.json'              │ 'depth50-r2'     │ 20 │ 14      │ 14      │ 14       │ 0.7     │ '10'      │ '50'      │ 41           │ 67           │
+│ 8       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated-backfill/cluster12-r1.json'   │ 'cluster12-r1'   │ 20 │ 14      │ 20      │ 20       │ 0.8     │ '10'      │ '12'      │ 42           │ 77           │
+│ 9       │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated-backfill/cluster12-r2.json'   │ 'cluster12-r2'   │ 20 │ 14      │ 20      │ 20       │ 0.8     │ '10'      │ '12'      │ 30           │ 83           │
+│ 10      │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated-backfill/cluster20-r1.json'   │ 'cluster20-r1'   │ 20 │ 14      │ 20      │ 20       │ 0.8     │ '10'      │ '20'      │ 44           │ 77           │
+│ 11      │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated-backfill/cluster20-r2.json'   │ 'cluster20-r2'   │ 20 │ 14      │ 20      │ 20       │ 0.8     │ '10'      │ '20'      │ 44           │ 68           │
+│ 12      │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated-backfill/cluster12c4-r1.json' │ 'cluster12c4-r1' │ 20 │ 14      │ 20      │ 20       │ 0.76    │ '10'      │ '12'      │ 43           │ 87           │
+│ 13      │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated-backfill/cluster12c4-r2.json' │ 'cluster12c4-r2' │ 20 │ 14      │ 20      │ 20       │ 0.76    │ '10'      │ '12'      │ 45           │ 73           │
+│ 14      │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated-backfill/cluster12c8-r1.json' │ 'cluster12c8-r1' │ 20 │ 14      │ 14      │ 20       │ 0.7333  │ '10'      │ '12'      │ 45           │ 73           │
+│ 15      │ 'docs/research/memory-formation-query-transform/artifacts/candidate-matrix/isolated-backfill/cluster12c8-r2.json' │ 'cluster12c8-r2' │ 20 │ 14      │ 14      │ 20       │ 0.7333  │ '10'      │ '12'      │ 45           │ 80           │
+└─────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┴──────────────────┴────┴─────────┴─────────┴──────────┴─────────┴───────────┴───────────┴──────────────┴──────────────┘
+depth10 stability: 0/20 repeated-query rankings changed
+depth12 stability: 0/20 repeated-query rankings changed
+depth20 stability: 0/20 repeated-query rankings changed
+depth50 stability: 0/20 repeated-query rankings changed
+cluster12 stability: 0/20 repeated-query rankings changed
+cluster20 stability: 0/20 repeated-query rankings changed
+cluster12c4 stability: 0/20 repeated-query rankings changed
+cluster12c8 stability: 0/20 repeated-query rankings changed
+
+depth10-r1 former-miss ranks (0-based):
+  paginated-list-endpoint: page=-1 pool=-1 poolSize=10
+  webhook-processor: page=-1 pool=-1 poolSize=10
+  inventory-reservation: page=-1 pool=-1 poolSize=10
+  currency-conversion: page=-1 pool=-1 poolSize=10
+  tenant-scoped-projects: page=-1 pool=-1 poolSize=10
+  order-dto-mapping: page=-1 pool=-1 poolSize=10
+
+depth12-r1 former-miss ranks (0-based):
+  paginated-list-endpoint: page=-1 pool=10 poolSize=12
+  webhook-processor: page=-1 pool=10 poolSize=12
+  inventory-reservation: page=-1 pool=10 poolSize=12
+  currency-conversion: page=-1 pool=10 poolSize=12
+  tenant-scoped-projects: page=-1 pool=10 poolSize=12
+  order-dto-mapping: page=-1 pool=10 poolSize=12
+
+depth20-r1 former-miss ranks (0-based):
+  paginated-list-endpoint: page=-1 pool=10 poolSize=20
+  webhook-processor: page=-1 pool=10 poolSize=20
+  inventory-reservation: page=-1 pool=10 poolSize=20
+  currency-conversion: page=-1 pool=10 poolSize=20
+  tenant-scoped-projects: page=-1 pool=10 poolSize=20
+  order-dto-mapping: page=-1 pool=10 poolSize=20
+
+depth50-r1 former-miss ranks (0-based):
+  paginated-list-endpoint: page=-1 pool=10 poolSize=50
+  webhook-processor: page=-1 pool=10 poolSize=50
+  inventory-reservation: page=-1 pool=10 poolSize=50
+  currency-conversion: page=-1 pool=10 poolSize=50
+  tenant-scoped-projects: page=-1 pool=10 poolSize=50
+  order-dto-mapping: page=-1 pool=10 poolSize=50
+
+cluster12-r1 former-miss ranks (0-based):
+  paginated-list-endpoint: page=2 pool=2 poolSize=12
+  webhook-processor: page=2 pool=2 poolSize=12
+  inventory-reservation: page=2 pool=2 poolSize=12
+  currency-conversion: page=2 pool=2 poolSize=12
+  tenant-scoped-projects: page=2 pool=2 poolSize=12
+  order-dto-mapping: page=2 pool=2 poolSize=12
+
+cluster20-r1 former-miss ranks (0-based):
+  paginated-list-endpoint: page=2 pool=2 poolSize=20
+  webhook-processor: page=2 pool=2 poolSize=20
+  inventory-reservation: page=2 pool=2 poolSize=20
+  currency-conversion: page=2 pool=2 poolSize=20
+  tenant-scoped-projects: page=2 pool=2 poolSize=20
+  order-dto-mapping: page=2 pool=2 poolSize=20
+
+cluster12c4-r1 former-miss ranks (0-based):
+  paginated-list-endpoint: page=4 pool=4 poolSize=12
+  webhook-processor: page=4 pool=4 poolSize=12
+  inventory-reservation: page=4 pool=4 poolSize=12
+  currency-conversion: page=4 pool=4 poolSize=12
+  tenant-scoped-projects: page=4 pool=4 poolSize=12
+  order-dto-mapping: page=4 pool=4 poolSize=12
+
+cluster12c8-r1 former-miss ranks (0-based):
+  paginated-list-endpoint: page=8 pool=8 poolSize=12
+  webhook-processor: page=8 pool=8 poolSize=12
+  inventory-reservation: page=8 pool=8 poolSize=12
+  currency-conversion: page=8 pool=8 poolSize=12
+  tenant-scoped-projects: page=8 pool=8 poolSize=12
+  order-dto-mapping: page=8 pool=8 poolSize=12
