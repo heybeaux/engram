@@ -42,10 +42,93 @@ import { RecallWeightService } from './recall-weight.service';
 import { MemoryQueryRankingService } from './memory-query-ranking.service';
 import { MemoryQueryContextService } from './memory-query-context.service';
 import { MemoryFailureService } from './memory-failure.service';
+import {
+  compareByRankKeys,
+  ftsRescueScore,
+  ilikeRescueScore,
+  meetsLexicalCoverageFloor,
+  ILIKE_RESCUE_BAND_BOTTOM,
+} from './memory-ranking.util';
 
 @Injectable()
 export class MemoryQueryService {
   private readonly logger = new Logger(MemoryQueryService.name);
+
+  /**
+   * RESEARCH FLAG — default OFF, no change to shipped behaviour.
+   *
+   * `RECALL_RERANK_SCALE_FIX=true` removes the score-scale mixing between the
+   * reranker and the sticky keyword re-add (see the long comment at the re-add
+   * site below). Two coupled changes, both required for the invariant:
+   *
+   *  1. `applyReranking` is asked to rank the WHOLE candidate pool instead of
+   *     truncating at `limit`. Every keyword-rescued candidate therefore
+   *     survives reranking *in the rescaled scale*, so "sticky" is satisfied
+   *     structurally rather than by re-injecting a pre-rerank score.
+   *  2. Anything that still has to be re-added (defensive path only, e.g. a
+   *     candidate dropped by a downstream stage) is placed just below the
+   *     lowest rescaled score instead of at its raw 1.25 / 1.15 / 1.05 band
+   *     value, so raw and rescaled values are never sorted against each other.
+   *
+   * Consequence — the property the old code violated: ranking becomes
+   * MONOTONIC IN `limit`. The top-K of a `limit=K` query is exactly the prefix
+   * of the top-K of a `limit=N` query (N > K) for the same candidate pool.
+   */
+  private readonly rerankScaleFix =
+    process.env.RECALL_RERANK_SCALE_FIX === 'true';
+
+  /**
+   * RESEARCH FLAG — default OFF. Control arm.
+   *
+   * `RECALL_NO_RESCUE=true` disables every lexical rescue path (FTS/BM25,
+   * ILIKE coverage, identity profile) so recall is vector-only. This is the
+   * honest baseline for "what can the embedding do on its own", against which
+   * any rescue policy — banded, relative, or scale-fixed — has to justify
+   * itself.
+   */
+  private readonly noRescue = process.env.RECALL_NO_RESCUE === 'true';
+
+  /**
+   * RESEARCH FLAG — default OFF. Defect A, part 1.
+   *
+   * `RECALL_LEXICAL_COVERAGE_FLOOR=true` stops the `OR`-joined ILIKE rescue
+   * from promoting a row that contains a single incidental query token into the
+   * (1.00, 1.10] band, where it outranks every cosine hit including perfect
+   * semantic matches. On the noisy corpus one 71-character junk memory matched
+   * exactly one of the eight extracted terms ("mnemon", which appears in all 20
+   * task queries) and was promoted on 20/20 queries for it.
+   *
+   * Rows below the floor are NOT removed from the candidate pool — they simply
+   * keep their cosine score instead of being lifted above the cosine ceiling.
+   */
+  private readonly lexicalCoverageFloor =
+    process.env.RECALL_LEXICAL_COVERAGE_FLOOR === 'true';
+
+  /**
+   * RESEARCH FLAG — default OFF. Defect B.
+   *
+   * `RECALL_RESCUE_SQL_TIEBREAK=true` appends `id ASC` to every rescue query's
+   * `ORDER BY`. Without it, `ORDER BY ts_rank DESC` / `ORDER BY importance_score
+   * DESC, created_at DESC` leave ties to Postgres' physical row order, which is
+   * not stable across server restarts, VACUUMs or plan changes. On the
+   * benchmark corpus the gold memory sits in a cluster of ~11 near-identical
+   * rows with equal `ts_rank`, so *which* member the `LIMIT 100`/`LIMIT 20`
+   * window keeps — and hence which one gets the rank-0 RRF term — is decided by
+   * heap order. `compareByRankKeys` only imposes a total order on rows that
+   * already came back; this imposes one on the rows that come back at all.
+   */
+  private readonly rescueSqlTiebreak =
+    process.env.RECALL_RESCUE_SQL_TIEBREAK === 'true';
+
+  /**
+   * `, <col> ASC` fragment appended to rescue `ORDER BY` clauses, or the empty
+   * string when {@link rescueSqlTiebreak} is off — so flag-off SQL is
+   * character-identical to the shipped statements.
+   */
+  private rescueTiebreak(column = 'id'): string {
+    return this.rescueSqlTiebreak ? `, ${column} ASC` : '';
+  }
+
   constructor(
     private prisma: PrismaService,
     private embedding: EmbeddingService,
@@ -351,9 +434,13 @@ export class MemoryQueryService {
             blendedScore *
             this.recallWeightService.recallWeight(memory) *
             this.rankingService.getImportanceMultiplier(memory);
-          return { ...memory, score: adjustedScore } as MemoryWithScore;
+          return {
+            ...memory,
+            score: adjustedScore,
+            vectorScore: scoreMap.get(memory.id),
+          } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .sort(compareByRankKeys)
         .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
     } else {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
@@ -371,6 +458,10 @@ export class MemoryQueryService {
       );
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
+      // Preserved separately from scoreMap: the keyword-rescue paths below
+      // overwrite scoreMap with band values, but the raw cosine similarity is
+      // the first tie-break key (see compareByRankKeys).
+      const cosineMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       const memoryIds = vectorResults.map((r) => r.id);
       const keywordRescueIds = new Set<string>();
 
@@ -386,9 +477,14 @@ export class MemoryQueryService {
           ? [singleUserId]
           : [];
       try {
-        const ftsResults = poolOnlyMode
-          ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-              `SELECT m.id FROM memories m
+        type FtsRow = { id: string; ts_rank: number };
+        const ftsResults = this.noRescue
+          ? []
+          : poolOnlyMode
+            ? await this.prisma.$queryRawUnsafe<FtsRow[]>(
+                `SELECT m.id,
+                      ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) AS ts_rank
+               FROM memories m
                WHERE m.id IN (
                  SELECT mpm.memory_id FROM memory_pool_memberships mpm
                  WHERE mpm.pool_id = ANY($1::text[])
@@ -399,14 +495,16 @@ export class MemoryQueryService {
                  AND m.searchable IS NOT FALSE
                  AND m.embedding_status != 'DUPLICATE'
                  AND m.is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC
+               ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC${this.rescueTiebreak('m.id')}
                LIMIT 100`,
-              poolIds,
-              searchQuery,
-            )
-          : resolvedUserIds.length > 0
-            ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                `SELECT id FROM memories
+                poolIds,
+                searchQuery,
+              )
+            : resolvedUserIds.length > 0
+              ? await this.prisma.$queryRawUnsafe<FtsRow[]>(
+                  `SELECT id,
+                        ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) AS ts_rank
+               FROM memories
                WHERE user_id = ANY($1::text[])
                  AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
                  AND deleted_at IS NULL
@@ -414,40 +512,53 @@ export class MemoryQueryService {
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
+               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC${this.rescueTiebreak()}
                LIMIT 100`,
-                resolvedUserIds,
-                searchQuery,
-              )
-            : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                `SELECT id FROM memories
+                  resolvedUserIds,
+                  searchQuery,
+                )
+              : await this.prisma.$queryRawUnsafe<FtsRow[]>(
+                  `SELECT id,
+                        ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) AS ts_rank
+               FROM memories
                WHERE to_tsvector('english', raw) @@ websearch_to_tsquery('english', $1)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
+               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC${this.rescueTiebreak()}
                LIMIT 100`,
-                searchQuery,
-              );
-        // RRF fusion (k=60): BM25 rank contributes 1/(k+rank) so rank-1
-        // BM25 hit scores ≈0.016, rank-100 ≈0.006. This prevents a flat
-        // 0.75 override from promoting low-quality exact-keyword matches
-        // above high-quality semantic matches.
-        const RRF_K = 60;
+                  searchQuery,
+                );
+        // Continuous FTS rescue band. Previously every FTS-rescued candidate
+        // was assigned the constant 1.25, which is what made 18/20 benchmark
+        // queries end in a 5-way tie at the top score. The score now varies
+        // with the ts_rank the SQL was already ordering by (SELECTed above but
+        // formerly discarded), blended with an RRF positional term.
+        //
+        // Invariant: band top is exactly 1.25 for the best hit, values are
+        // strictly decreasing with rank, and never fall to or below 1.10 —
+        // so FTS rescue still outranks ILIKE rescue and every cosine hit.
+        // Rows arrive ordered by ts_rank DESC, so row 0 carries the max.
+        const maxTsRank =
+          ftsResults.length > 0 ? Number(ftsResults[0].ts_rank) : 0;
         let ftsAdded = 0;
         for (let ftsRank = 0; ftsRank < ftsResults.length; ftsRank++) {
           const row = ftsResults[ftsRank];
-          const bm25Score = 1 / (RRF_K + ftsRank + 1);
+          const bandedScore = ftsRescueScore(
+            Number(row.ts_rank),
+            maxTsRank,
+            ftsRank,
+          );
           ftsResultIds.add(row.id);
           keywordRescueIds.add(row.id);
           if (!scoreMap.has(row.id)) {
-            scoreMap.set(row.id, 1.25);
+            scoreMap.set(row.id, bandedScore);
             memoryIds.push(row.id);
             ftsAdded++;
           } else {
-            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.25));
+            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, bandedScore));
           }
         }
         if (ftsAdded > 0) {
@@ -460,7 +571,9 @@ export class MemoryQueryService {
         // websearch_to_tsquery can be too strict for natural questions (for
         // example requiring filler terms such as "tell" or "need"), while a
         // curated ILIKE pass catches exact domain words like medication/roast.
-        const words = this.extractLexicalRescueTerms(searchQuery);
+        const words = this.noRescue
+          ? []
+          : this.extractLexicalRescueTerms(searchQuery);
         if (words.length > 0) {
           try {
             const hasResolvedUsers = resolvedUserIds.length > 0;
@@ -468,10 +581,22 @@ export class MemoryQueryService {
             const ilikeConditions = words
               .map((_, i) => `LOWER(raw) LIKE $${i + paramOffset}`)
               .join(' OR ');
+            // Lexical coverage: how many of the extracted rescue terms this row
+            // actually contains. This is the quality signal that makes the
+            // ILIKE band continuous instead of a flat 1.1 constant.
+            const matchCountExpr = (column: string, offset: number): string =>
+              words
+                .map(
+                  (_, i) =>
+                    `(CASE WHEN LOWER(${column}) LIKE $${i + offset} THEN 1 ELSE 0 END)`,
+                )
+                .join(' + ');
             const ilikeParams = words.map((w) => `%${w}%`);
+            type IlikeRow = { id: string; match_count: number };
             const ilikeResults = poolOnlyMode
-              ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                  `SELECT m.id FROM memories m
+              ? await this.prisma.$queryRawUnsafe<IlikeRow[]>(
+                  `SELECT m.id, (${matchCountExpr('m.raw', 2)}) AS match_count
+                   FROM memories m
                    WHERE m.id IN (
                      SELECT mpm.memory_id FROM memory_pool_memberships mpm
                      WHERE mpm.pool_id = ANY($1::text[])
@@ -484,14 +609,15 @@ export class MemoryQueryService {
                      AND m.searchable IS NOT FALSE
                      AND m.embedding_status != 'DUPLICATE'
                      AND m.is_duplicate_of IS NULL
-                   ORDER BY m.importance_score DESC, m.created_at DESC
+                   ORDER BY m.importance_score DESC, m.created_at DESC${this.rescueTiebreak('m.id')}
                    LIMIT 20`,
                   poolIds,
                   ...ilikeParams,
                 )
               : hasResolvedUsers
-                ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                    `SELECT id FROM memories
+                ? await this.prisma.$queryRawUnsafe<IlikeRow[]>(
+                    `SELECT id, (${matchCountExpr('raw', paramOffset)}) AS match_count
+                   FROM memories
                    WHERE user_id = ANY($1::text[])
                      AND (${ilikeConditions})
                      AND deleted_at IS NULL
@@ -499,33 +625,76 @@ export class MemoryQueryService {
                      AND searchable IS NOT FALSE
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
-                   ORDER BY importance_score DESC, created_at DESC
+                   ORDER BY importance_score DESC, created_at DESC${this.rescueTiebreak()}
                    LIMIT 20`,
                     resolvedUserIds,
                     ...ilikeParams,
                   )
-                : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                    `SELECT id FROM memories
+                : await this.prisma.$queryRawUnsafe<IlikeRow[]>(
+                    `SELECT id, (${matchCountExpr('raw', paramOffset)}) AS match_count
+                   FROM memories
                    WHERE (${ilikeConditions})
                      AND deleted_at IS NULL
                      AND superseded_by_id IS NULL
                      AND searchable IS NOT FALSE
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
-                   ORDER BY importance_score DESC, created_at DESC
+                   ORDER BY importance_score DESC, created_at DESC${this.rescueTiebreak()}
                    LIMIT 20`,
                     ...ilikeParams,
                   );
+            // Continuous ILIKE rescue band, replacing the flat 1.1 constant.
+            // Quality signal = lexical coverage (matched terms / extracted
+            // terms); positional tie-break = RRF over the SQL ordering
+            // (importance_score DESC, created_at DESC).
+            //
+            // Invariant: values live strictly inside (1.00, 1.10] — always
+            // above the cosine ceiling of 1.0, never reaching the FTS band —
+            // and are strictly decreasing with rank at equal coverage.
             let ilikeAdded = 0;
-            for (const row of ilikeResults) {
+            let ilikeBandRank = 0;
+            for (
+              let ilikeRank = 0;
+              ilikeRank < ilikeResults.length;
+              ilikeRank++
+            ) {
+              const row = ilikeResults[ilikeRank];
+              // Defect A, part 1 (flag-gated): a row containing exactly one of
+              // the extracted terms is a coincidence, not a lexical agreement,
+              // and must not be lifted above the cosine ceiling. Skipping it
+              // here leaves any cosine score it already has untouched and keeps
+              // it out of `keywordRescueIds`, so it also loses the sticky
+              // re-add protection it never earned.
+              if (
+                this.lexicalCoverageFloor &&
+                !meetsLexicalCoverageFloor(
+                  Number(row.match_count),
+                  words.length,
+                )
+              ) {
+                continue;
+              }
+              // Position within the *promoted* set, so skipping a row does not
+              // leave a hole in the RRF positional term. Identical to
+              // `ilikeRank` whenever the floor is off, because nothing is
+              // skipped then.
+              const bandRank = ilikeBandRank++;
+              const bandedScore = ilikeRescueScore(
+                Number(row.match_count),
+                words.length,
+                bandRank,
+              );
               ftsResultIds.add(row.id);
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
-                scoreMap.set(row.id, 1.1);
+                scoreMap.set(row.id, bandedScore);
                 memoryIds.push(row.id);
                 ilikeAdded++;
               } else {
-                scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.1));
+                scoreMap.set(
+                  row.id,
+                  Math.max(scoreMap.get(row.id)!, bandedScore),
+                );
               }
             }
             if (ilikeAdded > 0) {
@@ -540,7 +709,11 @@ export class MemoryQueryService {
           }
         }
 
-        if (this.isIdentityProfileQuery(searchQuery) && !poolOnlyMode) {
+        if (
+          !this.noRescue &&
+          this.isIdentityProfileQuery(searchQuery) &&
+          !poolOnlyMode
+        ) {
           try {
             const identityResults = await this.prisma.memory.findMany({
               where: {
@@ -564,11 +737,21 @@ export class MemoryQueryService {
                 ...sessionIdFilter,
                 ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
               },
-              orderBy: [{ importanceScore: 'desc' }, { createdAt: 'desc' }],
+              orderBy: [
+                { importanceScore: 'desc' },
+                { createdAt: 'desc' },
+                ...(this.rescueSqlTiebreak ? [{ id: 'asc' } as const] : []),
+              ],
               take: 10,
               select: { id: true },
             });
             let identityAdded = 0;
+            // NOTE (research finding, not yet fixed): this flat 1.15 is the
+            // same flat-constant defect c905438 removed from the FTS and ILIKE
+            // paths. 1.15 sits *inside* the FTS band (1.10, 1.25], so identity
+            // hits interleave with FTS hits and all ten identity rows tie with
+            // each other. Left as-is deliberately — see
+            // docs/research/memory-formation-query-transform/05-finding-band-inversion.md.
             for (const row of identityResults) {
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
@@ -620,10 +803,11 @@ export class MemoryQueryService {
           return {
             ...memory,
             score: semanticScore,
+            vectorScore: cosineMap.get(memory.id),
             __keywordRescued: keywordRescueIds.has(memory.id),
           } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        .sort(compareByRankKeys);
 
       const RERANK_POOL = sorted.length;
 
@@ -633,6 +817,15 @@ export class MemoryQueryService {
         const mem = memoryMap.get(id);
         if (mem) keywordRescueMap.set(id, mem);
       }
+      // NOTE (research finding, unrelated to the flag): this loop is
+      // unreachable. `topIds` and `memoryMap` are both built from `sorted`, so
+      // `!topIds.has(id)` implies `memoryMap.get(id) === undefined` and the
+      // inner `if (mem)` never fires. `forcedFts` is therefore always empty and
+      // the flat `0.75` below is dead code — it is not a live scoring path.
+      // Deliberately left as-is: making it live would inject FTS-only
+      // candidates at a flat constant, i.e. reintroduce the exact defect
+      // c905438 removed. Fixing it properly means sourcing those memories from
+      // a second findMany, which is out of scope for this experiment.
       const forcedFts: MemoryWithScore[] = [];
       for (const id of ftsResultIds) {
         if (!topIds.has(id)) {
@@ -711,24 +904,81 @@ export class MemoryQueryService {
 
     // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
     const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
+    // Scale-fix mode ranks the entire pool rather than truncating at `limit`.
+    // The reranker already scores every candidate (`candidates = memories`);
+    // `limit` only controlled the final `slice`. Ranking the whole pool is what
+    // makes the sticky re-add a no-op and the page prefix-stable in `limit`.
+    const rerankDepth = this.rerankScaleFix
+      ? Math.max(limit, scoredMemories.length)
+      : limit;
     scoredMemories = await this.rankingService.applyReranking(
       scoredMemories,
       rerankQuery,
-      limit,
+      rerankDepth,
     );
 
     // Exact keyword/ILIKE rescued memories are deterministic high-signal hits.
     // Keep them sticky after reranking so the cross-encoder cannot drop fresh
     // exact-match writes from the final top-N.
+    // Preserve the banded rescue score the candidate already carries. Clamping
+    // to a flat 1.1 here would re-flatten exactly the scores the FTS/ILIKE
+    // bands above made continuous; the band bottom is only a floor for the
+    // pathological case of a rescued memory arriving with no score at all.
+    //
+    // RESEARCH FINDING — this is where the score scales get mixed.
+    //
+    // `applyReranking` rescales EVERY surviving candidate: with the
+    // cross-encoder it becomes `normalisedRerankScore * 0.85 + importance *
+    // 0.15` (≤ ~1.0); without it, the fallback blend is `(score * 0.85 +
+    // importance * 0.15) * importanceMultiplier * sentimentPenalty`. Either
+    // way the output lives well below 1.0. The candidates re-added below,
+    // however, carry their *pre-rerank* rescue score — 1.25 / 1.15 / 1.05 —
+    // straight from `keywordRescueMap`. Those raw band values are then sorted
+    // against rescaled values and win categorically, so the final top-N is
+    // whatever the lexical rescue produced and the reranker's judgement is
+    // discarded. It also makes results non-monotonic in `limit`: at limit=5
+    // the page is 5 band hits, at limit=50 the same query returns pure
+    // reranked scores because nothing was "missing" to re-add.
+    const rescaledFloor = scoredMemories.reduce(
+      (min, m) => Math.min(min, m.score ?? 0),
+      Number.POSITIVE_INFINITY,
+    );
     const missingKeywordHits = [...keywordRescueMap.entries()]
       .filter(([id]) => !scoredMemories.some((m) => m.id === id))
-      .map(
-        ([, mem]) =>
-          ({ ...mem, score: Math.max(mem.score ?? 0, 1.1) }) as MemoryWithScore,
-      );
-    if (missingKeywordHits.length > 0) {
+      .map(([, mem], i) => {
+        if (!this.rerankScaleFix) {
+          return {
+            ...mem,
+            score: mem.score ?? ILIKE_RESCUE_BAND_BOTTOM,
+          } as MemoryWithScore;
+        }
+        // Scale-fix mode: honour the "sticky" intent (an exact-match write must
+        // not vanish from the result set) without letting a pre-rerank score
+        // outrank post-rerank ones. Re-added hits are appended just below the
+        // lowest rescaled score, ordered among themselves by their own rescue
+        // score.
+        const floor = Number.isFinite(rescaledFloor) ? rescaledFloor : 0;
+        return {
+          ...mem,
+          score: Math.min(mem.score ?? 0, floor) - 1e-9 * (i + 1),
+        } as MemoryWithScore;
+      });
+    if (this.rerankScaleFix) {
+      // Always re-sort and truncate here: `applyReranking` was given the full
+      // pool depth above, so this is the single point where `limit` is applied.
+      // Truncating a total order (compareByRankKeys) at K is what gives the
+      // prefix property across different values of `limit`.
+      scoredMemories = (
+        missingKeywordHits.length > 0
+          ? [...missingKeywordHits, ...scoredMemories]
+          : scoredMemories
+      )
+        .slice()
+        .sort(compareByRankKeys)
+        .slice(0, limit);
+    } else if (missingKeywordHits.length > 0) {
       scoredMemories = [...missingKeywordHits, ...scoredMemories]
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .sort(compareByRankKeys)
         .slice(0, limit);
     }
 
@@ -747,7 +997,7 @@ export class MemoryQueryService {
         }
         return m;
       });
-      scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      scoredMemories.sort(compareByRankKeys);
     }
 
     let result: MemoryWithScore[] = this.filterRecallSurvivors(scoredMemories);
@@ -911,9 +1161,13 @@ export class MemoryQueryService {
         const adjustedScore =
           blendedScore * this.recallWeightService.recallWeight(memory);
 
-        return { ...memory, score: adjustedScore } as MemoryWithScore;
+        return {
+          ...memory,
+          score: adjustedScore,
+          vectorScore: scoreMap.get(memory.id),
+        } as MemoryWithScore;
       })
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      .sort(compareByRankKeys);
 
     // Apply the same post-processing chain as the standard path so multi-query
     // is not silently downgraded to cosine-only ranking (retrieval H4), then
