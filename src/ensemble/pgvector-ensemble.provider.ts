@@ -11,7 +11,12 @@
  * - Supports upsert (update on conflict)
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { assertValidEmbedding } from '../embedding/embedding-validation.util';
 import { ServicePrismaService } from '../prisma/service-prisma.service';
 import {
   ModelId,
@@ -27,6 +32,8 @@ import {
 } from './ensemble.types';
 
 export interface EnsembleEmbeddingRecord {
+  /** Required for request-facing writes; omitted only by trusted background jobs. */
+  userId?: string;
   memoryId: string;
   modelId: ModelId;
   embedding: number[];
@@ -52,17 +59,33 @@ export class PgVectorEnsembleProvider {
 
   constructor(private prisma: ServicePrismaService) {}
 
+  private validateRecord(record: EnsembleEmbeddingRecord): void {
+    const model = MODEL_CONFIGS[record.modelId];
+    if (!model || record.dimensions !== model.dimensions) {
+      throw new Error(
+        `Invalid dimensions for ensemble model ${record.modelId}`,
+      );
+    }
+    assertValidEmbedding(record.embedding, {
+      expectedDimensions: model.dimensions,
+      context: `ensemble store ${record.memoryId}/${record.modelId}`,
+    });
+  }
+
   /**
    * Upsert a single embedding for a memory/model pair
    */
   async upsertEmbedding(record: EnsembleEmbeddingRecord): Promise<void> {
+    this.validateRecord(record);
     const embeddingStr = `[${record.embedding.join(',')}]`;
     const now = new Date();
 
-    await this.prisma.$executeRawUnsafe(
+    const written = await this.prisma.$executeRawUnsafe(
       `
       INSERT INTO memory_embeddings (id, memory_id, model_id, dimensions, embedding, created_at, updated_at)
-      VALUES (gen_random_uuid()::text, $1, $2, $3, $4::vector, $5, $5)
+      SELECT gen_random_uuid()::text, m.id, $2, $3, $4::vector, $5, $5
+      FROM memories m WHERE m.id = $1 AND m.deleted_at IS NULL
+        AND ($6::text IS NULL OR m.user_id = $6)
       ON CONFLICT (memory_id, model_id) 
       DO UPDATE SET 
         embedding = $4::vector,
@@ -74,13 +97,19 @@ export class PgVectorEnsembleProvider {
       record.dimensions,
       embeddingStr,
       now,
+      record.userId ?? null,
     );
+    if (written !== 1)
+      throw new ServiceUnavailableException('Embedding was not stored');
   }
 
   /**
    * Upsert multiple embeddings in a batch
    */
   async upsertEmbeddings(records: EnsembleEmbeddingRecord[]): Promise<void> {
+    if (records.length === 0)
+      throw new ServiceUnavailableException('No embeddings to store');
+    records.forEach((record) => this.validateRecord(record));
     // Use a transaction for atomicity
     await this.prisma.$transaction(
       async (tx) => {
@@ -88,10 +117,12 @@ export class PgVectorEnsembleProvider {
           const embeddingStr = `[${record.embedding.join(',')}]`;
           const now = new Date();
 
-          await tx.$executeRawUnsafe(
+          const written = await tx.$executeRawUnsafe(
             `
           INSERT INTO memory_embeddings (id, memory_id, model_id, dimensions, embedding, created_at, updated_at)
-          VALUES (gen_random_uuid()::text, $1, $2, $3, $4::vector, $5, $5)
+          SELECT gen_random_uuid()::text, m.id, $2, $3, $4::vector, $5, $5
+      FROM memories m WHERE m.id = $1 AND m.deleted_at IS NULL
+        AND ($6::text IS NULL OR m.user_id = $6)
           ON CONFLICT (memory_id, model_id) 
           DO UPDATE SET 
             embedding = $4::vector,
@@ -103,7 +134,10 @@ export class PgVectorEnsembleProvider {
             record.dimensions,
             embeddingStr,
             now,
+            record.userId ?? null,
           );
+          if (written !== 1)
+            throw new ServiceUnavailableException('Embedding was not stored');
         }
       },
       { timeout: 120000 },
@@ -127,6 +161,12 @@ export class PgVectorEnsembleProvider {
   async queryByModel(
     options: EnsembleSearchOptions,
   ): Promise<EnsembleSearchResult[]> {
+    if (!MODEL_CONFIGS[options.modelId])
+      throw new Error(`Unknown ensemble model ${options.modelId}`);
+    assertValidEmbedding(options.embedding, {
+      expectedDimensions: MODEL_CONFIGS[options.modelId]?.dimensions,
+      context: `ensemble query ${options.modelId}`,
+    });
     const embeddingStr = `[${options.embedding.join(',')}]`;
     const dimensions = options.embedding.length;
 
@@ -208,6 +248,10 @@ export class PgVectorEnsembleProvider {
       }),
     );
 
+    if (results.size === 0)
+      throw new ServiceUnavailableException(
+        'No ensemble search backend succeeded',
+      );
     return results;
   }
 
@@ -245,6 +289,10 @@ export class PgVectorEnsembleProvider {
       }),
     );
 
+    if (results.size === 0)
+      throw new ServiceUnavailableException(
+        'No ensemble search backend succeeded',
+      );
     return results;
   }
 

@@ -12,7 +12,13 @@
  * - Support for batch embedding (for nightly re-embed)
  */
 
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { assertValidEmbedding } from '../embedding/embedding-validation.util';
 import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
@@ -378,12 +384,11 @@ export class EnsembleService implements OnModuleInit {
    */
   async upsert(options: EnsembleUpsertOptions): Promise<void> {
     if (!this.config.enabled) {
-      this.logger.debug('Ensemble disabled, skipping upsert');
-      return;
+      throw new ServiceUnavailableException('Ensemble is not enabled');
     }
 
     // Generate embeddings from all models (plan-limited for cloud)
-    const { embeddings, errors } = await this.embedAll(
+    const { embeddings } = await this.embedAll(
       options.content,
       'document',
       options.userId,
@@ -393,12 +398,15 @@ export class EnsembleService implements OnModuleInit {
       this.logger.warn(
         `No embeddings generated for memory ${options.memoryId} — embed service may be down`,
       );
-      return;
+      throw new ServiceUnavailableException(
+        'No embeddings generated; retry the write',
+      );
     }
 
     // Prepare records for batch upsert
     const records: EnsembleEmbeddingRecord[] = embeddings.map((embResult) => ({
       memoryId: options.memoryId,
+      userId: options.userId,
       modelId: embResult.model,
       embedding: embResult.embedding,
       dimensions: embResult.dimensions,
@@ -417,7 +425,7 @@ export class EnsembleService implements OnModuleInit {
    */
   async upsertEmbeddings(records: EnsembleEmbeddingRecord[]): Promise<void> {
     if (!this.config.enabled) {
-      return;
+      throw new ServiceUnavailableException('Ensemble is not enabled');
     }
     await this.pgvectorProvider.upsertEmbeddings(records);
   }
@@ -430,7 +438,7 @@ export class EnsembleService implements OnModuleInit {
     models: ModelId[],
   ): Promise<void> {
     if (!this.config.enabled) {
-      return;
+      throw new ServiceUnavailableException('Ensemble is not enabled');
     }
 
     // Fetch memories
@@ -439,11 +447,17 @@ export class EnsembleService implements OnModuleInit {
       select: { id: true, raw: true, userId: true },
     });
 
-    if (memories.length === 0) return;
+    if (memories.length === 0)
+      throw new ServiceUnavailableException('No memories found to embed');
 
     // Generate embeddings - embedBatch returns embeddings grouped by model, then by text index
     const texts = memories.map((m) => m.raw);
     const batchResult = await this.embedBatch(texts, models);
+    if (batchResult.errors?.length) {
+      throw new ServiceUnavailableException(
+        'Incomplete embedding batch; retry the batch',
+      );
+    }
 
     // Group embeddings by model to track text index
     const embeddingsByModel = new Map<ModelId, number[][]>();
@@ -457,6 +471,11 @@ export class EnsembleService implements OnModuleInit {
     // Convert to records for storage
     const records: EnsembleEmbeddingRecord[] = [];
     for (const [modelId, modelEmbeddings] of embeddingsByModel) {
+      if (modelEmbeddings.length !== memories.length) {
+        throw new ServiceUnavailableException(
+          'Embedding batch cardinality mismatch',
+        );
+      }
       for (let i = 0; i < memories.length && i < modelEmbeddings.length; i++) {
         const memory = memories[i];
         const embedding = modelEmbeddings[i];
@@ -472,9 +491,11 @@ export class EnsembleService implements OnModuleInit {
     }
 
     // Store embeddings
-    if (records.length > 0) {
-      await this.pgvectorProvider.upsertEmbeddings(records);
-    }
+    if (records.length === 0)
+      throw new ServiceUnavailableException(
+        'No embeddings generated; retry the batch',
+      );
+    await this.pgvectorProvider.upsertEmbeddings(records);
   }
 
   /**
@@ -498,7 +519,16 @@ export class EnsembleService implements OnModuleInit {
       'query',
       options.userId,
     );
-    const embeddingMap = new Map(embeddings.map((e) => [e.model, e.embedding]));
+    const embeddingMap = new Map(
+      embeddings
+        .filter((e) => models.includes(e.model))
+        .map((e) => [e.model, e.embedding]),
+    );
+    if (embeddingMap.size === 0) {
+      throw new ServiceUnavailableException(
+        'No query embeddings generated; retry retrieval',
+      );
+    }
 
     // Query each model using pgvector
     const modelResults = await this.pgvectorProvider.queryWithModelEmbeddings(
@@ -506,6 +536,12 @@ export class EnsembleService implements OnModuleInit {
       options.userId,
       topKPerModel,
     );
+
+    if (modelResults.size === 0)
+      throw new ServiceUnavailableException(
+        'No ensemble search backend succeeded',
+      );
+    const failedModels = models.filter((model) => !modelResults.has(model));
 
     // Apply RRF fusion
     const weights = { ...this.config.weights, ...options.weights };
@@ -518,6 +554,8 @@ export class EnsembleService implements OnModuleInit {
         modelsQueried: Array.from(modelResults.keys()),
         candidatesEvaluated: fusedResults.length,
         fusionAlgorithm: 'rrf',
+        degraded: failedModels.length > 0,
+        failedModels,
       },
     };
   }
@@ -608,7 +646,9 @@ export class EnsembleService implements OnModuleInit {
   ): Promise<MultiEmbedResponse> {
     // Route to cloud providers if active
     if (this.useCloud) {
-      return this.cloudEnsemble.embedBatch(texts, models);
+      const result = await this.cloudEnsemble.embedBatch(texts, models);
+      this.validateBatch(result.embeddings, texts.length, models);
+      return result;
     }
 
     const start = Date.now();
@@ -636,38 +676,47 @@ export class EnsembleService implements OnModuleInit {
 
       const data = await response.json();
 
-      // Handle multi-model response
-      if (data.embeddings) {
-        for (const modelEmbed of data.embeddings) {
-          const modelId = modelEmbed.model as ModelId;
-          if (models.includes(modelId) && modelEmbed.data) {
-            // For batch embeddings, we get an array of embeddings
-            for (let i = 0; i < modelEmbed.data.length; i++) {
-              if (modelEmbed.data[i]?.embedding) {
-                embeddings.push({
-                  model: modelId,
-                  dimensions: modelEmbed.dimensions,
-                  embedding: modelEmbed.data[i].embedding,
-                  latencyMs: data.timing?.per_model?.[modelId] ?? 0,
-                });
-              }
-            }
-          }
+      // A model is accepted only as a complete, unambiguous input-aligned batch.
+      // Positional responses require exact cardinality; indexed responses are reordered.
+      const responses = data.embeddings ?? [
+        { model: models[0], data: data.data },
+      ];
+      for (const modelEmbed of responses) {
+        const modelId = modelEmbed.model as ModelId;
+        if (!models.includes(modelId)) continue;
+        const entries = modelEmbed.data;
+        if (!Array.isArray(entries) || entries.length !== texts.length) {
+          throw new Error(`Incomplete batch for ${modelId}`);
         }
-      } else if (data.data) {
-        // Single model response format
-        for (let i = 0; i < data.data.length; i++) {
-          if (data.data[i]?.embedding) {
-            embeddings.push({
-              model: models[0],
-              dimensions: data.data[i].embedding.length,
-              embedding: data.data[i].embedding,
-              latencyMs: Date.now() - start,
-            });
+        const ordered: EmbeddingResult[] = new Array(texts.length);
+        const indexed = entries.some((entry) => entry?.index !== undefined);
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          const index = indexed ? entry?.index : i;
+          if (
+            !Number.isInteger(index) ||
+            index < 0 ||
+            index >= texts.length ||
+            ordered[index]
+          ) {
+            throw new Error(`Invalid or duplicate batch index for ${modelId}`);
           }
+          const embedding = assertValidEmbedding(entry?.embedding, {
+            expectedDimensions: MODEL_CONFIGS[modelId]?.dimensions,
+            context: `batch ${modelId} input ${index}`,
+          });
+          ordered[index] = {
+            model: modelId,
+            dimensions: embedding.length,
+            embedding,
+            latencyMs: data.timing?.per_model?.[modelId] ?? Date.now() - start,
+          };
         }
+        embeddings.push(...ordered);
       }
+      this.validateBatch(embeddings, texts.length, models);
     } catch (error) {
+      embeddings.length = 0; // Never expose a partially accepted positional batch.
       this.logger.error('Failed to get batch embeddings', error);
       for (const model of models) {
         errors.push({
@@ -683,6 +732,24 @@ export class EnsembleService implements OnModuleInit {
       totalMs: Date.now() - start,
       errors: errors.length > 0 ? errors : undefined,
     };
+  }
+
+  private validateBatch(
+    embeddings: EmbeddingResult[],
+    count: number,
+    models: ModelId[],
+  ): void {
+    for (const model of models) {
+      const batch = embeddings.filter((entry) => entry.model === model);
+      if (batch.length !== count)
+        throw new ServiceUnavailableException(`Incomplete batch for ${model}`);
+      for (const entry of batch) {
+        assertValidEmbedding(entry.embedding, {
+          expectedDimensions: MODEL_CONFIGS[model]?.dimensions,
+          context: `batch ${model}`,
+        });
+      }
+    }
   }
 
   /**
@@ -701,7 +768,16 @@ export class EnsembleService implements OnModuleInit {
 
     // Get individual model results
     const { embeddings } = await this.embedAll(query);
-    const embeddingMap = new Map(embeddings.map((e) => [e.model, e.embedding]));
+    const embeddingMap = new Map(
+      embeddings
+        .filter((e) => this.config.models.includes(e.model))
+        .map((e) => [e.model, e.embedding]),
+    );
+    if (embeddingMap.size === 0) {
+      throw new ServiceUnavailableException(
+        'No query embeddings generated; retry retrieval',
+      );
+    }
 
     const singleModel = await this.pgvectorProvider.queryWithModelEmbeddings(
       embeddingMap,

@@ -49,7 +49,13 @@ describe('EnsembleController', () => {
         findMany: jest.fn(),
         create: jest.fn(),
       },
+      user: {
+        findFirst: jest
+          .fn()
+          .mockImplementation(async ({ where }) => ({ id: where.id })),
+      },
       memory: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'm1' }),
         findMany: jest.fn(),
       },
     } as any;
@@ -99,7 +105,10 @@ describe('EnsembleController', () => {
         modelsUsed: ['text-embedding-3-small'],
       } as any);
 
-      const result = await controller.query(dto as any);
+      const result = await controller.query(dto as any, {
+        accountId: 'a1',
+        user: { id: dto.userId },
+      });
       expect(result.results[0].modelScores).toEqual({
         'text-embedding-3-small': { rank: 1, score: 0.95 },
       });
@@ -107,9 +116,12 @@ describe('EnsembleController', () => {
 
     it('should throw BadRequestException when ensemble is disabled', async () => {
       ensembleService.isEnabled.mockReturnValue(false);
-      await expect(controller.query(dto as any)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        controller.query(dto as any, {
+          accountId: 'a1',
+          user: { id: dto.userId },
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException when query is missing', async () => {
@@ -133,7 +145,10 @@ describe('EnsembleController', () => {
 
     it('should upsert and return success', async () => {
       ensembleService.upsert.mockResolvedValue(undefined);
-      const result = await controller.upsert(dto as any);
+      const result = await controller.upsert(dto as any, {
+        accountId: 'a1',
+        user: { id: dto.userId },
+      });
       expect(result).toEqual({ success: true });
       expect(ensembleService.upsert).toHaveBeenCalledWith({
         memoryId: 'm1',
@@ -145,9 +160,12 @@ describe('EnsembleController', () => {
 
     it('should throw when ensemble is disabled', async () => {
       ensembleService.isEnabled.mockReturnValue(false);
-      await expect(controller.upsert(dto as any)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        controller.upsert(dto as any, {
+          accountId: 'a1',
+          user: { id: dto.userId },
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw when required fields are missing', async () => {
@@ -190,10 +208,13 @@ describe('EnsembleController', () => {
         singleModel,
       } as any);
 
-      const result = await controller.compare({
-        query: 'q',
-        userId: 'u',
-      } as any);
+      const result = await controller.compare(
+        {
+          query: 'q',
+          userId: 'u',
+        } as any,
+        { accountId: 'a1', user: { id: 'u' } },
+      );
       expect(result.ensemble.results).toHaveLength(1);
       expect(result.singleModel['text-embedding-3-small']).toHaveLength(1);
     });
@@ -447,7 +468,10 @@ describe('EnsembleController', () => {
         { model: 'model-a', exists: true, dimensions: 1536 },
       ] as any);
 
-      const result = await controller.getMemoryEmbeddings('m1');
+      const result = await controller.getMemoryEmbeddings('m1', {
+        accountId: 'a1',
+        user: { id: 'u' },
+      });
       expect(result.memoryId).toBe('m1');
       expect(result.embeddings).toHaveLength(1);
     });

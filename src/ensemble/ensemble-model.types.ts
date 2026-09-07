@@ -205,6 +205,8 @@ export interface EnsembleQueryResult {
     modelsQueried: ModelId[];
     candidatesEvaluated: number;
     fusionAlgorithm: string;
+    degraded?: boolean;
+    failedModels?: ModelId[];
   };
 }
 
