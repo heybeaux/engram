@@ -41,6 +41,8 @@ export interface FixtureUser {
 }
 
 export interface GoldQuery {
+  /** Explicit negative judgment; empty must_top5 alone is NOT a no-answer label. */
+  expect_no_answer?: boolean;
   /** Unique query ID */
   id: string;
   /** The search query text */

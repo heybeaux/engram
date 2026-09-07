@@ -75,6 +75,8 @@ export function compareReports(
   current: BenchmarkReport,
   previous: BenchmarkReport,
 ): string {
+  if (current.metricVersion !== previous.metricVersion)
+    return 'Reports use incompatible metric versions; rerun or rescore original results.';
   const lines: string[] = [];
   lines.push('');
   lines.push('═══ BENCHMARK COMPARISON ═══');
@@ -89,20 +91,20 @@ export function compareReports(
 
   const metrics: Array<{
     name: string;
-    prev: number;
-    curr: number;
+    prev: number | null;
+    curr: number | null;
     higherBetter: boolean;
   }> = [
     {
-      name: 'Precision@5',
-      prev: previous.overallPrecisionAt5,
-      curr: current.overallPrecisionAt5,
+      name: 'Required coverage@5',
+      prev: previous.overallRequiredCoverageAt5,
+      curr: current.overallRequiredCoverageAt5,
       higherBetter: true,
     },
     {
-      name: 'Recall@20',
-      prev: previous.overallRecallAt20,
-      curr: current.overallRecallAt20,
+      name: 'Expected coverage@20',
+      prev: previous.overallExpectedCoverageAt20,
+      curr: current.overallExpectedCoverageAt20,
       higherBetter: true,
     },
     {
@@ -130,6 +132,10 @@ export function compareReports(
   lines.push('  ├─────────────────┼──────────┼──────────┼──────────┤');
 
   for (const m of metrics) {
+    if (m.prev === null || m.curr === null) {
+      lines.push(`${m.name}: N/A (no labels)`);
+      continue;
+    }
     const delta = m.curr - m.prev;
     const deltaStr =
       delta >= 0

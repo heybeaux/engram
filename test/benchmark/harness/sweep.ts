@@ -2,7 +2,7 @@
  * Benchmark Harness — Parameter Sweep
  *
  * Grid searches over scoring config parameters and prints all passing configs.
- * Thresholds: P@5 >= 0.70, zero-hits = 0, isolation = 1.0
+ * Thresholds: Required coverage@5 >= 0.95; shared benchmark gates
  *
  * Run: pnpm benchmark:sweep
  */
@@ -52,7 +52,7 @@ function loadJson<T>(filename: string): T {
 
 interface SweepResult {
   config: ScoringConfig;
-  precisionAt5: number;
+  requiredCoverageAt5: number;
   zeroHits: number;
   isolationScore: number;
   passed: boolean;
@@ -89,77 +89,31 @@ function evaluateConfig(
       .slice(0, 20)
       .map((r) => r.id);
 
-    const top5Hits = goldQuery.must_top5.filter((id) => topIds.includes(id));
-    const precisionAt5 =
-      goldQuery.must_top5.length > 0
-        ? top5Hits.length / goldQuery.must_top5.length
-        : 1.0;
-
-    const mustAbsentViolations = goldQuery.must_absent.filter((id) =>
-      [...topIds, ...top20].includes(id),
+    allScores.push(
+      scoreQuery(
+        goldQuery,
+        [...topIds, ...top20.filter((id) => !topIds.includes(id))].slice(0, 20),
+      ),
     );
-    const isolationPassed = mustAbsentViolations.length === 0;
-
-    const shouldTop20 = goldQuery.should_top20 ?? [];
-    const top20Hits = shouldTop20.filter((id) => top20.includes(id));
-    const recallAt20 =
-      shouldTop20.length > 0 ? top20Hits.length / shouldTop20.length : 1.0;
-
-    let mrr: number;
-    if (goldQuery.must_top5.length > 0) {
-      const allIds = [...new Set([...topIds, ...top20])];
-      const reciprocalRanks = goldQuery.must_top5.map((id) => {
-        const rank = allIds.indexOf(id);
-        return rank >= 0 ? 1 / (rank + 1) : 0;
-      });
-      mrr =
-        reciprocalRanks.reduce((sum, rr) => sum + rr, 0) /
-        goldQuery.must_top5.length;
-    } else {
-      mrr = 1.0;
-    }
-
-    const passed =
-      isolationPassed &&
-      (goldQuery.must_top5.length === 0 || top5Hits.length > 0);
-
-    allScores.push({
-      queryId: goldQuery.id,
-      category: goldQuery.category,
-      passed,
-      precisionAt5,
-      recallAt20,
-      mrr,
-      isolationPassed,
-      details: {
-        query: goldQuery.query,
-        user: goldQuery.user,
-        expectedTop5: goldQuery.must_top5,
-        expectedTop20: shouldTop20,
-        actualIds: [
-          ...topIds,
-          ...top20.filter((id) => !topIds.includes(id)),
-        ].slice(0, 20),
-        mustAbsentViolations,
-        top5Hits,
-        top20Hits,
-      },
-    });
   }
 
-  const avg = (vals: number[]) =>
-    vals.length === 0 ? 0 : vals.reduce((s, v) => s + v, 0) / vals.length;
+  const avg = (vals: (number | null)[]) => {
+    const labelled = vals.filter((v): v is number => v !== null);
+    return labelled.length
+      ? labelled.reduce((s, v) => s + v, 0) / labelled.length
+      : 0;
+  };
 
-  const precisionAt5 = avg(allScores.map((s) => s.precisionAt5));
+  const requiredCoverageAt5 = avg(allScores.map((s) => s.requiredCoverageAt5));
   const zeroHits = allScores.filter(
     (s) => s.details.expectedTop5.length > 0 && s.details.top5Hits.length === 0,
   ).length;
   const isolationScore =
     allScores.filter((s) => s.isolationPassed).length / allScores.length;
 
-  const passed = precisionAt5 >= 0.7 && zeroHits === 0 && isolationScore >= 1.0;
+  const passed = checkThresholds(allScores);
 
-  return { config, precisionAt5, zeroHits, isolationScore, passed };
+  return { config, requiredCoverageAt5, zeroHits, isolationScore, passed };
 }
 
 function main() {
@@ -211,7 +165,7 @@ function main() {
   // Filter passing configs
   const passing = allResults
     .filter((r) => r.passed)
-    .sort((a, b) => b.precisionAt5 - a.precisionAt5);
+    .sort((a, b) => b.requiredCoverageAt5 - a.requiredCoverageAt5);
 
   console.log(
     `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -223,23 +177,23 @@ function main() {
 
   if (passing.length === 0) {
     console.log('\nNo configs passed all thresholds.');
-    console.log('\nTop 5 by P@5:');
+    console.log('\nTop 5 by Coverage@5:');
     allResults
-      .sort((a, b) => b.precisionAt5 - a.precisionAt5)
+      .sort((a, b) => b.requiredCoverageAt5 - a.requiredCoverageAt5)
       .slice(0, 5)
       .forEach((r, i) => {
         console.log(
-          `  ${i + 1}. P@5=${(r.precisionAt5 * 100).toFixed(1)}%  zero-hits=${r.zeroHits}  isolation=${(r.isolationScore * 100).toFixed(0)}%  config=${JSON.stringify(r.config)}`,
+          `  ${i + 1}. Coverage@5=${(r.requiredCoverageAt5 * 100).toFixed(1)}%  zero-hits=${r.zeroHits}  isolation=${(r.isolationScore * 100).toFixed(0)}%  config=${JSON.stringify(r.config)}`,
         );
       });
   } else {
     console.log(
-      `\n${'Rank'.padEnd(5)} ${'P@5'.padEnd(8)} ${'Zero-hits'.padEnd(10)} ${'Isolation'.padEnd(10)} Config`,
+      `\n${'Rank'.padEnd(5)} ${'Coverage@5'.padEnd(8)} ${'Zero-hits'.padEnd(10)} ${'Isolation'.padEnd(10)} Config`,
     );
     console.log('─'.repeat(80));
     passing.forEach((r, i) => {
       console.log(
-        `  ${String(i + 1).padEnd(4)} ${(r.precisionAt5 * 100).toFixed(1).padEnd(8)}% ${String(r.zeroHits).padEnd(10)} ${(r.isolationScore * 100).toFixed(0).padEnd(10)}%  cW=${r.config.cosineWeight} K=${r.config.preRerankK} iW=${r.config.importanceFinalWeight}`,
+        `  ${String(i + 1).padEnd(4)} ${(r.requiredCoverageAt5 * 100).toFixed(1).padEnd(8)}% ${String(r.zeroHits).padEnd(10)} ${(r.isolationScore * 100).toFixed(0).padEnd(10)}%  cW=${r.config.cosineWeight} K=${r.config.preRerankK} iW=${r.config.importanceFinalWeight}`,
       );
     });
 
@@ -251,7 +205,7 @@ function main() {
       `   importanceFinalWeight: ${best.config.importanceFinalWeight}`,
     );
     console.log(
-      `   P@5:                  ${(best.precisionAt5 * 100).toFixed(1)}%`,
+      `   Coverage@5:                  ${(best.requiredCoverageAt5 * 100).toFixed(1)}%`,
     );
   }
 

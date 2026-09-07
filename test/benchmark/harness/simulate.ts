@@ -218,35 +218,12 @@ function main() {
       .slice(0, 20)
       .map((r) => r.id);
 
-    const score = scoreQuery(goldQuery, top20);
-    // Override actualIds to use top5 from resultMap for precision@5
-    const adjustedScore = {
-      ...score,
-      precisionAt5: (() => {
-        const top5Hits = goldQuery.must_top5.filter((id) =>
-          topIds.includes(id),
-        );
-        return goldQuery.must_top5.length > 0
-          ? top5Hits.length / goldQuery.must_top5.length
-          : 1.0;
-      })(),
-      details: {
-        ...score.details,
-        top5Hits: goldQuery.must_top5.filter((id) => topIds.includes(id)),
-        actualIds: [
-          ...topIds,
-          ...top20.filter((id) => !topIds.includes(id)),
-        ].slice(0, 20),
-      },
-    };
-
-    // Recalculate passed with corrected precisionAt5
-    const passed =
-      adjustedScore.isolationPassed &&
-      (goldQuery.must_top5.length === 0 ||
-        adjustedScore.details.top5Hits.length > 0);
-
-    allScores.push({ ...adjustedScore, passed });
+    allScores.push(
+      scoreQuery(
+        goldQuery,
+        [...topIds, ...top20.filter((id) => !topIds.includes(id))].slice(0, 20),
+      ),
+    );
   }
 
   const report = buildReport(allScores, 'offline', 'harness');

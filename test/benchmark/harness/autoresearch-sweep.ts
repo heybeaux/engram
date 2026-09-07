@@ -3,7 +3,7 @@
  *
  * Extends the standard benchmark sweep with durability multipliers to find
  * optimal scoring parameters that fix the 3 known failing queries (daily_gen
- * noise memories beating durable memories) without regressing overall P@5.
+ * noise memories beating durable memories) without regressing overall Coverage@5.
  *
  * The key problem: alice_daily_gen_* noise memories (importanceScore 0.3–0.5)
  * appear in top 5 for queries where durable memories (health, coffee, identity)
@@ -15,7 +15,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { GOLD_QUERIES } from '../../fixtures/queries/gold-queries';
-import { scoreQuery } from '../scoring';
+import { scoreQuery, checkThresholds } from '../scoring';
 import type { QueryScore } from '../scoring';
 import type { ScoringConfig } from './simulate';
 
@@ -55,12 +55,12 @@ export interface DurabilityAwareScoringConfig extends ScoringConfig {
 /** Result for a single swept configuration. */
 export interface AutoresearchResult {
   config: DurabilityAwareScoringConfig;
-  overallPrecisionAt5: number;
+  overallRequiredCoverageAt5: number;
   zeroHits: number;
   isolationScore: number;
   passed: boolean;
-  /** P@5 specifically on the 3 known failing queries */
-  focusPrecisionAt5: number;
+  /** Coverage@5 specifically on the 3 known failing queries */
+  focusRequiredCoverageAt5: number;
   /** How many of the 3 focus queries have their must_top5 in the actual top 5 */
   focusHits: number;
   /** Per-query detail for the focus queries */
@@ -315,68 +315,24 @@ function evaluateConfig(
       .slice(0, 20)
       .map((r) => r.id);
 
-    const top5Hits = goldQuery.must_top5.filter((id) => topIds.includes(id));
-    const precisionAt5 =
-      goldQuery.must_top5.length > 0
-        ? top5Hits.length / goldQuery.must_top5.length
-        : 1.0;
-
-    const mustAbsentViolations = goldQuery.must_absent.filter((id) =>
-      [...topIds, ...top20].includes(id),
+    allScores.push(
+      scoreQuery(
+        goldQuery,
+        [...topIds, ...top20.filter((id) => !topIds.includes(id))].slice(0, 20),
+      ),
     );
-    const isolationPassed = mustAbsentViolations.length === 0;
-
-    const shouldTop20 = goldQuery.should_top20 ?? [];
-    const top20Hits = shouldTop20.filter((id) => top20.includes(id));
-    const recallAt20 =
-      shouldTop20.length > 0 ? top20Hits.length / shouldTop20.length : 1.0;
-
-    let mrr: number;
-    if (goldQuery.must_top5.length > 0) {
-      const allIds = [...new Set([...topIds, ...top20])];
-      const reciprocalRanks = goldQuery.must_top5.map((id) => {
-        const rank = allIds.indexOf(id);
-        return rank >= 0 ? 1 / (rank + 1) : 0;
-      });
-      mrr =
-        reciprocalRanks.reduce((sum, rr) => sum + rr, 0) /
-        goldQuery.must_top5.length;
-    } else {
-      mrr = 1.0;
-    }
-
-    const passed =
-      isolationPassed &&
-      (goldQuery.must_top5.length === 0 || top5Hits.length > 0);
-
-    allScores.push({
-      queryId: goldQuery.id,
-      category: goldQuery.category,
-      passed,
-      precisionAt5,
-      recallAt20,
-      mrr,
-      isolationPassed,
-      details: {
-        query: goldQuery.query,
-        user: goldQuery.user,
-        expectedTop5: goldQuery.must_top5,
-        expectedTop20: shouldTop20,
-        actualIds: [
-          ...topIds,
-          ...top20.filter((id) => !topIds.includes(id)),
-        ].slice(0, 20),
-        mustAbsentViolations,
-        top5Hits,
-        top20Hits,
-      },
-    });
   }
 
-  const avg = (vals: number[]) =>
-    vals.length === 0 ? 0 : vals.reduce((s, v) => s + v, 0) / vals.length;
+  const avg = (vals: (number | null)[]) => {
+    const labelled = vals.filter((v): v is number => v !== null);
+    return labelled.length
+      ? labelled.reduce((s, v) => s + v, 0) / labelled.length
+      : 0;
+  };
 
-  const overallPrecisionAt5 = avg(allScores.map((s) => s.precisionAt5));
+  const overallRequiredCoverageAt5 = avg(
+    allScores.map((s) => s.requiredCoverageAt5),
+  );
   const zeroHits = allScores.filter(
     (s) => s.details.expectedTop5.length > 0 && s.details.top5Hits.length === 0,
   ).length;
@@ -387,7 +343,9 @@ function evaluateConfig(
   const focusScores = allScores.filter((s) =>
     FOCUS_QUERY_IDS.includes(s.queryId),
   );
-  const focusPrecisionAt5 = avg(focusScores.map((s) => s.precisionAt5));
+  const focusRequiredCoverageAt5 = avg(
+    focusScores.map((s) => s.requiredCoverageAt5),
+  );
   const focusHits = focusScores.filter(
     (s) => s.details.expectedTop5.length > 0 && s.details.top5Hits.length > 0,
   ).length;
@@ -399,16 +357,15 @@ function evaluateConfig(
     expected: s.details.expectedTop5,
   }));
 
-  const passed =
-    overallPrecisionAt5 >= 0.7 && zeroHits === 0 && isolationScore >= 1.0;
+  const passed = checkThresholds(allScores);
 
   return {
     config,
-    overallPrecisionAt5,
+    overallRequiredCoverageAt5,
     zeroHits,
     isolationScore,
     passed,
-    focusPrecisionAt5,
+    focusRequiredCoverageAt5,
     focusHits,
     focusDetails,
   };
@@ -530,10 +487,12 @@ function main() {
 
   // ── Results analysis ────────────────────────────────────────
 
-  // Primary sort: fixes all 3 focus queries, then by overall P@5
+  // Primary sort: fixes all 3 focus queries, then by overall Coverage@5
   const fixesAll = allResults
     .filter((r) => r.focusHits === FOCUS_QUERY_IDS.length && r.passed)
-    .sort((a, b) => b.overallPrecisionAt5 - a.overallPrecisionAt5);
+    .sort(
+      (a, b) => b.overallRequiredCoverageAt5 - a.overallRequiredCoverageAt5,
+    );
 
   // Secondary: fixes at least some focus queries while passing overall
   const fixesSome = allResults
@@ -544,12 +503,12 @@ function main() {
     .sort(
       (a, b) =>
         b.focusHits - a.focusHits ||
-        b.overallPrecisionAt5 - a.overallPrecisionAt5,
+        b.overallRequiredCoverageAt5 - a.overallRequiredCoverageAt5,
     );
 
-  // Fallback: best overall P@5 regardless
+  // Fallback: best overall Coverage@5 regardless
   const bestOverall = [...allResults].sort(
-    (a, b) => b.overallPrecisionAt5 - a.overallPrecisionAt5,
+    (a, b) => b.overallRequiredCoverageAt5 - a.overallRequiredCoverageAt5,
   );
 
   // ── Print results ─────────────────────────────────────────
@@ -577,7 +536,7 @@ function main() {
     console.log(
       `\n❌ No config fixes any focus query while passing overall thresholds.`,
     );
-    console.log('\nTop 10 by overall P@5:\n');
+    console.log('\nTop 10 by overall Coverage@5:\n');
     printResultTable(bestOverall.slice(0, 10));
     if (bestOverall.length > 0) printBestConfig(bestOverall[0]);
   }
@@ -607,7 +566,7 @@ function main() {
 }
 
 function printResultTable(results: AutoresearchResult[]) {
-  const header = `${'Rank'.padEnd(5)} ${'P@5'.padEnd(7)} ${'Focus'.padEnd(7)} ${'ZH'.padEnd(4)} ${'Iso'.padEnd(5)} ${'dB'.padEnd(5)} ${'eP'.padEnd(6)} ${'cW'.padEnd(5)} ${'iW'.padEnd(5)} Focus Detail`;
+  const header = `${'Rank'.padEnd(5)} ${'Coverage@5'.padEnd(7)} ${'Focus'.padEnd(7)} ${'ZH'.padEnd(4)} ${'Iso'.padEnd(5)} ${'dB'.padEnd(5)} ${'eP'.padEnd(6)} ${'cW'.padEnd(5)} ${'iW'.padEnd(5)} Focus Detail`;
   console.log(header);
   console.log('─'.repeat(100));
 
@@ -621,7 +580,7 @@ function printResultTable(results: AutoresearchResult[]) {
 
     console.log(
       `${String(i + 1).padEnd(5)} ` +
-        `${(r.overallPrecisionAt5 * 100).toFixed(1).padEnd(6)}% ` +
+        `${(r.overallRequiredCoverageAt5 * 100).toFixed(1).padEnd(6)}% ` +
         `${r.focusHits}/${FOCUS_QUERY_IDS.length}`.padEnd(7) +
         ` ${String(r.zeroHits).padEnd(4)}` +
         `${(r.isolationScore * 100).toFixed(0).padEnd(5)}% ` +
@@ -642,10 +601,10 @@ function printBestConfig(best: AutoresearchResult) {
   console.log(`   importanceFinalWeight: ${best.config.importanceFinalWeight}`);
   console.log(`   preRerankK:            ${best.config.preRerankK}`);
   console.log(
-    `   Overall P@5:           ${(best.overallPrecisionAt5 * 100).toFixed(1)}%`,
+    `   Overall Coverage@5:           ${(best.overallRequiredCoverageAt5 * 100).toFixed(1)}%`,
   );
   console.log(
-    `   Focus P@5:             ${(best.focusPrecisionAt5 * 100).toFixed(1)}%`,
+    `   Focus Coverage@5:             ${(best.focusRequiredCoverageAt5 * 100).toFixed(1)}%`,
   );
   console.log(
     `   Focus hits:            ${best.focusHits}/${FOCUS_QUERY_IDS.length}`,

@@ -10,7 +10,7 @@
  *
  * Thresholds:
  *  - Isolation score = 100% (zero tolerance for cross-tenant leaks)
- *  - Precision@5 >= 95%
+ *  - Required coverage@5 >= 95%
  *  - No Dream Cycle stage returns internal errors
  *  - No must_top5 query has 0 hits
  *
@@ -32,7 +32,7 @@ import { EmbeddingService as EmbeddingGeneratorService } from '../../src/embeddi
 import { LLMService } from '../../src/llm/llm.service';
 import type { LLMMessage } from '../../src/llm/llm.interface';
 import {
-  PRECISION_AT_5_THRESHOLD,
+  REQUIRED_COVERAGE_AT_5_THRESHOLD,
   scoreQuery,
   buildReport,
   formatReport,
@@ -327,36 +327,22 @@ describe('Recall Benchmark (Post-Dream-Cycle)', () => {
       expect(isolationFailures).toHaveLength(0);
     });
 
-    it('should meet post-dream-cycle precision thresholds (Precision@5 >= 95%)', () => {
+    it('should meet post-dream-cycle coverage thresholds (Required coverage@5 >= 95%)', () => {
       if (allScores.length === 0) {
         console.warn('No scores to check thresholds against');
         return;
       }
 
-      const usingRealEmbeddings =
-        process.env.BENCHMARK_REAL_EMBEDDINGS === 'true';
-
-      if (!usingRealEmbeddings) {
-        const avgP5 =
-          allScores.reduce((s, q) => s + q.precisionAt5, 0) / allScores.length;
-        console.log(
-          `Using cached embeddings — Precision@5 = ${(avgP5 * 100).toFixed(1)}% (thresholds relaxed)`,
-        );
-        console.log(
-          '   Set BENCHMARK_REAL_EMBEDDINGS=true to enforce post-DC precision thresholds.',
-        );
-        return;
-      }
-
+      // This suite also always requests real embeddings; enforce its gate.
       const { sha, branch } = getGitInfo();
       const report = buildReport(allScores, sha, branch);
 
       // Post-dream-cycle threshold: 95% (keeps production recall quality honest)
-      expect(report.overallPrecisionAt5).toBeGreaterThanOrEqual(
-        PRECISION_AT_5_THRESHOLD,
+      expect(report.overallRequiredCoverageAt5).toBeGreaterThanOrEqual(
+        REQUIRED_COVERAGE_AT_5_THRESHOLD,
       );
 
-      // Log any zero-hit queries (aspirational — P@5 threshold is the hard gate).
+      // Log any zero-hit queries (aspirational — Coverage@5 threshold is the hard gate).
       const zeroHitQueries = allScores.filter(
         (s) =>
           s.details.expectedTop5.length > 0 && s.details.top5Hits.length === 0,
