@@ -7,6 +7,7 @@ require('ts-node').register({ transpileOnly: true, project: path.join(repo, 'tsc
 const { Client } = require('pg');
 const { DreamCycleConsolidationStage } = require(path.join(repo, 'src/consolidation/stages/dream-cycle-consolidation.stage.ts'));
 const { EmbeddingWriteService } = require(path.join(repo, 'src/vector/embedding-write.service.ts'));
+const { PgVectorEnsembleProvider } = require(path.join(repo, 'src/ensemble/pgvector-ensemble.provider.ts'));
 const db = `engram_preservation_test_${process.pid}`;
 const config = { host: '/tmp', database: 'postgres' };
 (async () => {
@@ -74,7 +75,14 @@ const config = { host: '/tmp', database: 'postgres' };
       assert.equal(eligible.length, fail ? 3 : 4);
       assert.deepEqual(eligible.filter(r => r.id !== 'new').map(r => r.id), ['a','b','c']);
       assert.ok(eligible.every(r => r.dimensions === dims));
-      console.log(JSON.stringify({ name, eligible: eligible.length, sourcesPreserved: 3, rollback: fail }));
+      // Exercise the integrated ensemble reader against the preservation writer's
+      // committed model rows, including rollback paths and a different owner.
+      const provider = new PgVectorEnsembleProvider(prisma);
+      const search = { modelId: model, embedding: Array(dims).fill(0.1), userId: 'u', limit: 10 };
+      const retrieved = await provider.queryByModel(search);
+      assert.deepEqual(retrieved.map(r => r.memoryId).sort(), eligible.map(r => r.id).sort());
+      assert.deepEqual(await provider.queryByModel({ ...search, userId: 'other-owner' }), []);
+      console.log(JSON.stringify({ name, eligible: eligible.length, sourcesPreserved: 3, rollback: fail, ensembleRetrieved: retrieved.length, otherOwnerRetrieved: 0 }));
     }
     await tx.query("UPDATE memories SET consolidated_into='missing-replacement' WHERE id IN ('a','b','c')");
     const inventory = require('node:fs').readFileSync(path.join(__dirname, 'consolidation-reconciliation.sql'), 'utf8')
