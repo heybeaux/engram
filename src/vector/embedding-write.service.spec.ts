@@ -42,9 +42,15 @@ describe('EmbeddingWriteService', () => {
     });
 
     it('passes for correct dimensions', () => {
-      expect(() => service.validateDimensions('bge-base', make(768))).not.toThrow();
-      expect(() => service.validateDimensions('openai-small', make(1536))).not.toThrow();
-      expect(() => service.validateDimensions('openai-large', make(3072))).not.toThrow();
+      expect(() =>
+        service.validateDimensions('bge-base', make(768)),
+      ).not.toThrow();
+      expect(() =>
+        service.validateDimensions('openai-small', make(1536)),
+      ).not.toThrow();
+      expect(() =>
+        service.validateDimensions('openai-large', make(3072)),
+      ).not.toThrow();
     });
 
     it('passes for unknown model (no guard applied)', () => {
@@ -98,11 +104,13 @@ describe('EmbeddingWriteService', () => {
       expect(calls[0][4]).toBe(1536);
     });
 
-    it('no-ops when memory does not exist (existence check returns empty)', async () => {
+    it('rejects when memory does not exist', async () => {
       (prisma.$queryRawUnsafe as jest.Mock).mockResolvedValueOnce([]);
       const vector = make(768);
 
-      await service.writeMemoryEmbedding('missing-mem', 'bge-base', vector);
+      await expect(
+        service.writeMemoryEmbedding('missing-mem', 'bge-base', vector),
+      ).rejects.toThrow('not found');
 
       expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
     });

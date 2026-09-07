@@ -42,6 +42,8 @@ describe('MemoryDedupService', () => {
   describe('findDuplicateV2', () => {
     const mockMemory = {
       id: 'mem-1',
+      userId: 'user1',
+      raw: 'test text',
       deletedAt: null,
       confidence: 0.7,
       importanceScore: 0.5,
@@ -217,7 +219,12 @@ describe('MemoryDedupService', () => {
 
   describe('findDuplicate (legacy)', () => {
     it('should return existing memory when duplicate found', async () => {
-      const mockMemory = { id: 'mem-1', deletedAt: null };
+      const mockMemory = {
+        id: 'mem-1',
+        userId: 'user1',
+        raw: 'test',
+        deletedAt: null,
+      };
       mockEmbedding.generate.mockResolvedValue([0.1]);
       mockEmbedding.search.mockResolvedValue([{ id: 'mem-1', score: 0.95 }]);
       mockPrisma.memory.findUnique.mockResolvedValue(mockMemory);
@@ -239,6 +246,7 @@ describe('MemoryDedupService', () => {
     it('should boost confidence and update counters', async () => {
       mockPrisma.memory.findUnique.mockResolvedValue({
         id: 'mem-1',
+        raw: 'new content',
         confidence: 0.7,
       });
 
@@ -254,11 +262,9 @@ describe('MemoryDedupService', () => {
     it('should not update when memory not found', async () => {
       mockPrisma.memory.findUnique.mockResolvedValue(null);
 
-      await service.autoMergeMemory(
-        'nonexistent',
-        'new content',
-        'SYSTEM' as any,
-      );
+      await expect(
+        service.autoMergeMemory('nonexistent', 'new content', 'SYSTEM' as any),
+      ).rejects.toThrow('non-equivalent');
 
       expect(mockPrisma.$executeRaw).not.toHaveBeenCalled();
     });
@@ -266,6 +272,7 @@ describe('MemoryDedupService', () => {
     it('should cap boosted confidence at 1.0', async () => {
       mockPrisma.memory.findUnique.mockResolvedValue({
         id: 'mem-1',
+        raw: 'content',
         confidence: 0.98,
       });
 

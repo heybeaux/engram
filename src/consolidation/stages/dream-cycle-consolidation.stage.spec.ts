@@ -57,7 +57,7 @@ describe('DreamCycleConsolidationStage', () => {
         {
           provide: EmbeddingWriteService,
           useValue: {
-            writeLegacyInlineEmbedding: jest.fn().mockResolvedValue(undefined),
+            getCurrentModelId: jest.fn().mockReturnValue('bge-base'),
             writeMemoryEmbedding: jest.fn().mockResolvedValue(undefined),
           },
         },
@@ -173,7 +173,7 @@ describe('DreamCycleConsolidationStage', () => {
       const result = await stage.run('user1', false);
       expect(result.clustersFound).toBe(1);
       expect(result.consolidated).toBe(1);
-      expect(result.archived).toBe(3);
+      expect(result.archived).toBe(0);
       expect(result.llmCalls).toBe(1);
       expect(llmService.chat).toHaveBeenCalledTimes(1);
       expect(embeddingService.embed).toHaveBeenCalledTimes(1);
@@ -255,7 +255,7 @@ describe('DreamCycleConsolidationStage', () => {
           {
             provide: EmbeddingWriteService,
             useValue: {
-              writeLegacyInlineEmbedding: jest.fn().mockResolvedValue(undefined),
+              getCurrentModelId: jest.fn().mockReturnValue('bge-base'),
               writeMemoryEmbedding: jest.fn().mockResolvedValue(undefined),
             },
           },
@@ -326,7 +326,7 @@ describe('DreamCycleConsolidationStage', () => {
           {
             provide: EmbeddingWriteService,
             useValue: {
-              writeLegacyInlineEmbedding: jest.fn().mockResolvedValue(undefined),
+              getCurrentModelId: jest.fn().mockReturnValue('bge-base'),
               writeMemoryEmbedding: jest.fn().mockResolvedValue(undefined),
             },
           },

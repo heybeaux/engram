@@ -34,57 +34,62 @@ export class DreamCycleTieringStage {
       `Starting memory tiering for user ${userId} (dryRun: ${dryRun})`,
     );
 
-    const memories = await this.prisma.memory.findMany({
-      where: {
-        userId,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        tier: true,
-        userPinned: true,
-        createdAt: true,
-        lastRetrievedAt: true,
-        retrievalCount: true,
-      },
-      take: this.batchSize,
-      orderBy: { createdAt: 'asc' },
-    });
-
-    if (memories.length === 0) {
-      this.logger.log(`No memories found for user ${userId}`);
-      return { promoted: 0, demoted: 0, unchanged: 0 };
-    }
-
-    this.logger.log(`Processing ${memories.length} memories for tiering`);
-
     const now = new Date();
+    let afterId: string | undefined;
+    while (true) {
+      const memories = await this.prisma.memory.findMany({
+        where: {
+          userId,
+          deletedAt: null,
+          searchable: true,
+          supersededById: null,
+          OR: [{ tier: null }, { tier: { not: 'ARCHIVED' } }],
+          createdAt: { lte: now },
+          ...(afterId ? { id: { gt: afterId } } : {}),
+        },
+        select: {
+          id: true,
+          tier: true,
+          userPinned: true,
+          createdAt: true,
+          lastRetrievedAt: true,
+          retrievalCount: true,
+        },
+        take: this.batchSize,
+        orderBy: { id: 'asc' },
+      });
 
-    for (const memory of memories) {
-      const newTier = this.calculateTier(memory, now);
-      const currentTier = memory.tier ?? 'WARM';
+      if (memories.length === 0) break;
 
-      if (newTier === currentTier) {
-        unchanged++;
-        continue;
+      for (const memory of memories) {
+        const newTier = this.calculateTier(memory, now);
+        const currentTier = memory.tier ?? 'WARM';
+
+        if (newTier === currentTier) {
+          unchanged++;
+          continue;
+        }
+
+        const currentOrder =
+          TIER_ORDER[currentTier as keyof typeof TIER_ORDER] ?? 1;
+        const newOrder = TIER_ORDER[newTier as keyof typeof TIER_ORDER];
+
+        if (newOrder < currentOrder) {
+          promoted++;
+        } else {
+          demoted++;
+        }
+
+        if (!dryRun) {
+          await this.prisma.memory.update({
+            where: { id: memory.id },
+            data: { tier: newTier },
+          });
+        }
       }
 
-      const currentOrder =
-        TIER_ORDER[currentTier as keyof typeof TIER_ORDER] ?? 1;
-      const newOrder = TIER_ORDER[newTier as keyof typeof TIER_ORDER];
-
-      if (newOrder < currentOrder) {
-        promoted++;
-      } else {
-        demoted++;
-      }
-
-      if (!dryRun) {
-        await this.prisma.memory.update({
-          where: { id: memory.id },
-          data: { tier: newTier },
-        });
-      }
+      afterId = memories[memories.length - 1].id;
+      if (memories.length < this.batchSize) break;
     }
 
     const result = { promoted, demoted, unchanged };

@@ -13,7 +13,11 @@ describe('DreamCycleArchivalStage', () => {
     prisma = {
       memory: {
         findMany: jest.fn().mockResolvedValue([]),
-        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        updateMany: jest
+          .fn()
+          .mockImplementation(({ where }) =>
+            Promise.resolve({ count: where.id.in.length }),
+          ),
       },
     };
 
@@ -59,7 +63,12 @@ describe('DreamCycleArchivalStage', () => {
     expect(result.byLayer).toEqual({ SESSION: 1 });
     expect(result.byType).toEqual({ EVENT: 1 });
     expect(prisma.memory.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['m1'] }, userId: 'user1' },
+      where: expect.objectContaining({
+        id: { in: ['m1'] },
+        userId: 'user1',
+        userPinned: false,
+        createdAt: { lt: expect.any(Date) },
+      }),
       data: {
         archivedReason: 'low_importance',
         searchable: false,
@@ -272,7 +281,12 @@ describe('DreamCycleArchivalStage', () => {
     expect(result.skippedRecentlyRetrieved).toBe(1);
     expect(result.skippedFrequentlyUsed).toBe(1);
     expect(prisma.memory.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['m1'] }, userId: 'user1' },
+      where: expect.objectContaining({
+        id: { in: ['m1'] },
+        userId: 'user1',
+        userPinned: false,
+        createdAt: { lt: expect.any(Date) },
+      }),
       data: expect.objectContaining({ archivedReason: 'low_importance' }),
     });
   });
