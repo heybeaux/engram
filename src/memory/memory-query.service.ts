@@ -116,7 +116,9 @@ export class MemoryQueryService {
     const now = new Date();
     const parsed = this.temporalParser.parse(dto.query, now);
     const hasTemporalIntent = parsed.temporalFilter !== null;
-    const searchQuery = parsed.semanticQuery;
+    // Date filters constrain eligibility; the full phrase still carries meaning
+    // for semantic ranking, especially when no cross-encoder is available.
+    const searchQuery = hasTemporalIntent ? dto.query : parsed.semanticQuery;
 
     if (hasTemporalIntent) {
       this.logger.log('[Recall] Temporal intent detected:', {
