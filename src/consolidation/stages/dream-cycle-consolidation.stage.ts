@@ -88,7 +88,7 @@ export class DreamCycleConsolidationStage {
           result.llmCalls++;
         }
         result.consolidated++;
-        result.archived += cluster.length;
+        // Summaries are not proof of factual equivalence: keep sources searchable.
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         this.logger.error(`Failed to consolidate cluster: ${msg}`);
@@ -105,13 +105,18 @@ export class DreamCycleConsolidationStage {
     const memories = await this.prisma.$queryRaw<
       Array<{ id: string; content: string; embedding: string | null }>
     >`
-      SELECT id, raw AS content, embedding::text
-      FROM memories
+      SELECT m.id, m.raw AS content, me.embedding::text
+      FROM memories m
+      JOIN memory_embeddings me ON me.memory_id = m.id
+        AND me.model_id = ${this.embeddingWrite.getCurrentModelId()}
       WHERE user_id = ${userId}
         AND deleted_at IS NULL
         AND tier = 'COLD'
         AND consolidated = false
-      ORDER BY created_at ASC
+        AND searchable = true
+        AND superseded_by_id IS NULL
+        AND user_pinned = false
+      ORDER BY m.created_at ASC
     `;
 
     return memories.map((m) => ({
@@ -208,7 +213,9 @@ Write a single consolidated memory that captures all the information above.`;
       consolidatedContent,
     ]);
 
-    // Create consolidated memory and archive originals in a transaction
+    if (!embedding) throw new Error('Consolidation embedding is missing');
+
+    // Atomically publish the replacement in the same model store as retrieval.
     await this.prisma.$transaction(async (tx) => {
       // Create the new consolidated memory; searchable is set after embedding is written
       const newMemory = await tx.memory.create({
@@ -224,25 +231,26 @@ Write a single consolidated memory that captures all the information above.`;
         },
       });
 
-      if (embedding) {
-        await this.embeddingWrite.writeLegacyInlineEmbedding(newMemory.id, embedding);
-        // Mark searchable now that embedding exists
-        await tx.memory.update({
-          where: { id: newMemory.id },
-          data: { searchable: true },
-        });
-      }
+      await this.embeddingWrite.writeMemoryEmbedding(
+        newMemory.id,
+        this.embeddingWrite.getCurrentModelId(),
+        embedding,
+        false,
+        tx,
+      );
+      await tx.memory.update({
+        where: { id: newMemory.id },
+        data: { searchable: true, embeddingStatus: 'COMPLETE' },
+      });
 
-      // Link originals to the consolidated memory and archive them.
-      // Set supersededById so resolveSuperseded() can follow the chain in benchmarks.
+      // An LLM summary cannot establish equivalence. Link processed sources,
+      // but preserve their independent retrieval until equivalence is verified.
       const originalIds = cluster.map((m) => m.id);
       await tx.memory.updateMany({
         where: { id: { in: originalIds }, userId },
         data: {
           consolidatedInto: newMemory.id,
           consolidated: true,
-          tier: 'ARCHIVED',
-          supersededById: newMemory.id,
         },
       });
     });

@@ -42,17 +42,18 @@ describe('PgVectorEnsembleProvider', () => {
       await provider.upsertEmbedding({
         memoryId: 'mem-1',
         modelId: 'bge-base' as any,
-        embedding: [0.1, 0.2, 0.3],
-        dimensions: 3,
+        embedding: Array(768).fill(0.1),
+        dimensions: 768,
       });
 
       expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO memory_embeddings'),
         'mem-1',
         'bge-base',
-        3,
-        '[0.1,0.2,0.3]',
+        768,
+        JSON.stringify(Array(768).fill(0.1)),
         expect.any(Date),
+        null,
       );
     });
   });
@@ -69,14 +70,14 @@ describe('PgVectorEnsembleProvider', () => {
         {
           memoryId: 'mem-1',
           modelId: 'bge-base' as any,
-          embedding: [0.1],
-          dimensions: 1,
+          embedding: Array(768).fill(0.1),
+          dimensions: 768,
         },
         {
           memoryId: 'mem-2',
           modelId: 'bge-base' as any,
-          embedding: [0.2],
-          dimensions: 1,
+          embedding: Array(768).fill(0.2),
+          dimensions: 768,
         },
       ]);
 
@@ -94,7 +95,7 @@ describe('PgVectorEnsembleProvider', () => {
       const results = await provider.queryByModel({
         userId: 'user1',
         modelId: 'bge-base' as any,
-        embedding: [0.1, 0.2, 0.3],
+        embedding: Array(768).fill(0.1),
         limit: 5,
       });
 
@@ -104,9 +105,9 @@ describe('PgVectorEnsembleProvider', () => {
       ]);
       expect(mockPrisma.$queryRawUnsafe).toHaveBeenCalledWith(
         expect.stringContaining('FROM memory_embeddings'),
-        '[0.1,0.2,0.3]',
+        JSON.stringify(Array(768).fill(0.1)),
         'bge-base',
-        3,
+        768,
         'user1',
         5,
       );
@@ -118,7 +119,7 @@ describe('PgVectorEnsembleProvider', () => {
       const results = await provider.queryByModel({
         userId: 'user1',
         modelId: 'bge-base' as any,
-        embedding: [0.1],
+        embedding: Array(768).fill(0.1),
         limit: 5,
       });
 
@@ -148,12 +149,14 @@ describe('PgVectorEnsembleProvider', () => {
 
     it('should skip models with mismatched dimensions', async () => {
       // 3-dim embedding won't match any model config (768, 384, etc.)
-      const results = await provider.queryAllModels(
-        [0.1, 0.2, 0.3],
-        'user1',
-        ['bge-base' as any],
-        5,
-      );
+      await expect(
+        provider.queryAllModels(
+          [0.1, 0.2, 0.3],
+          'user1',
+          ['bge-base' as any],
+          5,
+        ),
+      ).rejects.toThrow('No ensemble search backend succeeded');
 
       // Should skip bge-m3 since dims don't match
       expect(mockPrisma.$queryRawUnsafe).not.toHaveBeenCalled();
@@ -163,15 +166,9 @@ describe('PgVectorEnsembleProvider', () => {
       mockPrisma.$queryRawUnsafe.mockRejectedValue(new Error('DB error'));
 
       const embedding768 = new Array(768).fill(0.1);
-      const results = await provider.queryAllModels(
-        embedding768,
-        'user1',
-        ['bge-base' as any],
-        5,
-      );
-
-      // Should not throw, just return empty results for failed model
-      expect(results.get('bge-base' as any)).toBeUndefined();
+      await expect(
+        provider.queryAllModels(embedding768, 'user1', ['bge-base'], 5),
+      ).rejects.toThrow('No ensemble search backend succeeded');
     });
   });
 

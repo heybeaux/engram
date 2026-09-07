@@ -53,10 +53,9 @@ export class MemoryDedupService {
   }
 
   /**
-   * Three-tier semantic deduplication (v2)
-   * - ≥0.93: auto-merge (combine content, boost confidence)
-   * - ≥0.85: reinforce (increment accessCount, update lastAccessedAt)
-   * - ≥0.78: flag for review (add to MergeCandidate table)
+   * Search for exact content duplicates; similarity alone only queues review.
+   * Identical content above the merge/reinforcement thresholds can boost
+   * confidence/counters. All non-identical observations remain independently stored.
    */
   async findDuplicateV2(
     userId: string,
@@ -107,7 +106,14 @@ export class MemoryDedupService {
           where: { id: match.id },
         });
 
-        if (!candidate || candidate.deletedAt) {
+        if (
+          !candidate ||
+          candidate.deletedAt ||
+          candidate.userId !== userId ||
+          candidate.searchable === false ||
+          candidate.supersededById ||
+          candidate.embeddingStatus === 'DUPLICATE'
+        ) {
           continue;
         }
 
@@ -127,7 +133,10 @@ export class MemoryDedupService {
 
       let result: DedupResult;
 
-      if (bestMatch.score >= threshold) {
+      // Similarity is not equivalence: changed numbers, negation and added facts
+      // must remain retrievable. Until a verifier exists only identical text merges.
+      const equivalent = existingMemory.raw === text;
+      if (equivalent && bestMatch.score >= threshold) {
         this.logger.log(
           `[Dedup] Auto-merge: score=${bestMatch.score.toFixed(3)} memory=${bestMatch.id}`,
         );
@@ -136,7 +145,7 @@ export class MemoryDedupService {
           existingMemory,
           similarityScore: bestMatch.score,
         };
-      } else if (bestMatch.score >= DEDUP_REINFORCE_THRESHOLD) {
+      } else if (equivalent && bestMatch.score >= DEDUP_REINFORCE_THRESHOLD) {
         this.logger.log(
           `[Dedup] Reinforce: score=${bestMatch.score.toFixed(3)} memory=${bestMatch.id}`,
         );
@@ -199,7 +208,7 @@ export class MemoryDedupService {
   }
 
   /**
-   * Auto-merge: combine content from new memory into existing, boost confidence
+   * Reinforce only identical content; semantic similarity cannot prove equivalence.
    */
   async autoMergeMemory(
     existingId: string,
@@ -209,7 +218,9 @@ export class MemoryDedupService {
     const existing = await this.prisma.memory.findUnique({
       where: { id: existingId },
     });
-    if (!existing) return;
+    if (!existing || existing.raw !== newContent) {
+      throw new Error('Cannot reinforce non-equivalent memory content');
+    }
 
     const newConfidence = SOURCE_CONFIDENCE[newSource] ?? 1.0;
     const boostedConfidence = Math.min(

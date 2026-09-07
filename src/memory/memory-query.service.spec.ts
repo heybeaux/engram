@@ -653,6 +653,32 @@ describe('MemoryQueryService', () => {
   });
 
   describe('temporal path — reranking query selection', () => {
+    it('embeds the original temporal meaning without a reranker and retains date eligibility', async () => {
+      const start = new Date(Date.now() - 7 * 86400000);
+      const end = new Date();
+      temporalParser.parse.mockReturnValue({
+        semanticQuery: 'What did I work on?',
+        temporalFilter: { expression: 'last week', start, end },
+      } as any);
+      await service.recall(userId, {
+        query: 'What did I work on last week?',
+        limit: 5,
+      });
+      expect(embedding.generateForRecall).toHaveBeenCalledWith(
+        'What did I work on last week?',
+      );
+      expect(prisma.memory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [
+              { observedAt: { gte: start, lte: end } },
+              { observedAt: null, createdAt: { gte: start, lte: end } },
+            ],
+          }),
+        }),
+      );
+    });
+
     it('should pass original query (with temporal expression) to reranker on temporal path', async () => {
       const mockRerankService = {
         rerank: jest.fn().mockResolvedValue([{ index: 0, score: 0.9 }]),

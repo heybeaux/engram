@@ -16,13 +16,13 @@ export interface UsageWeightConfig {
   usageWeight: number;
   /** Half-life for recency decay in days (default 14) */
   recencyHalfLifeDays: number;
-  /** Multiplier for usedCount vs retrievalCount (default 2) */
+  /** Multiplier for actual use count (default 2) */
   usedCountMultiplier: number;
   /** Boost factor for positive feedback (default 1.5) */
   feedbackBoost: number;
   /** Penalty factor for negative feedback (default 0.5) */
   feedbackPenalty: number;
-  /** Minimum retrievals before usage weighting kicks in (default 3) */
+  /** @deprecated Retained for config compatibility; actual use needs no retrieval threshold. */
   minRetrievals: number;
 }
 
@@ -134,29 +134,25 @@ export class RecallWeightService {
    * ENG-27: Calculate a usage-based signal for a memory.
    *
    * Combines:
-   * - usedCount (weighted higher — actual usage > mere retrieval)
-   * - retrievalCount
+   * - usedCount (actual use, not appearances in recall results)
    * - recency decay (recent usage matters more)
    *
    * Returns a value in [0, 1] representing usage strength.
    */
   usageSignal(memory: Memory): number {
-    // Don't boost memories without enough retrieval data (cold-start protection)
-    if (memory.retrievalCount < this.usageConfig.minRetrievals) return 0;
+    // Retrieval is exposure, not evidence of use. Rewarding it creates a
+    // feedback loop in which repeatedly surfaced distractions gain relevance.
+    if (!(memory.usedCount > 0)) return 0;
 
     const now = Date.now();
     const { usedCountMultiplier, recencyHalfLifeDays } = this.usageConfig;
 
-    // Raw usage score: usedCount is weighted higher than retrievalCount
-    const rawUsage =
-      memory.usedCount * usedCountMultiplier + memory.retrievalCount;
+    const rawUsage = memory.usedCount * usedCountMultiplier;
 
     // Recency decay: exp(-lambda * days) where lambda = ln(2) / halfLife
     const lambda = Math.LN2 / recencyHalfLifeDays;
     const lastUsedTime =
-      memory.lastUsedAt?.getTime() ??
-      memory.lastRetrievedAt?.getTime() ??
-      memory.createdAt.getTime();
+      memory.lastUsedAt?.getTime() ?? memory.createdAt.getTime();
     const daysSinceUse = (now - lastUsedTime) / DAY_MS;
     const recencyDecay = Math.exp(-lambda * daysSinceUse);
 

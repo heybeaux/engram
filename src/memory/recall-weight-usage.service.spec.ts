@@ -93,12 +93,12 @@ describe('RecallWeightService — Usage Weighting (ENG-27)', () => {
   });
 
   describe('usageSignal', () => {
-    it('should return 0 for memories below minimum retrieval threshold', () => {
+    it('should return 0 for memories with no actual use', () => {
       const memory = createMemory({ retrievalCount: 2, usedCount: 0 });
       expect(service.usageSignal(memory)).toBe(0);
     });
 
-    it('should return > 0 for memories with enough retrievals', () => {
+    it('should return > 0 for memories with actual use', () => {
       const memory = createMemory({
         retrievalCount: 10,
         usedCount: 5,
@@ -107,34 +107,39 @@ describe('RecallWeightService — Usage Weighting (ENG-27)', () => {
       expect(service.usageSignal(memory)).toBeGreaterThan(0);
     });
 
-    it('should weight usedCount higher than retrievalCount', () => {
-      const highUsed = createMemory({
-        retrievalCount: 5,
-        usedCount: 10,
-        lastRetrievedAt: new Date(),
+    it('does not promote repeatedly retrieved distractions over a relevant unused memory', async () => {
+      const relevant = { ...createMemory({ id: 'relevant' }), score: 0.51 };
+      const distraction = {
+        ...createMemory({
+          id: 'distraction',
+          retrievalCount: 1000,
+          lastRetrievedAt: new Date(),
+        }),
+        score: 0.48,
+      };
+      const ranked = await service.applyUsageWeighting([distraction, relevant]);
+      expect(ranked.map((memory) => memory.id)).toEqual([
+        'relevant',
+        'distraction',
+      ]);
+      expect(service.usageSignal(distraction)).toBe(0);
+    });
+
+    it('uses actual usage even without retrieval history and ignores later exposures', () => {
+      const memory = createMemory({
+        usedCount: 5,
+        retrievalCount: 0,
+        lastUsedAt: new Date(Date.now() - DAY_MS),
       });
-      const highRetrieved = createMemory({
-        retrievalCount: 25, // same raw total: 10*2 + 5 = 25, vs 0*2 + 25 = 25
-        usedCount: 0,
-        lastRetrievedAt: new Date(),
-      });
-      // With usedCountMultiplier=2: highUsed = 10*2 + 5 = 25, highRetrieved = 0*2 + 25 = 25
-      // But with usedCount=10 vs 0, let's make the numbers different
-      const moreUsed = createMemory({
-        retrievalCount: 3,
-        usedCount: 10,
-        lastRetrievedAt: new Date(),
-      });
-      const moreRetrieved = createMemory({
-        retrievalCount: 20,
-        usedCount: 0,
-        lastRetrievedAt: new Date(),
-      });
-      // moreUsed raw = 10*2 + 3 = 23
-      // moreRetrieved raw = 0*2 + 20 = 20
-      expect(service.usageSignal(moreUsed)).toBeGreaterThan(
-        service.usageSignal(moreRetrieved),
-      );
+      const signal = service.usageSignal(memory);
+      expect(signal).toBeGreaterThan(0);
+      expect(
+        service.usageSignal({
+          ...memory,
+          retrievalCount: 1000,
+          lastRetrievedAt: new Date(),
+        }),
+      ).toBe(signal);
     });
 
     it('should decay with time since last use', () => {

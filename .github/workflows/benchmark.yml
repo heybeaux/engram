@@ -136,16 +136,18 @@ jobs:
             }
 
             // Extract the report section
-            const reportStart = output.indexOf('╔══');
-            const reportEnd = output.lastIndexOf('benchmark PASSED') !== -1
-              ? output.lastIndexOf('benchmark PASSED') + 20
-              : output.lastIndexOf('benchmark FAILED') + 20;
+            const reportStart = output.indexOf('Engram recall benchmark (metric version ');
+            const successMarker = 'Quality thresholds passed';
+            const failureMarker = 'Quality thresholds FAILED';
+            const reportEnd = output.lastIndexOf(successMarker) !== -1
+              ? output.lastIndexOf(successMarker) + successMarker.length
+              : output.lastIndexOf(failureMarker) + failureMarker.length;
 
             const report = reportStart >= 0
               ? output.slice(reportStart, reportEnd > reportStart ? reportEnd : undefined)
               : 'Report not found in output';
 
-            const passed = output.includes('ALL THRESHOLDS PASSED') && !output.includes('THRESHOLDS NOT MET') && !output.includes('Benchmark FAILED');
+            const passed = output.includes('Quality thresholds passed') && !output.includes('Quality thresholds FAILED') && !output.includes('Benchmark FAILED');
             const emoji = passed ? '✅' : '❌';
 
             const body = `## ${emoji} Recall Benchmark Results
@@ -199,11 +201,11 @@ jobs:
             echo "::error::Benchmark output file not found — benchmark step likely failed"
             exit 1
           fi
-          if ! grep -q "ALL THRESHOLDS PASSED" benchmark-output.txt; then
-            echo "::error::Benchmark did not report ALL THRESHOLDS PASSED"
+          if ! grep -q "Quality thresholds passed" benchmark-output.txt; then
+            echo "::error::Benchmark did not report Quality thresholds passed"
             exit 1
           fi
-          if grep -Eq "THRESHOLDS NOT MET|Benchmark FAILED" benchmark-output.txt; then
+          if grep -Eq "Quality thresholds FAILED|Benchmark FAILED" benchmark-output.txt; then
             echo "::error::Benchmark thresholds not met"
             exit 1
           fi

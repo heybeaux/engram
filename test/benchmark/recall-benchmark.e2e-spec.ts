@@ -6,8 +6,8 @@
  *
  * Thresholds:
  *  - Isolation score = 100% (zero tolerance for cross-tenant leaks)
- *  - Precision@5 >= 95%
- *  - No must_top5 query has 0 hits
+ *  - Required coverage@5 >= 95%
+ *  - Explicit no-answer judgments must return no records
  */
 
 import { INestApplication } from '@nestjs/common';
@@ -22,13 +22,12 @@ import type { GoldQuery } from '../fixtures/types';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { EmbeddingService as EmbeddingGeneratorService } from '../../src/embedding/embedding.service';
 import {
-  PRECISION_AT_5_THRESHOLD,
+  REQUIRED_COVERAGE_AT_5_THRESHOLD,
   scoreQuery,
   buildReport,
   formatReport,
   checkThresholds,
   type QueryScore,
-  type BenchmarkReport,
 } from './scoring';
 import { saveReport, getGitInfo } from './history';
 import { generateCorpusEmbeddings } from '../helpers/generate-embeddings';
@@ -91,17 +90,13 @@ describe('Recall Benchmark', () => {
         .set(headers)
         .send({ query: query.query, limit: 20 })
         .expect((r) => {
-          // Accept 200, 201, or 400 (for edge case queries like empty string)
-          if (r.status !== 200 && r.status !== 201 && r.status !== 400) {
+          // Empty input is handled above; other API failures must fail the run.
+          if (r.status !== 200 && r.status !== 201) {
             throw new Error(
               `Unexpected status ${r.status} for query "${query.query}": ${JSON.stringify(r.body)}`,
             );
           }
         });
-
-      if (res.status === 400) {
-        return [];
-      }
 
       const body = res.body as { memories?: Array<{ id: string }> };
       return (body.memories ?? []).map((m) => m.id);
@@ -109,7 +104,7 @@ describe('Recall Benchmark', () => {
       console.error(
         `Query execution failed for [${query.id}]: ${(error as Error).message}`,
       );
-      return [];
+      throw error;
     }
   }
 
@@ -163,7 +158,7 @@ describe('Recall Benchmark', () => {
       expect(isolationFailures).toHaveLength(0);
     });
 
-    it('should meet precision thresholds (with real embeddings)', () => {
+    it('should meet coverage thresholds (with real embeddings)', () => {
       if (allScores.length === 0) {
         console.warn('No scores to check thresholds against');
         return;
@@ -172,43 +167,14 @@ describe('Recall Benchmark', () => {
       const { sha, branch } = getGitInfo();
       const report = buildReport(allScores, sha, branch);
 
-      // When using CachedEmbeddingService (hash-based stubs), precision will
-      // be low because vectors are not semantically meaningful. These thresholds
-      // only apply when using real embeddings (e.g., in CI with a real embedding provider).
-      // createTestApp() swaps EmbeddingService for CachedEmbeddingService by default.
-      // Only enforce precision thresholds when explicitly using real embeddings.
-      const usingRealEmbeddings =
-        process.env.BENCHMARK_REAL_EMBEDDINGS === 'true';
-
-      if (usingRealEmbeddings) {
-        // Precision@5 >= 95%
-        expect(report.overallPrecisionAt5).toBeGreaterThanOrEqual(
-          PRECISION_AT_5_THRESHOLD,
-        );
-
-        // Log any must_top5 queries with 0 hits (aspirational — not a hard gate).
-        // P@5 threshold above already captures overall quality.
-        // These edge cases are tracked for improvement but don't block CI.
-        const zeroHitQueries = allScores.filter(
-          (s) =>
-            s.details.expectedTop5.length > 0 &&
-            s.details.top5Hits.length === 0,
-        );
-        if (zeroHitQueries.length > 0) {
-          const ids = zeroHitQueries.map((q) => q.queryId).join(', ');
-          console.warn(
-            `⚠️  Zero-hit queries (${zeroHitQueries.length}): ${ids}`,
-          );
-        }
-      } else {
-        // With cached embeddings, just log the baseline
-        console.log(
-          `⚠️  Using cached embeddings — precision@5 = ${(report.overallPrecisionAt5 * 100).toFixed(1)}% (thresholds relaxed)`,
-        );
-        console.log(
-          '   Set EMBEDDING_PROVIDER to a real provider to enforce precision thresholds.',
-        );
-      }
+      // This suite always generates real embeddings. The gate cannot be disabled
+      // by omitting an unrelated environment flag.
+      expect(allScores).toHaveLength(GOLD_QUERIES.length);
+      expect(report.overallRequiredCoverageAt5).not.toBeNull();
+      expect(report.overallRequiredCoverageAt5).toBeGreaterThanOrEqual(
+        REQUIRED_COVERAGE_AT_5_THRESHOLD,
+      );
+      expect(checkThresholds(allScores)).toBe(true);
     });
   });
 });

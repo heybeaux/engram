@@ -93,7 +93,7 @@ jobs:
 
   # ── 4a. Test shard — memory (large module, needs own slot) ───────────────
   test-memory:
-    name: Test / memory
+    name: Test / shard 1 of 5
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: install
@@ -133,11 +133,13 @@ jobs:
       - name: Test — memory module
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/memory'
+            --shard=1/5
+      - name: Verify benchmark scoring definitions
+        run: pnpm exec jest --config test/jest-e2e.json --testRegex='benchmark/scoring.spec.ts$' --runInBand --ci
 
   # ── 4b. Test shard — core (identity, account, common) ────────────────────
   test-core:
-    name: Test / core
+    name: Test / shard 2 of 5
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: install
@@ -177,11 +179,11 @@ jobs:
       - name: Test — core modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(identity|account|common|app\.controller)'
+            --shard=2/5
 
   # ── 4b. Test shard — intelligence ────────────────────────────────────────
   test-intelligence:
-    name: Test / intelligence
+    name: Test / shard 3 of 5
     runs-on: ubuntu-latest
     timeout-minutes: 12
     needs: install
@@ -221,11 +223,11 @@ jobs:
       - name: Test — intelligence modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(deduplication|awareness|multi-query|consolidation|prefetch|retrieval-signals|graph|clustering|hierarchy|ensemble)'
+            --shard=3/5
 
   # ── 4c. Test shard — cloud-edition features ───────────────────────────────
   test-cloud:
-    name: Test / cloud features
+    name: Test / shard 4 of 5 features
     runs-on: ubuntu-latest
     timeout-minutes: 12
     needs: install
@@ -265,11 +267,11 @@ jobs:
       - name: Test — cloud-edition modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(cloud-link|cloud-sync|instance|webhooks|analytics|monitoring|stripe|reembedding)'
+            --shard=4/5
 
   # ── 4d. Test shard — remaining features ──────────────────────────────────
   test-features:
-    name: Test / features
+    name: Test / shard 5 of 5
     runs-on: ubuntu-latest
     timeout-minutes: 12
     needs: install
@@ -309,7 +311,7 @@ jobs:
       - name: Test — remaining feature modules
         run: |
           pnpm test -- --no-coverage --forceExit --ci \
-            --testPathPatterns='src/(llm|import|import-v2|inbound-email|agent|agent-recall|agent-session|anticipatory|auto|correction|entity-profile|events|feedback|fog-index|health|memory-access-log|memory-pool|queue|scoped-context|scripts|session-indexing|storage|summarization|teams|utils|eval|dashboard)'
+            --shard=5/5
 
   # ── 5. Gate ───────────────────────────────────────────────────────────────
   tests-passed:

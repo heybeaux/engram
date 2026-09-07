@@ -47,19 +47,15 @@ export class ContextualRecallService {
     dto: ContextualRecallDto,
   ): Promise<ContextualRecallResponseDto> {
     const startTime = Date.now();
-    const session = this.getOrCreateSession(dto.sessionKey);
+    const session = this.getOrCreateSession(
+      this.sessionScope(userId, dto.sessionKey),
+    );
 
     // 1. Generate embedding for the incoming text
     const queryEmbedding = await this.embedding.generate(dto.text);
 
     // 2. Detect topic shift
     const topicShift = this.detectTopicShift(queryEmbedding, session);
-
-    // Store this embedding for future comparisons
-    session.recentEmbeddings.push(queryEmbedding);
-    if (session.recentEmbeddings.length > this.MAX_RECENT_EMBEDDINGS) {
-      session.recentEmbeddings.shift();
-    }
 
     // 3. If no topic shift, return empty (no recall needed)
     if (!topicShift) {
@@ -118,14 +114,47 @@ export class ContextualRecallService {
         ? await this.embedding.generate(semanticText)
         : queryEmbedding;
 
-    const vectorResults = await this.embedding.search(
-      userId ?? 'default',
-      searchEmbedding,
-      limit + excludeSet.size, // over-fetch to account for filtering
-      undefined,
-      undefined,
-      poolIds,
-    );
+    // Providers do not all support date predicates. Refill the candidate window
+    // until enough eligible records survive or the provider is exhausted. Dates
+    // here deliberately mean creation time, matching the contextual API contract.
+    let window = Math.max(1, limit + excludeSet.size);
+    let vectorResults: Awaited<ReturnType<EmbeddingService['search']>>;
+    let memories: Awaited<ReturnType<typeof this.prisma.memory.findMany>>;
+    let previousIds = '';
+    for (;;) {
+      const found = await this.embedding.search(
+        userId ?? 'default',
+        searchEmbedding,
+        window,
+        undefined,
+        undefined,
+        poolIds,
+      );
+      const ids = found
+        .filter((r) => r.score >= minScore && !excludeSet.has(r.id))
+        .map((r) => r.id);
+      memories = await this.prisma.memory.findMany({
+        where: {
+          id: { in: ids },
+          deletedAt: null,
+          supersededById: null,
+          searchable: { not: false },
+          ...(temporalCreatedAt ? { createdAt: temporalCreatedAt } : {}),
+        },
+        include: { extraction: true },
+      });
+      const eligible = new Set(memories.map((m) => m.id));
+      vectorResults = found.filter((r) => eligible.has(r.id));
+      const signature = JSON.stringify(found.map((r) => r.id));
+      if (
+        vectorResults.length >= limit ||
+        found.length < window ||
+        signature === previousIds
+      )
+        break;
+      previousIds = signature;
+      window *= 2;
+    }
 
     // HEY-189: If delegation context provided, fetch delegator's memories and merge
     let delegatorMemoryIds: Set<string> | undefined;
@@ -167,6 +196,7 @@ export class ContextualRecallService {
       .map((r) => ({ id: r.id, score: r.score }));
 
     if (filteredIds.length === 0) {
+      this.recordSuccessfulTopic(session, queryEmbedding);
       return {
         memories: [],
         topicShift: true,
@@ -177,18 +207,7 @@ export class ContextualRecallService {
 
     // 6. Fetch full memory records (apply temporal filter if present)
     const scoreMap = new Map(filteredIds.map((r) => [r.id, r.score]));
-    const memories = await this.prisma.memory.findMany({
-      where: {
-        id: { in: filteredIds.map((r) => r.id) },
-        deletedAt: null,
-        supersededById: null,
-        searchable: { not: false },
-        ...(temporalCreatedAt ? { createdAt: temporalCreatedAt } : {}),
-      },
-      include: {
-        extraction: true,
-      },
-    });
+    memories = memories.filter((memory) => scoreMap.has(memory.id));
 
     // 7. Build response, respecting token budget
     const maxTokens = dto.maxTokens ?? 500;
@@ -210,15 +229,12 @@ export class ContextualRecallService {
         raw: rawText,
         layer: memory.layer,
         score: scoreMap.get(memory.id) ?? 0,
-        topics: memory.extraction?.topics ?? [],
+        topics:
+          (memory as typeof memory & { extraction?: { topics: string[] } })
+            .extraction?.topics ?? [],
       });
       tokenCount += approxTokens;
-      session.recalledIds.add(memory.id);
     }
-
-    // Update session state
-    session.lastRecallAt = Date.now();
-    session.recallCount++;
 
     // Update retrieval counts
     const resultIds = result.map((m) => m.id);
@@ -238,6 +254,10 @@ export class ContextualRecallService {
           .catch(() => {});
       }
     }
+
+    // Commit suppression state only after the entire retrieval succeeds.
+    this.recordSuccessfulTopic(session, queryEmbedding);
+    for (const id of resultIds) session.recalledIds.add(id);
 
     return {
       memories: result,
@@ -280,6 +300,27 @@ export class ContextualRecallService {
     }
     const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
     return magnitude === 0 ? 0 : dotProduct / magnitude;
+  }
+
+  private sessionScope(
+    userId: string | string[] | null,
+    sessionKey: string,
+  ): string {
+    const users = [
+      ...new Set(Array.isArray(userId) ? userId : [userId ?? 'default']),
+    ].sort();
+    return JSON.stringify([users, sessionKey]);
+  }
+
+  private recordSuccessfulTopic(
+    session: SessionState,
+    embedding: number[],
+  ): void {
+    session.recentEmbeddings.push(embedding);
+    if (session.recentEmbeddings.length > this.MAX_RECENT_EMBEDDINGS)
+      session.recentEmbeddings.shift();
+    session.lastRecallAt = Date.now();
+    session.recallCount++;
   }
 
   private getOrCreateSession(sessionKey: string): SessionState {
@@ -327,8 +368,8 @@ export class ContextualRecallService {
   /**
    * Clean up session state (call on session end)
    */
-  clearSession(sessionKey: string): void {
-    this.sessions.delete(sessionKey);
+  clearSession(userId: string | string[] | null, sessionKey: string): void {
+    this.sessions.delete(this.sessionScope(userId, sessionKey));
   }
 
   /**

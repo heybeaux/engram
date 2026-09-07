@@ -288,6 +288,7 @@ export class MemoryQueryRankingService {
             const finalScore = (r.score * 0.85 + importanceScore * 0.15) * sp;
             return { ...mem, score: finalScore };
           })
+          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
           .slice(0, limit);
 
         this.logger.debug(

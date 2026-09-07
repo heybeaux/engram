@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -41,6 +42,10 @@ export class EmbeddingWriteService {
     modelId: string,
     vector: number[],
     skipLegacyInline = false,
+    client: Pick<
+      Prisma.TransactionClient,
+      '$executeRawUnsafe' | '$queryRawUnsafe'
+    > = this.prisma,
   ): Promise<void> {
     this.validateDimensions(modelId, vector);
 
@@ -50,38 +55,36 @@ export class EmbeddingWriteService {
     if (!skipLegacyInline) {
       if (vector.length === LEGACY_INLINE_DIMS) {
         // Write to legacy memories.embedding column — confirm memory exists
-        const rows = await this.prisma.$queryRawUnsafe<Array<{ exists: number }>>(
+        const rows = await client.$queryRawUnsafe<Array<{ exists: number }>>(
           `SELECT 1 AS exists FROM memories WHERE id = $1`,
           memoryId,
         );
         if (rows.length === 0) {
-          this.logger.warn(
-            `[EmbeddingWrite] Memory ${memoryId} not found — skipping write`,
-          );
-          return;
+          throw new Error(`[EmbeddingWrite] Memory ${memoryId} not found`);
         }
-        await this.prisma.$executeRawUnsafe(
+        const updated = await client.$executeRawUnsafe(
           `UPDATE memories SET embedding = $1::vector WHERE id = $2`,
           embeddingStr,
           memoryId,
         );
+        if (updated !== 1)
+          throw new Error(
+            `[EmbeddingWrite] Expected one legacy row, got ${updated}`,
+          );
       } else {
         // Non-768 dim: verify memory exists without touching the typed column
-        const rows = await this.prisma.$queryRawUnsafe<Array<{ exists: number }>>(
+        const rows = await client.$queryRawUnsafe<Array<{ exists: number }>>(
           `SELECT 1 AS exists FROM memories WHERE id = $1`,
           memoryId,
         );
         if (rows.length === 0) {
-          this.logger.warn(
-            `[EmbeddingWrite] Memory ${memoryId} not found — skipping write`,
-          );
-          return;
+          throw new Error(`[EmbeddingWrite] Memory ${memoryId} not found`);
         }
       }
     }
 
     // Always write to memory_embeddings (the authoritative multi-model store)
-    await this.prisma.$executeRawUnsafe(
+    const written = await client.$executeRawUnsafe(
       `
       INSERT INTO memory_embeddings (id, memory_id, model_id, dimensions, embedding, created_at, updated_at)
       VALUES (
@@ -101,6 +104,10 @@ export class EmbeddingWriteService {
       modelId,
       vector.length,
     );
+    if (written !== 1)
+      throw new Error(
+        `[EmbeddingWrite] Expected one model row, got ${written}`,
+      );
   }
 
   /**
@@ -124,11 +131,15 @@ export class EmbeddingWriteService {
       return;
     }
     const embeddingStr = this.serializeVector(vector, memoryId);
-    await this.prisma.$executeRawUnsafe(
+    const updated = await this.prisma.$executeRawUnsafe(
       `UPDATE memories SET embedding = $1::vector WHERE id = $2`,
       embeddingStr,
       memoryId,
     );
+    if (updated !== 1)
+      throw new Error(
+        `[EmbeddingWrite] Expected one legacy row, got ${updated}`,
+      );
   }
 
   /**
@@ -149,7 +160,9 @@ export class EmbeddingWriteService {
 
   private serializeVector(vector: number[], context: string): string {
     if (!Array.isArray(vector) || vector.length === 0) {
-      throw new Error(`[EmbeddingWrite] Empty or invalid vector for ${context}`);
+      throw new Error(
+        `[EmbeddingWrite] Empty or invalid vector for ${context}`,
+      );
     }
     if (Object.keys(vector).length !== vector.length) {
       throw new Error(
@@ -173,7 +186,12 @@ export class EmbeddingWriteService {
     skipLegacyInline = false,
   ): Promise<void> {
     const modelId = resolveEmbeddingModelId();
-    return this.writeMemoryEmbedding(memoryId, modelId, vector, skipLegacyInline);
+    return this.writeMemoryEmbedding(
+      memoryId,
+      modelId,
+      vector,
+      skipLegacyInline,
+    );
   }
 
   /** Expose current model/dimension config for callers that need it */

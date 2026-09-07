@@ -17,6 +17,9 @@ import {
   NotFoundException,
   UseGuards,
   Logger,
+  Req,
+  ForbiddenException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import {
@@ -41,6 +44,7 @@ import {
   MemoryEmbeddingStatus,
   ABTestResult,
 } from './ensemble.types';
+import { AdminGuard } from '../common/guards/admin.guard';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 
 // ============================================================================
@@ -169,7 +173,10 @@ export class EnsembleController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Query memories with multi-model ensemble' })
   @ApiResponse({ status: 200, description: 'Fused query results' })
-  async query(@Body() dto: EnsembleQueryDto): Promise<EnsembleQueryResponse> {
+  async query(
+    @Body() dto: EnsembleQueryDto,
+    @Req() request?: any,
+  ): Promise<EnsembleQueryResponse> {
     if (!this.ensembleService.isEnabled()) {
       throw new BadRequestException('Ensemble retrieval is not enabled');
     }
@@ -178,9 +185,10 @@ export class EnsembleController {
       throw new BadRequestException('query and userId are required');
     }
 
+    const userId = await this.authorizedUser(request, dto.userId);
     const result = await this.ensembleService.query({
       query: dto.query,
-      userId: dto.userId,
+      userId,
       limit: dto.limit ? Math.min(dto.limit, 1000) : undefined,
       k: dto.k ? Math.min(dto.k, 1000) : undefined,
       models: dto.models,
@@ -207,7 +215,10 @@ export class EnsembleController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Upsert memory with ensemble embeddings' })
   @ApiResponse({ status: 200, description: 'Memory upserted' })
-  async upsert(@Body() dto: EnsembleUpsertDto): Promise<{ success: boolean }> {
+  async upsert(
+    @Body() dto: EnsembleUpsertDto,
+    @Req() request?: any,
+  ): Promise<{ success: boolean }> {
     if (!this.ensembleService.isEnabled()) {
       throw new BadRequestException('Ensemble retrieval is not enabled');
     }
@@ -218,10 +229,12 @@ export class EnsembleController {
       );
     }
 
+    const userId = await this.authorizedUser(request, dto.userId);
+    await this.authorizedMemory(dto.memoryId, userId);
     await this.ensembleService.upsert({
       memoryId: dto.memoryId,
       content: dto.content,
-      userId: dto.userId,
+      userId,
       metadata: dto.metadata,
     });
 
@@ -235,7 +248,10 @@ export class EnsembleController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Compare ensemble vs single-model retrieval' })
   @ApiResponse({ status: 200, description: 'Comparison results' })
-  async compare(@Body() dto: CompareQueryDto): Promise<{
+  async compare(
+    @Body() dto: CompareQueryDto,
+    @Req() request?: any,
+  ): Promise<{
     ensemble: EnsembleQueryResponse;
     singleModel: Record<
       ModelId,
@@ -250,9 +266,10 @@ export class EnsembleController {
       throw new BadRequestException('query and userId are required');
     }
 
+    const userId = await this.authorizedUser(request, dto.userId);
     const result = await this.ensembleService.compare(
       dto.query,
-      dto.userId,
+      userId,
       dto.limit ?? 10,
     );
 
@@ -318,6 +335,7 @@ export class EnsembleController {
   /**
    * Get all registered models with status and configuration
    */
+  @UseGuards(AdminGuard)
   @Get('models')
   @ApiOperation({ summary: 'List all registered ensemble models' })
   @ApiResponse({
@@ -332,6 +350,7 @@ export class EnsembleController {
    * Get embedding coverage statistics
    * Transforms perModel object to array format for dashboard compatibility
    */
+  @UseGuards(AdminGuard)
   @Get('coverage')
   @ApiOperation({ summary: 'Get embedding coverage statistics' })
   @ApiResponse({ status: 200, description: 'Coverage stats per model' })
@@ -369,11 +388,14 @@ export class EnsembleController {
   })
   async getMemoryEmbeddings(
     @Param('id') memoryId: string,
+    @Req() request?: any,
   ): Promise<{ memoryId: string; embeddings: MemoryEmbeddingStatus[] }> {
     if (!memoryId) {
       throw new BadRequestException('Memory ID is required');
     }
 
+    const userId = await this.authorizedUser(request);
+    await this.authorizedMemory(memoryId, userId);
     const embeddings = await this.ensembleService.getMemoryEmbeddings(memoryId);
     return { memoryId, embeddings };
   }
@@ -381,6 +403,7 @@ export class EnsembleController {
   /**
    * Get A/B test results
    */
+  @UseGuards(AdminGuard)
   @Get('ab-results')
   @ApiOperation({ summary: 'Get A/B test results' })
   @ApiQuery({
@@ -409,6 +432,7 @@ export class EnsembleController {
   /**
    * Trigger re-embedding for specified models
    */
+  @UseGuards(AdminGuard)
   @Post('reembed')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Trigger batch re-embedding for models' })
@@ -432,6 +456,7 @@ export class EnsembleController {
   /**
    * Get active re-embed job status
    */
+  @UseGuards(AdminGuard)
   @Get('reembed/status')
   @ApiOperation({ summary: 'Get active re-embed job status' })
   @ApiResponse({
@@ -445,6 +470,7 @@ export class EnsembleController {
   /**
    * Re-embed specific memories with specific models (direct endpoint)
    */
+  @UseGuards(AdminGuard)
   @Post('reembed/targeted')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Re-embed specific memories with specific models' })
@@ -481,6 +507,7 @@ export class EnsembleController {
   /**
    * Get latest drift analysis per model
    */
+  @UseGuards(AdminGuard)
   @Get('drift')
   @ApiOperation({ summary: 'Get latest drift snapshot per model' })
   @ApiResponse({ status: 200, description: 'Latest drift per model' })
@@ -534,6 +561,7 @@ export class EnsembleController {
   /**
    * Get drift snapshots over time (for charting)
    */
+  @UseGuards(AdminGuard)
   @Get('drift/history')
   @ApiOperation({ summary: 'Get drift history for charting' })
   @ApiQuery({
@@ -584,6 +612,7 @@ export class EnsembleController {
   /**
    * Trigger a new drift analysis and persist snapshots
    */
+  @UseGuards(AdminGuard)
   @Post('drift/analyze')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Trigger drift analysis and persist results' })
@@ -697,6 +726,41 @@ export class EnsembleController {
       }
     }
     return embeddings;
+  }
+
+  /** Request-facing routes must scope the privileged vector store explicitly. */
+  private async authorizedUser(
+    request: any,
+    suppliedUserId?: string,
+  ): Promise<string> {
+    const userId = request?.user?.id ?? request?.userId;
+    const accountId = request?.accountId;
+    if (!userId || !accountId) {
+      throw new UnauthorizedException(
+        'Authenticated user and account are required',
+      );
+    }
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, accountId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!user || (suppliedUserId && suppliedUserId !== user.id)) {
+      throw new ForbiddenException(
+        'User scope does not match authenticated identity',
+      );
+    }
+    return user.id;
+  }
+
+  private async authorizedMemory(
+    memoryId: string,
+    userId: string,
+  ): Promise<void> {
+    const memory = await this.prisma.memory.findFirst({
+      where: { id: memoryId, userId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!memory) throw new NotFoundException('Memory not found');
   }
 
   private async processTargetedReembed(

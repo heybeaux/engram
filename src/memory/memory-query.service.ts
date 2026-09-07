@@ -116,7 +116,9 @@ export class MemoryQueryService {
     const now = new Date();
     const parsed = this.temporalParser.parse(dto.query, now);
     const hasTemporalIntent = parsed.temporalFilter !== null;
-    const searchQuery = parsed.semanticQuery;
+    // Date filters constrain eligibility; the full phrase still carries meaning
+    // for semantic ranking, especially when no cross-encoder is available.
+    const searchQuery = hasTemporalIntent ? dto.query : parsed.semanticQuery;
 
     if (hasTemporalIntent) {
       this.logger.log('[Recall] Temporal intent detected:', {
@@ -150,7 +152,6 @@ export class MemoryQueryService {
     const temporalRangeFilter = this.buildTemporalRangeFilter(dto);
 
     let scoredMemories: MemoryWithScore[];
-    const keywordRescueMap = new Map<string, MemoryWithScore>();
 
     if (hasTemporalIntent) {
       // TEMPORAL PATH — HEY-575: Adaptive window expansion
@@ -431,10 +432,10 @@ export class MemoryQueryService {
                LIMIT 100`,
                 searchQuery,
               );
-        // RRF fusion (k=60): BM25 rank contributes 1/(k+rank) so rank-1
-        // BM25 hit scores ≈0.016, rank-100 ≈0.006. This prevents a flat
-        // 0.75 override from promoting low-quality exact-keyword matches
-        // above high-quality semantic matches.
+        // Lexical rank admits new candidates with a conservative prior. Keep
+        // measured semantic scores for existing candidates; never overwrite them
+        // with an out-of-range lexical boost. The final reranker/blend evaluates
+        // all admitted candidates, including lexical-only matches.
         const RRF_K = 60;
         let ftsAdded = 0;
         for (let ftsRank = 0; ftsRank < ftsResults.length; ftsRank++) {
@@ -443,11 +444,9 @@ export class MemoryQueryService {
           ftsResultIds.add(row.id);
           keywordRescueIds.add(row.id);
           if (!scoreMap.has(row.id)) {
-            scoreMap.set(row.id, 1.25);
+            scoreMap.set(row.id, bm25Score);
             memoryIds.push(row.id);
             ftsAdded++;
-          } else {
-            scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.25));
           }
         }
         if (ftsAdded > 0) {
@@ -521,11 +520,9 @@ export class MemoryQueryService {
               ftsResultIds.add(row.id);
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
-                scoreMap.set(row.id, 1.1);
+                scoreMap.set(row.id, 1 / 61);
                 memoryIds.push(row.id);
                 ilikeAdded++;
-              } else {
-                scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.1));
               }
             }
             if (ilikeAdded > 0) {
@@ -572,11 +569,9 @@ export class MemoryQueryService {
             for (const row of identityResults) {
               keywordRescueIds.add(row.id);
               if (!scoreMap.has(row.id)) {
-                scoreMap.set(row.id, 1.15);
+                scoreMap.set(row.id, 1 / 61);
                 memoryIds.push(row.id);
                 identityAdded++;
-              } else {
-                scoreMap.set(row.id, Math.max(scoreMap.get(row.id)!, 1.15));
               }
             }
             if (identityAdded > 0) {
@@ -629,10 +624,6 @@ export class MemoryQueryService {
 
       const topIds = new Set(sorted.map((m) => m.id));
       const memoryMap = new Map(sorted.map((m) => [m.id, m]));
-      for (const id of keywordRescueIds) {
-        const mem = memoryMap.get(id);
-        if (mem) keywordRescueMap.set(id, mem);
-      }
       const forcedFts: MemoryWithScore[] = [];
       for (const id of ftsResultIds) {
         if (!topIds.has(id)) {
@@ -716,21 +707,6 @@ export class MemoryQueryService {
       rerankQuery,
       limit,
     );
-
-    // Exact keyword/ILIKE rescued memories are deterministic high-signal hits.
-    // Keep them sticky after reranking so the cross-encoder cannot drop fresh
-    // exact-match writes from the final top-N.
-    const missingKeywordHits = [...keywordRescueMap.entries()]
-      .filter(([id]) => !scoredMemories.some((m) => m.id === id))
-      .map(
-        ([, mem]) =>
-          ({ ...mem, score: Math.max(mem.score ?? 0, 1.1) }) as MemoryWithScore,
-      );
-    if (missingKeywordHits.length > 0) {
-      scoredMemories = [...missingKeywordHits, ...scoredMemories]
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, limit);
-    }
 
     // v1.7: Agent-scoped filter
     if (dto.filterAgentId) {

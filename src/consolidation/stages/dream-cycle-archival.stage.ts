@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ServicePrismaService } from '../../prisma/service-prisma.service';
@@ -53,14 +54,36 @@ export class DreamCycleArchivalStage {
       retrievalCutoff.getDate() - this.retrievalWindowDays,
     );
 
+    const minAgeDays = Math.max(
+      1,
+      Number(this.config.get('DREAM_ARCHIVAL_MIN_AGE_DAYS') ?? 90) || 90,
+    );
+    const creationCutoff = new Date(Date.now() - minAgeDays * 86_400_000);
+    const eligibility: Prisma.MemoryWhereInput = {
+      userId,
+      deletedAt: null,
+      searchable: true,
+      userPinned: false,
+      supersededById: null,
+      OR: [{ tier: null }, { tier: { not: 'ARCHIVED' } }],
+      createdAt: { lt: creationCutoff },
+      importanceScore: { lt: this.importanceThreshold },
+      layer: { notIn: ['IDENTITY', 'PROJECT'] },
+      usedCount: { lte: this.maxUsedCount },
+      AND: [
+        {
+          OR: [
+            { lastRetrievedAt: null },
+            { lastRetrievedAt: { lt: retrievalCutoff } },
+          ],
+        },
+        { OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: retrievalCutoff } }] },
+      ],
+    };
+
     // Fetch candidate memories: low importance, active, not already archived
     const candidates = await this.prisma.memory.findMany({
-      where: {
-        userId,
-        deletedAt: null,
-        searchable: true,
-        importanceScore: { lt: this.importanceThreshold },
-      },
+      where: eligibility,
       select: {
         id: true,
         layer: true,
@@ -124,9 +147,10 @@ export class DreamCycleArchivalStage {
       byType[type] = (byType[type] ?? 0) + 1;
     }
 
+    let archived = toArchive.length;
     if (toArchive.length > 0 && !dryRun) {
-      await this.prisma.memory.updateMany({
-        where: { id: { in: toArchive }, userId },
+      const updated = await this.prisma.memory.updateMany({
+        where: { ...eligibility, id: { in: toArchive } },
         data: {
           archivedReason: 'low_importance',
           searchable: false,
@@ -134,13 +158,20 @@ export class DreamCycleArchivalStage {
         },
       });
 
+      archived = updated.count;
+      // updateMany returns no identities. Do not claim per-layer counts when
+      // concurrent pin/access changes prevented some writes.
+      if (archived !== toArchive.length) {
+        for (const key of Object.keys(byLayer)) delete byLayer[key];
+        for (const key of Object.keys(byType)) delete byType[key];
+      }
       this.logger.log(
-        `Archived ${toArchive.length} memories for user ${userId}: ${JSON.stringify({ byLayer, byType })}`,
+        `Archived ${archived} memories for user ${userId}: ${JSON.stringify({ byLayer, byType })}`,
       );
     }
 
     const result: ArchivalStageResult = {
-      archived: toArchive.length,
+      archived,
       skippedProtectedLayer,
       skippedRecentlyRetrieved,
       skippedFrequentlyUsed,

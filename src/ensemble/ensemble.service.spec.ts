@@ -1194,7 +1194,7 @@ describe('PgVectorEnsembleProvider', () => {
       await provider.upsertEmbedding({
         memoryId: 'mem-1',
         modelId: 'bge-base',
-        embedding: [0.1, 0.2, 0.3],
+        embedding: Array(768).fill(0.1),
         dimensions: 768,
       });
 
@@ -1216,7 +1216,7 @@ describe('PgVectorEnsembleProvider', () => {
       const results = await provider.queryByModel({
         userId: 'user-1',
         modelId: 'bge-base',
-        embedding: [0.1, 0.2, 0.3],
+        embedding: Array(768).fill(0.1),
         limit: 10,
       });
 

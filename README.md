@@ -227,46 +227,11 @@ pnpm longmemeval --subset full --resume results/full-<ts>.jsonl       # Resume a
 
 ## Recall Benchmark
 
-Engram includes a comprehensive recall benchmark suite that tests semantic retrieval quality across 81 queries in 7 categories. Every PR runs the benchmark in CI with real embeddings (bge-base-en-v1.5) and ensemble reranking.
+The recall suite exercises 81 fixture queries in seven categories. Metric version 2 reports **required-item coverage@5** on the 57 queries with top-five labels, **expected-item coverage@20** on the ten queries with top-20 labels, and reciprocal rank of the first required hit. Missing labels are excluded, not scored as perfect. An empty expected list is not an explicit no-answer judgment.
 
-### Latest Results (March 2026)
+The previous published 95.1%/96.9% “precision” and associated recall/MRR tables used a different, inflated scoring definition. Those historical numbers are withdrawn as precision claims and must not be compared directly with version 2. Partial required-item labels do not establish conventional precision or exhaustive recall; fully judged held-out queries are still needed.
 
-| Metric | Pre-Dream Cycle | Post-Dream Cycle |
-|--------|:-:|:-:|
-| **Precision@5** | 95.1% ✅ | 96.9% ✅ |
-| **Recall@20** | 95.7% | 96.9% |
-| **MRR** | 0.836 | 0.874 |
-| **Isolation** | 100% ✅ | 100% ✅ |
-| **Queries Passed** | 78/81 | 79/81 |
-
-<details>
-<summary>Category Breakdown (Post-Dream Cycle)</summary>
-
-| Category | Queries | Passed | P@5 | R@20 | MRR | Isolation |
-|----------|:-------:|:------:|:---:|:----:|:---:|:---------:|
-| Adversarial | 10 | 10 | 100% | 100% | 1.00 | 100% |
-| Cross-feature | 10 | 10 | 100% | 100% | 0.88 | 100% |
-| Edge case | 16 | 16 | 100% | 100% | 0.95 | 100% |
-| Emotional | 10 | 9 | 85% | 95% | 0.73 | 100% |
-| RLS isolation | 10 | 10 | 100% | 100% | 0.88 | 100% |
-| Semantic | 14 | 13 | 93% | 100% | 0.79 | 100% |
-| Temporal | 11 | 11 | 100% | 82% | 0.87 | 100% |
-
-</details>
-
-### Benchmark Progression
-
-The recall pipeline evolved through several iterations:
-
-| Phase | P@5 | Notes |
-|-------|:---:|-------|
-| Baseline (cosine only) | ~45% | Single-model vector search, no reranking |
-| + BM25 hybrid | ~65% | Full-text search fusion for keyword recall |
-| + Sentiment polarity | ~75% | Penalizes opposite-emotion memories |
-| + Ensemble reranking | ~85% | 2 cross-encoder models via RRF |
-| + Fixture enrichment | ~90% | Realistic gold memories, noise calibration |
-| + Temporal patterns | 95.1% | Month/year/week recognition, expanded BM25 pool |
-| + Dream Cycle | **96.9%** | Post-consolidation: cleaner corpus, higher signal |
+The real-embedding suite always enforces the unchanged 95% required-coverage gate, forbidden-ID isolation, and any explicitly labelled no-answer cases. Reports include label denominators and a metric version. A passing forbidden-ID fixture does not prove production database-role isolation.
 
 ### Running the Benchmark
 

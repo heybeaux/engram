@@ -279,7 +279,7 @@ describe('ContextualRecallService', () => {
         sessionKey: 'sess-clear',
       } as any);
 
-      service.clearSession('sess-clear');
+      service.clearSession(userId, 'sess-clear');
 
       // Next recall should treat as first message (topic shift)
       embedding.search.mockResolvedValue([]);
