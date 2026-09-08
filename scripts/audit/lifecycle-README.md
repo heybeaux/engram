@@ -72,3 +72,18 @@ The archival fix intentionally makes age/low-importance automated hiding fail
 closed until validated information-preservation evidence exists. It preserves
 normal search eligibility and explicit user deletion semantics; storage/recall
 volume can grow. It does not recover already hidden historical sources.
+
+To isolate the archival change from nondeterministic formation, after the final
+run use the same snapshot comparison (requires that synthetic DB still exists):
+
+```sh
+node scripts/audit/compare-archival-snapshot.cjs \
+  /absolute/path/to/baseline-checkout /tmp/paired-archival.json
+```
+
+This loads baseline and candidate stage implementations and runs each in a real
+PostgreSQL transaction against identical state. A real consolidated SESSION
+source's summary is deliberately emptied of facts and the original unique
+receipt is aged. Both arms roll back all mutations. The expected result is that
+the old stage hides both sources and the guarded stage retains both. IDENTITY
+sources are excluded because they were already protected by the baseline.
