@@ -1,3 +1,4 @@
+import { flushAndDisconnectRedis } from '../queue/redis-shutdown';
 import {
   Injectable,
   Logger,
@@ -88,6 +89,7 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    const pending: Promise<unknown>[] = [];
     const runningJobs = Array.from(this.jobs.values()).filter(
       (j) => j.status === ReembeddingJobStatus.RUNNING,
     );
@@ -101,10 +103,10 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
         job.error =
           (job.error ? job.error + '; ' : '') +
           'Interrupted by server shutdown';
-        await this.persistJob(job).catch(() => {});
+        pending.push(this.persistJob(job));
       }
     }
-    this.redis?.disconnect();
+    await flushAndDisconnectRedis(this.redis, pending);
     this.redis = null;
   }
 

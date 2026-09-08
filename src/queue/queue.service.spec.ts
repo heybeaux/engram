@@ -86,13 +86,16 @@ describe('QueueService', () => {
     expect(status.errors).toHaveLength(2);
   });
 
-  it('should start with pending status', () => {
-    // Use a slow processor so we can catch pending/processing
-    const jobId = service.enqueue('test', ['a'], async () => {
-      await new Promise((r) => setTimeout(r, 500));
+  it('should start with pending status', async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
     });
+    const jobId = service.enqueue('test', ['a'], async () => pending);
 
     const status = service.getStatus(jobId)!;
     expect(['pending', 'processing']).toContain(status.status);
+    finish();
+    await pending;
   });
 });

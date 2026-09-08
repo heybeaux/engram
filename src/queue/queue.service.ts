@@ -1,3 +1,4 @@
+import { flushAndDisconnectRedis } from './redis-shutdown';
 import {
   Injectable,
   Logger,
@@ -51,6 +52,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    const pending: Promise<unknown>[] = [];
     // Mark running jobs as interrupted in Redis
     for (const job of this.jobs.values()) {
       if (job.status === 'pending' || job.status === 'processing') {
@@ -59,10 +61,10 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         job.error =
           (job.error ? job.error + '; ' : '') +
           'Interrupted by server shutdown';
-        await this.persistJob(job).catch(() => {});
+        pending.push(this.persistJob(job));
       }
     }
-    this.redis?.disconnect();
+    await flushAndDisconnectRedis(this.redis, pending);
     this.redis = null;
   }
 

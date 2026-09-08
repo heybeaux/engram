@@ -4,10 +4,13 @@ import { TransientEmbeddingError } from './embedding-validation.util';
 // Server-side admission control is still required across multiple processes.
 let active = 0;
 const waiting: Array<() => void> = [];
-const concurrency = Math.max(
-  1,
-  Number(process.env.LOCAL_EMBED_CONCURRENCY) || 1,
-);
+const configuredConcurrency = Number(process.env.LOCAL_EMBED_CONCURRENCY ?? 1);
+const concurrency =
+  Number.isInteger(configuredConcurrency) &&
+  configuredConcurrency >= 1 &&
+  configuredConcurrency <= 16
+    ? configuredConcurrency
+    : 1;
 const maxPending = 64;
 
 export async function withLocalEmbeddingSlot<T>(

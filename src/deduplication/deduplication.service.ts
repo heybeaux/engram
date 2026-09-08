@@ -1,3 +1,4 @@
+import { flushAndDisconnectRedis } from '../queue/redis-shutdown';
 import {
   Injectable,
   Optional,
@@ -132,6 +133,7 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    const pending: Promise<unknown>[] = [];
     const runningJobs = Array.from(this.jobs.values()).filter(
       (j) => j.status === BatchJobStatus.RUNNING,
     );
@@ -143,10 +145,10 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
         job.status = BatchJobStatus.FAILED;
         job.completedAt = new Date();
         job.errors.push('Interrupted by server shutdown');
-        await this.persistJob(job).catch(() => {});
+        pending.push(this.persistJob(job));
       }
     }
-    this.redis?.disconnect();
+    await flushAndDisconnectRedis(this.redis, pending);
     this.redis = null;
   }
 

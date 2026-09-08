@@ -1,3 +1,4 @@
+import { withLocalEmbeddingSlot } from '../embedding/local-embedding-limiter';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -102,8 +103,13 @@ export class EntitySemanticService {
    * Call the local embedding server to embed a single text.
    */
   async embed(text: string): Promise<number[]> {
+    return withLocalEmbeddingSlot(() => this.embedAdmitted(text));
+  }
+
+  private async embedAdmitted(text: string): Promise<number[]> {
     const response = await fetch(`${this.embedUrl}/v1/embeddings`, {
       method: 'POST',
+      signal: AbortSignal.timeout(30_000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         input: text,
