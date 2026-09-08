@@ -177,6 +177,13 @@ export class MemoryWriteService {
         createdBySession: dto.agentSessionKey ?? undefined,
         visibility: (dto.visibility ?? 'PRIVATE') as any,
         contentHash,
+        // Classification is synchronous: persist with the original transaction.
+        ...(this.durabilityClassifier
+          ? {
+              durability: this.durabilityClassifier.classify(rawContent),
+              durabilityClassifiedAt: new Date(),
+            }
+          : {}),
         tags: dto.tags ?? [],
         observedAt: temporal.observedAt,
         temporalAnchorSource: temporal.temporalAnchorSource,
@@ -274,25 +281,6 @@ export class MemoryWriteService {
         rawContent.substring(0, 200),
       ),
     );
-
-    // 10b. ENG-31: Classify durability (fire-and-forget, non-blocking)
-    if (this.durabilityClassifier) {
-      const classifier = this.durabilityClassifier;
-      setImmediate(() => {
-        const durability = classifier.classify(rawContent);
-        this.prisma.memory
-          .update({
-            where: { id: memory.id },
-            data: { durability, durabilityClassifiedAt: new Date() },
-          })
-          .catch((err) =>
-            this.logger.error(
-              `[Memory] Durability classification failed for ${memory.id}:`,
-              err,
-            ),
-          );
-      });
-    }
 
     // 11. Check for contradictions
     if (this.correctionService) {

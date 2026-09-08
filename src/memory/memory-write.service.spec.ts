@@ -129,6 +129,27 @@ describe('MemoryWriteService', () => {
   });
 
   describe('remember', () => {
+    it('persists deterministic durability in the create transaction without a deferred update', async () => {
+      (service as any).durabilityClassifier = {
+        classify: jest.fn().mockReturnValue('DURABLE'),
+      };
+      mockPrisma.memory.create.mockResolvedValue(mockMemory);
+      mockPrisma.memory.update = jest
+        .fn()
+        .mockRejectedValue(new Error('P2028: transaction committed'));
+      await service.remember('user-456', {
+        raw: 'I always prefer tea with breakfast.',
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(mockPrisma.memory.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          durability: 'DURABLE',
+          durabilityClassifiedAt: expect.any(Date),
+        }),
+      });
+      expect(mockPrisma.memory.update).not.toHaveBeenCalled();
+    });
+
     it('should create a memory with calculated importance', async () => {
       mockImportance.calculate.mockReturnValue(0.6);
       mockPrisma.memory.create.mockResolvedValue(mockMemory);

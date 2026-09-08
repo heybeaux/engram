@@ -169,28 +169,34 @@ export class RerankService {
     query: string,
     texts: string[],
   ): Promise<RerankResult[]> {
-    const response = await Promise.race([
-      fetch(`${url}/rerank`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, texts, raw_scores: false }),
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`Rerank request to ${url} timed out`)),
-          this.timeoutMs,
-        ),
-      ),
-    ]);
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(
-        `Rerank API error from ${url}: ${response.status} - ${error}`,
-      );
+    const controller = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        (async () => {
+          const response = await fetch(`${url}/rerank`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, texts, raw_scores: false }),
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            throw new Error(
+              `Rerank API error from ${url}: ${response.status} - ${await response.text()}`,
+            );
+          }
+          return (await response.json()) as RerankResult[];
+        })(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            controller.abort();
+            reject(new Error(`Rerank request to ${url} timed out`));
+          }, this.timeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return response.json() as Promise<RerankResult[]>;
   }
 
   /**
@@ -203,12 +209,15 @@ export class RerankService {
       this.rerankUrls.map(async (url) => {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
-        const response = await fetch(`${url}/health`, {
-          method: 'GET',
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        return response.ok;
+        try {
+          const response = await fetch(`${url}/health`, {
+            method: 'GET',
+            signal: controller.signal,
+          });
+          return response.ok;
+        } finally {
+          clearTimeout(timeout);
+        }
       }),
     );
 

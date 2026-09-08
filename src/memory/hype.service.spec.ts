@@ -129,15 +129,7 @@ describe('HypeService', () => {
     });
 
     it('should return [] on timeout', async () => {
-      mockLlmService.chat.mockImplementation(
-        () =>
-          new Promise((resolve) =>
-            setTimeout(
-              () => resolve({ content: '["question"]', model: 'test' }),
-              6000,
-            ),
-          ),
-      );
+      mockLlmService.chat.mockImplementation(() => new Promise(() => {}));
 
       const result = await service.generateHypotheticals('some content');
 
