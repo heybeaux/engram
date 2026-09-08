@@ -47,7 +47,7 @@ describe('DreamCycleArchivalStage', () => {
     });
   });
 
-  it('should archive low importance + old + unretrieved memory', async () => {
+  it('should preserve low importance + old + unretrieved memory', async () => {
     prisma.memory.findMany.mockResolvedValue([
       {
         id: 'm1',
@@ -59,22 +59,11 @@ describe('DreamCycleArchivalStage', () => {
     ]);
 
     const result = await stage.run('user1', false);
-    expect(result.archived).toBe(1);
-    expect(result.byLayer).toEqual({ SESSION: 1 });
-    expect(result.byType).toEqual({ EVENT: 1 });
-    expect(prisma.memory.updateMany).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        id: { in: ['m1'] },
-        userId: 'user1',
-        userPinned: false,
-        createdAt: { lt: expect.any(Date) },
-      }),
-      data: {
-        archivedReason: 'low_importance',
-        searchable: false,
-        lastDreamCycleAt: expect.any(Date),
-      },
-    });
+    expect(result.archived).toBe(0);
+    expect(result.skippedUnverifiedPreservation).toBeGreaterThan(0);
+    expect(result.byLayer).toEqual({});
+    expect(result.byType).toEqual({});
+    expect(prisma.memory.updateMany).not.toHaveBeenCalled();
   });
 
   it('should never archive IDENTITY layer memories', async () => {
@@ -146,7 +135,7 @@ describe('DreamCycleArchivalStage', () => {
     expect(prisma.memory.updateMany).not.toHaveBeenCalled();
   });
 
-  it('should archive memory with usedCount exactly 5', async () => {
+  it('should preserve memory with usedCount exactly 5', async () => {
     prisma.memory.findMany.mockResolvedValue([
       {
         id: 'm1',
@@ -158,7 +147,8 @@ describe('DreamCycleArchivalStage', () => {
     ]);
 
     const result = await stage.run('user1', false);
-    expect(result.archived).toBe(1);
+    expect(result.archived).toBe(0);
+    expect(result.skippedUnverifiedPreservation).toBeGreaterThan(0);
   });
 
   it('should not archive memory retrieved 29 days ago (within window)', async () => {
@@ -178,7 +168,7 @@ describe('DreamCycleArchivalStage', () => {
     expect(result.archived).toBe(0);
   });
 
-  it('should archive memory retrieved 31 days ago', async () => {
+  it('should preserve memory retrieved 31 days ago', async () => {
     const now = new Date();
     prisma.memory.findMany.mockResolvedValue([
       {
@@ -191,8 +181,9 @@ describe('DreamCycleArchivalStage', () => {
     ]);
 
     const result = await stage.run('user1', false);
-    expect(result.archived).toBe(1);
-    expect(result.byLayer).toEqual({ TASK: 1 });
+    expect(result.archived).toBe(0);
+    expect(result.skippedUnverifiedPreservation).toBeGreaterThan(0);
+    expect(result.byLayer).toEqual({});
   });
 
   it('should not update in dryRun mode', async () => {
@@ -207,11 +198,12 @@ describe('DreamCycleArchivalStage', () => {
     ]);
 
     const result = await stage.run('user1', true);
-    expect(result.archived).toBe(1);
+    expect(result.archived).toBe(0);
+    expect(result.skippedUnverifiedPreservation).toBeGreaterThan(0);
     expect(prisma.memory.updateMany).not.toHaveBeenCalled();
   });
 
-  it('should count stats by layer and type for multiple memories', async () => {
+  it('should report skipped preservation checks without claiming archival stats', async () => {
     prisma.memory.findMany.mockResolvedValue([
       {
         id: 'm1',
@@ -237,9 +229,10 @@ describe('DreamCycleArchivalStage', () => {
     ]);
 
     const result = await stage.run('user1', false);
-    expect(result.archived).toBe(3);
-    expect(result.byLayer).toEqual({ SESSION: 2, TASK: 1 });
-    expect(result.byType).toEqual({ EVENT: 2, FACT: 1 });
+    expect(result.archived).toBe(0);
+    expect(result.skippedUnverifiedPreservation).toBeGreaterThan(0);
+    expect(result.byLayer).toEqual({});
+    expect(result.byType).toEqual({});
   });
 
   it('should handle mixed archivable and protected memories', async () => {
@@ -276,18 +269,26 @@ describe('DreamCycleArchivalStage', () => {
     ]);
 
     const result = await stage.run('user1', false);
-    expect(result.archived).toBe(1);
+    expect(result.archived).toBe(0);
+    expect(result.skippedUnverifiedPreservation).toBeGreaterThan(0);
     expect(result.skippedProtectedLayer).toBe(1);
     expect(result.skippedRecentlyRetrieved).toBe(1);
     expect(result.skippedFrequentlyUsed).toBe(1);
-    expect(prisma.memory.updateMany).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        id: { in: ['m1'] },
-        userId: 'user1',
-        userPinned: false,
-        createdAt: { lt: expect.any(Date) },
-      }),
-      data: expect.objectContaining({ archivedReason: 'low_importance' }),
-    });
+    expect(prisma.memory.updateMany).not.toHaveBeenCalled();
   });
+  it.each([null, 'summary-that-omits-code'])(
+    'preserves a unique fact with consolidation link %s',
+    async (consolidatedInto) => {
+      prisma.memory.findMany.mockResolvedValue([{
+        id: 'unique-code-source', layer: 'SESSION', memoryType: 'FACT',
+        lastRetrievedAt: null, usedCount: 0, consolidatedInto,
+        raw: 'The maintenance override code is 9624.',
+      }]);
+      const result = await stage.run('user1', false);
+      expect(result.archived).toBe(0);
+      expect(result.skippedUnverifiedPreservation).toBe(1);
+      expect(prisma.memory.updateMany).not.toHaveBeenCalled();
+    },
+  );
+
 });

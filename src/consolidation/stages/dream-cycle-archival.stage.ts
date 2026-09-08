@@ -5,6 +5,7 @@ import { ServicePrismaService } from '../../prisma/service-prisma.service';
 
 export interface ArchivalStageResult {
   archived: number;
+  skippedUnverifiedPreservation?: number;
   skippedProtectedLayer: number;
   skippedRecentlyRetrieved: number;
   skippedFrequentlyUsed: number;
@@ -111,12 +112,10 @@ export class DreamCycleArchivalStage {
       `Found ${candidates.length} low-importance candidates for archival`,
     );
 
-    const toArchive: string[] = [];
     let skippedProtectedLayer = 0;
     let skippedRecentlyRetrieved = 0;
     let skippedFrequentlyUsed = 0;
-    const byLayer: Record<string, number> = {};
-    const byType: Record<string, number> = {};
+    let skippedUnverifiedPreservation = 0;
 
     for (const memory of candidates) {
       // Safety rail: never archive IDENTITY or PROJECT layer
@@ -140,46 +139,22 @@ export class DreamCycleArchivalStage {
         continue;
       }
 
-      toArchive.push(memory.id);
-      const layer = memory.layer ?? 'UNKNOWN';
-      byLayer[layer] = (byLayer[layer] ?? 0) + 1;
-      const type = memory.memoryType ?? 'UNKNOWN';
-      byType[type] = (byType[type] ?? 0) + 1;
-    }
-
-    let archived = toArchive.length;
-    if (toArchive.length > 0 && !dryRun) {
-      const updated = await this.prisma.memory.updateMany({
-        where: { ...eligibility, id: { in: toArchive } },
-        data: {
-          archivedReason: 'low_importance',
-          searchable: false,
-          lastDreamCycleAt: new Date(),
-        },
-      });
-
-      archived = updated.count;
-      // updateMany returns no identities. Do not claim per-layer counts when
-      // concurrent pin/access changes prevented some writes.
-      if (archived !== toArchive.length) {
-        for (const key of Object.keys(byLayer)) delete byLayer[key];
-        for (const key of Object.keys(byType)) delete byType[key];
-      }
-      this.logger.log(
-        `Archived ${archived} memories for user ${userId}: ${JSON.stringify({ byLayer, byType })}`,
-      );
+      // Age, importance, similarity and a consolidation link cannot establish
+      // that every unique fact survives elsewhere. Until a persisted semantic
+      // preservation verifier exists, automated archival must fail closed.
+      skippedUnverifiedPreservation++;
     }
 
     const result: ArchivalStageResult = {
-      archived,
+      archived: 0,
+      skippedUnverifiedPreservation,
       skippedProtectedLayer,
       skippedRecentlyRetrieved,
       skippedFrequentlyUsed,
-      byLayer,
-      byType,
+      byLayer: {},
+      byType: {},
     };
-
-    this.logger.log(`Archival stage complete: ${JSON.stringify(result)}`);
+    this.logger.log(`Archival stage preserved search eligibility: ${JSON.stringify(result)}`);
     return result;
   }
 }
