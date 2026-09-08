@@ -1,3 +1,4 @@
+import { withLocalEmbeddingSlot } from '../embedding/local-embedding-limiter';
 /**
  * Ensemble Service
  *
@@ -247,6 +248,15 @@ export class EnsembleService implements OnModuleInit {
     mode: 'document' | 'query' = 'document',
     userId?: string,
   ): Promise<MultiEmbedResponse> {
+    const work = () => this.embedAllAdmitted(text, mode, userId);
+    return this.useCloud ? work() : withLocalEmbeddingSlot(work);
+  }
+
+  private async embedAllAdmitted(
+    text: string,
+    mode: 'document' | 'query' = 'document',
+    userId?: string,
+  ): Promise<MultiEmbedResponse> {
     // Route to cloud providers if active (with plan limits)
     if (this.useCloud) {
       const modelCount = await this.getEnsembleModelCount(userId);
@@ -269,6 +279,7 @@ export class EnsembleService implements OnModuleInit {
         `${this.config.localEmbedUrl}/v1/embeddings`,
         {
           method: 'POST',
+          signal: AbortSignal.timeout(30_000),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             input: text,
@@ -328,6 +339,14 @@ export class EnsembleService implements OnModuleInit {
    * requests, embedAll() still uses the local embed server directly.
    */
   async embed(text: string, model: ModelId): Promise<EmbeddingResult> {
+    const work = () => this.embedAdmitted(text, model);
+    return this.useCloud ? work() : withLocalEmbeddingSlot(work);
+  }
+
+  private async embedAdmitted(
+    text: string,
+    model: ModelId,
+  ): Promise<EmbeddingResult> {
     const start = Date.now();
 
     // Use cloud provider if available for this model
@@ -351,6 +370,7 @@ export class EnsembleService implements OnModuleInit {
     // Use local embed server directly for model-specific requests
     const response = await fetch(`${this.config.localEmbedUrl}/v1/embeddings`, {
       method: 'POST',
+      signal: AbortSignal.timeout(30_000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         input: text,
@@ -644,6 +664,14 @@ export class EnsembleService implements OnModuleInit {
     texts: string[],
     models: ModelId[],
   ): Promise<MultiEmbedResponse> {
+    const work = () => this.embedBatchAdmitted(texts, models);
+    return this.useCloud ? work() : withLocalEmbeddingSlot(work);
+  }
+
+  private async embedBatchAdmitted(
+    texts: string[],
+    models: ModelId[],
+  ): Promise<MultiEmbedResponse> {
     // Route to cloud providers if active
     if (this.useCloud) {
       const result = await this.cloudEnsemble.embedBatch(texts, models);
@@ -660,6 +688,7 @@ export class EnsembleService implements OnModuleInit {
         `${this.config.localEmbedUrl}/v1/embeddings`,
         {
           method: 'POST',
+          signal: AbortSignal.timeout(30_000),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             input: texts,
