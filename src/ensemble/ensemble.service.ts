@@ -340,7 +340,9 @@ export class EnsembleService implements OnModuleInit {
    */
   async embed(text: string, model: ModelId): Promise<EmbeddingResult> {
     const work = () => this.embedAdmitted(text, model);
-    return this.useCloud ? work() : withLocalEmbeddingSlot(work);
+    return this.useCloud && this.cloudEnsemble.getProvider(model)
+      ? work()
+      : withLocalEmbeddingSlot(work);
   }
 
   private async embedAdmitted(

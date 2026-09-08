@@ -121,6 +121,7 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `[DeduplicationService] Redis connect failed, falling back to in-memory: ${err.message}`,
         );
+        this.redis?.disconnect();
         this.redis = null;
       });
     }
@@ -130,7 +131,7 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
     await this.restoreAndRecoverJobs();
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     const runningJobs = Array.from(this.jobs.values()).filter(
       (j) => j.status === BatchJobStatus.RUNNING,
     );
@@ -142,9 +143,11 @@ export class DeduplicationService implements OnModuleInit, OnModuleDestroy {
         job.status = BatchJobStatus.FAILED;
         job.completedAt = new Date();
         job.errors.push('Interrupted by server shutdown');
-        this.persistJob(job).catch(() => {});
+        await this.persistJob(job).catch(() => {});
       }
     }
+    this.redis?.disconnect();
+    this.redis = null;
   }
 
   /**

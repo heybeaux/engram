@@ -161,12 +161,19 @@ export class LocalEmbedProvider implements EmbeddingProvider {
         signal: controller.signal,
       }).catch(() =>
         withLocalEmbeddingSlot(() =>
-          fetch(`${this.baseUrl}/v1/embeddings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ input: 'health check', model: this.model }),
-            signal: controller.signal,
-          }),
+          (async () => {
+            const fallback = await fetch(`${this.baseUrl}/v1/embeddings`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                input: 'health check',
+                model: this.model,
+              }),
+              signal: controller.signal,
+            });
+            await fallback.body?.cancel();
+            return fallback;
+          })(),
         ),
       );
 

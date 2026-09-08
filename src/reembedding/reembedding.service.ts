@@ -77,6 +77,7 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `[ReembeddingService] Redis connect failed, falling back to in-memory: ${err.message}`,
         );
+        this.redis?.disconnect();
         this.redis = null;
       });
     }
@@ -86,7 +87,7 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
     await this.restoreAndRecoverJobs();
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     const runningJobs = Array.from(this.jobs.values()).filter(
       (j) => j.status === ReembeddingJobStatus.RUNNING,
     );
@@ -100,9 +101,11 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
         job.error =
           (job.error ? job.error + '; ' : '') +
           'Interrupted by server shutdown';
-        this.persistJob(job).catch(() => {});
+        await this.persistJob(job).catch(() => {});
       }
     }
+    this.redis?.disconnect();
+    this.redis = null;
   }
 
   /**

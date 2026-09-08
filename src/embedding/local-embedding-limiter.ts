@@ -17,7 +17,20 @@ export async function withLocalEmbeddingSlot<T>(
     if (waiting.length >= maxPending) {
       throw new TransientEmbeddingError('Local embedding admission queue full');
     }
-    await new Promise<void>((resolve) => waiting.push(resolve));
+    await new Promise<void>((resolve, reject) => {
+      const admit = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        const index = waiting.indexOf(admit);
+        if (index >= 0) waiting.splice(index, 1);
+        reject(
+          new TransientEmbeddingError('Local embedding admission timed out'),
+        );
+      }, 5_000);
+      waiting.push(admit);
+    });
   } else {
     active++;
   }

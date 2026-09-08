@@ -40,6 +40,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `[QueueService] Redis connect failed, falling back to in-memory: ${err.message}`,
         );
+        this.redis?.disconnect();
         this.redis = null;
       });
     }
@@ -49,7 +50,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
     await this.restoreAndRecoverJobs();
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     // Mark running jobs as interrupted in Redis
     for (const job of this.jobs.values()) {
       if (job.status === 'pending' || job.status === 'processing') {
@@ -58,9 +59,11 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
         job.error =
           (job.error ? job.error + '; ' : '') +
           'Interrupted by server shutdown';
-        this.persistJob(job).catch(() => {});
+        await this.persistJob(job).catch(() => {});
       }
     }
+    this.redis?.disconnect();
+    this.redis = null;
   }
 
   enqueue(
