@@ -31,7 +31,7 @@ Module._resolveFilename = function(spec, parent, ...rest) {
 const { createTestApp } = require(path.join(repo, 'test/helpers/create-test-app.ts'));
 const { DreamCycleConsolidationStage } = require(path.join(repo, 'src/consolidation/stages/dream-cycle-consolidation.stage.ts'));
 const { DreamCycleArchivalStage } = require(path.join(repo, 'src/consolidation/stages/dream-cycle-archival.stage.ts'));
-const corpus = require('./lifecycle-corpus.json');
+const corpus = require(process.env.LIFECYCLE_CORPUS || './lifecycle-corpus.json');
 assert.equal(new Set(corpus.memories.map(([id])=>id)).size, corpus.memories.length);
 assert.ok(corpus.queries.every(q=>q.relevant.every(id=>corpus.memories.some(([label])=>label===id))));
 const request = require('supertest');
@@ -83,9 +83,26 @@ const save = () => fs.writeFileSync(output, JSON.stringify(report, null, 2));
   report.dream = await app.get(DreamCycleConsolidationStage).run(userId,false); save();
   await snapshot('consolidated');
   report.summaries=report.stages.consolidated.rows.filter(r=>r.source==='DREAM_CYCLE');
+  if (process.env.LIFECYCLE_OMISSION_CONTROL === '1') {
+   const source=await prisma.memory.findFirst({where:{userId,consolidatedInto:{not:null},searchable:true}});
+   if (!source) { report.omissionControl={executed:false,reason:'No actually consolidated source'}; }
+   else {
+    // Separate causal diagnostic, never counted as semantic retrieval scoring:
+    // deliberately remove all source facts from the actual linked summary.
+    await prisma.memory.update({where:{id:source.consolidatedInto},data:{raw:'Deliberately incomplete diagnostic summary: source details omitted.'}});
+    await prisma.memory.update({where:{id:source.id},data:{importanceScore:0.01,lastRetrievedAt:null,lastUsedAt:null,usedCount:0,createdAt:new Date(Date.now()-100*86400000)}});
+    const result=await app.get(DreamCycleArchivalStage).run(userId,false);
+    const after=await prisma.memory.findUnique({where:{id:source.id}});
+    report.omissionControl={executed:true,sourceId:source.id,summaryId:source.consolidatedInto,sourceRaw:source.raw,result,searchableAfter:after.searchable,sourceRawUnchanged:after.raw===source.raw};
+    // Restore summary text before normal archival/retrieval scoring; embeddings unchanged.
+    const summary=report.summaries.find(r=>r.id===source.consolidatedInto);
+    await prisma.memory.update({where:{id:summary.id},data:{raw:summary.raw}});
+   }
+   save();
+  }
   // Explicit future-lifecycle scenario: emulate 100-day age and no recent use.
   await prisma.memory.updateMany({where:{id:{in:corpus.memories.filter(([id])=>id.startsWith('archive_')).map(([id])=>ids[id])}},data:{importanceScore:0.01,lastRetrievedAt:null,lastUsedAt:null,usedCount:0,createdAt:new Date(Date.now()-100*86400000)}});
   report.archival = await app.get(DreamCycleArchivalStage).run(userId,false); save();
   await snapshot('archived');
- } finally { await app.close(); report.appCloseReturned=true; save(); }
+ } finally { await app.close(); report.appCloseReturned=true; report.activeResourcesAfterClose=process.getActiveResourcesInfo(); save(); }
 })().catch(e=>{report.error=String(e.stack||e);save();console.error(e);process.exitCode=1});

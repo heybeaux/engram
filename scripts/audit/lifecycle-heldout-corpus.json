@@ -1,0 +1,197 @@
+{
+  "version": 2,
+  "memories": [
+    [
+      "harbor_original",
+      "According to operations bulletin V-61 dated 2026-07-09, the Alderwing valley tram departs at 06:25 and costs 23 CAD."
+    ],
+    [
+      "harbor_correction",
+      "Correction in operations bulletin V-62 dated 2026-07-12: the Alderwing valley tram departs at 09:35, not 06:25; the fare remains 23 CAD."
+    ],
+    [
+      "harbor_exception",
+      "The Alderwing valley tram departs at 09:35 and costs 23 CAD, except on statutory holidays when there is no service; operations bulletin V-63."
+    ],
+    [
+      "harbor_added",
+      "The Alderwing valley tram departs at 09:35 and costs 23 CAD; bicycles require a reservation 36 hours ahead, according to operations bulletin V-64."
+    ],
+    [
+      "orchid_a",
+      "Saffron sensor calibration record S-71: use buffer pH 7.2 at 19 Celsius; technician Inez measured drift of 0.03."
+    ],
+    [
+      "orchid_b",
+      "Saffron sensor calibration record S-72: use buffer pH 7.2 at 19 Celsius; technician Ravi measured drift of 0.11, disagreeing with Inez's 0.03."
+    ],
+    [
+      "orchid_c",
+      "Saffron sensor calibration record S-73: use buffer pH 7.2 at 19 Celsius; do not recalibrate during rain, and retain both Inez and Ravi measurements."
+    ],
+    [
+      "archive_a",
+      "Cedar locker access note C-81: the inspection code is 8526 and inspection closes on 2026-12-18."
+    ],
+    [
+      "archive_b",
+      "Cedar locker access note C-82: the inspection code is 8526 and inspection requires two witnesses, except emergency repairs."
+    ],
+    [
+      "archive_c",
+      "Cedar locker access note C-83: the inspection code is 8526 and caretaker Esme holds the brass key."
+    ],
+    [
+      "noise_a",
+      "The Alderwing restaurant serves harbor chowder for 23 CAD; dinner reservations open at 09:35."
+    ],
+    [
+      "noise_b",
+      "The Saffron theatre's opening performance starts at 22:00. Ravi booked seat 68."
+    ],
+    [
+      "noise_c",
+      "Cedar paint costs 73.19 CAD and comes in brass and rain grey colours."
+    ]
+  ],
+  "queries": [
+    {
+      "id": "correction",
+      "query": "What is the corrected departure time of the Alderwing valley tram?",
+      "relevant": [
+        "harbor_correction",
+        "harbor_exception",
+        "harbor_added"
+      ],
+      "facts": [
+        "09:35"
+      ]
+    },
+    {
+      "id": "date_provenance",
+      "query": "Which operations bulletin corrected the Alderwing valley tram time and on what date?",
+      "relevant": [
+        "harbor_correction"
+      ],
+      "facts": [
+        "V-62",
+        "2026-07-12"
+      ]
+    },
+    {
+      "id": "exception",
+      "query": "Does the Alderwing valley tram run on statutory holidays?",
+      "relevant": [
+        "harbor_exception"
+      ],
+      "facts": [
+        "statutory holidays",
+        "no service"
+      ]
+    },
+    {
+      "id": "added_fact",
+      "query": "How far ahead do bicycles need reservations on the Alderwing valley tram?",
+      "relevant": [
+        "harbor_added"
+      ],
+      "facts": [
+        "36 hours"
+      ]
+    },
+    {
+      "id": "conflict",
+      "query": "What conflicting drift measurements did Inez and Ravi record for the Saffron sensor?",
+      "relevant": [
+        "orchid_a",
+        "orchid_b"
+      ],
+      "facts": [
+        "Inez",
+        "Ravi",
+        "0.03",
+        "0.11"
+      ]
+    },
+    {
+      "id": "rain_exception",
+      "query": "When should the Saffron sensor not be recalibrated?",
+      "relevant": [
+        "orchid_c"
+      ],
+      "facts": [
+        "rain"
+      ]
+    },
+    {
+      "id": "numeric",
+      "query": "What buffer pH and temperature does Saffron sensor calibration use?",
+      "relevant": [
+        "orchid_a",
+        "orchid_b",
+        "orchid_c"
+      ],
+      "facts": [
+        "7.2",
+        "19"
+      ]
+    },
+    {
+      "id": "archive_date",
+      "query": "What is the Cedar locker inspection code and closing date?",
+      "relevant": [
+        "archive_a"
+      ],
+      "facts": [
+        "8526",
+        "2026-12-18"
+      ]
+    },
+    {
+      "id": "archive_exception",
+      "query": "When is the two-witness rule waived for Cedar locker inspection?",
+      "relevant": [
+        "archive_b"
+      ],
+      "facts": [
+        "two witnesses",
+        "emergency repairs"
+      ]
+    },
+    {
+      "id": "provenance",
+      "query": "Who holds the Cedar locker brass key?",
+      "relevant": [
+        "archive_c"
+      ],
+      "facts": [
+        "Esme"
+      ]
+    },
+    {
+      "id": "no_answer_near",
+      "query": "What is the Alderwing valley tram captain's phone number?",
+      "relevant": [],
+      "facts": []
+    },
+    {
+      "id": "no_answer_far",
+      "query": "What is the diameter of planet Orionis's largest moon?",
+      "relevant": [],
+      "facts": []
+    },
+    {
+      "id": "no_answer_same_entity",
+      "query": "Who manufactured the Saffron sensor?",
+      "relevant": [],
+      "facts": []
+    },
+    {
+      "id": "no_answer_false_premise",
+      "query": "Which operations bulletin authorizes Alderwing valley tram service on statutory holidays?",
+      "relevant": [],
+      "facts": []
+    }
+  ],
+  "provenance": "Fresh synthetic entity/value variant frozen before first run 2026-09-08; same scenario templates as diagnostic v1, not an independent distribution."
+}
