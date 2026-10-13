@@ -63,6 +63,12 @@ export interface MemoryWithExtraction extends Memory {
 
 export interface MemoryWithScore extends MemoryWithExtraction {
   score?: number;
+  /**
+   * Raw cosine similarity from the vector search, preserved after `score` is
+   * replaced by a rescue prior or reranker blend. Set only when
+   * RECALL_DETERMINISTIC_RANKING=true (first tie-break key in compareByRankKeys).
+   */
+  vectorScore?: number;
   /** Present when this memory was surfaced by the Anticipatory Recall Engine. */
   recallSource?: 'standard' | 'anticipatory' | 'graph';
   /** Anticipatory metadata (strategy, reason, salience). Only present when recallSource='anticipatory'. */

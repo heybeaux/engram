@@ -42,6 +42,16 @@ import { RecallWeightService } from './recall-weight.service';
 import { MemoryQueryRankingService } from './memory-query-ranking.service';
 import { MemoryQueryContextService } from './memory-query-context.service';
 import { MemoryFailureService } from './memory-failure.service';
+import {
+  isDeterministicRankingEnabled,
+  recallRankComparator,
+  rescueSqlTiebreak,
+} from './memory-ranking.util';
+import {
+  CLUSTER_SCAN_DEPTH,
+  nearDuplicateClusterLimit,
+  selectNearDuplicateDiverse,
+} from './memory-diversity.util';
 
 @Injectable()
 export class MemoryQueryService {
@@ -354,7 +364,7 @@ export class MemoryQueryService {
             this.rankingService.getImportanceMultiplier(memory);
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .sort(recallRankComparator())
         .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
     } else {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
@@ -372,6 +382,7 @@ export class MemoryQueryService {
       );
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
+      const cosineMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       const memoryIds = vectorResults.map((r) => r.id);
       const keywordRescueIds = new Set<string>();
 
@@ -400,7 +411,7 @@ export class MemoryQueryService {
                  AND m.searchable IS NOT FALSE
                  AND m.embedding_status != 'DUPLICATE'
                  AND m.is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC
+               ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak('m.id')}
                LIMIT 100`,
               poolIds,
               searchQuery,
@@ -415,7 +426,7 @@ export class MemoryQueryService {
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
+               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak()}
                LIMIT 100`,
                 resolvedUserIds,
                 searchQuery,
@@ -428,7 +439,7 @@ export class MemoryQueryService {
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
+               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC${rescueSqlTiebreak()}
                LIMIT 100`,
                 searchQuery,
               );
@@ -483,7 +494,7 @@ export class MemoryQueryService {
                      AND m.searchable IS NOT FALSE
                      AND m.embedding_status != 'DUPLICATE'
                      AND m.is_duplicate_of IS NULL
-                   ORDER BY m.importance_score DESC, m.created_at DESC
+                   ORDER BY m.importance_score DESC, m.created_at DESC${rescueSqlTiebreak('m.id')}
                    LIMIT 20`,
                   poolIds,
                   ...ilikeParams,
@@ -498,7 +509,7 @@ export class MemoryQueryService {
                      AND searchable IS NOT FALSE
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
-                   ORDER BY importance_score DESC, created_at DESC
+                   ORDER BY importance_score DESC, created_at DESC${rescueSqlTiebreak()}
                    LIMIT 20`,
                     resolvedUserIds,
                     ...ilikeParams,
@@ -511,7 +522,7 @@ export class MemoryQueryService {
                      AND searchable IS NOT FALSE
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
-                   ORDER BY importance_score DESC, created_at DESC
+                   ORDER BY importance_score DESC, created_at DESC${rescueSqlTiebreak()}
                    LIMIT 20`,
                     ...ilikeParams,
                   );
@@ -561,7 +572,13 @@ export class MemoryQueryService {
                 ...sessionIdFilter,
                 ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
               },
-              orderBy: [{ importanceScore: 'desc' }, { createdAt: 'desc' }],
+              orderBy: [
+                { importanceScore: 'desc' },
+                { createdAt: 'desc' },
+                ...(isDeterministicRankingEnabled()
+                  ? [{ id: 'asc' } as const]
+                  : []),
+              ],
               take: 10,
               select: { id: true },
             });
@@ -609,16 +626,19 @@ export class MemoryQueryService {
         include: { extraction: true },
       });
 
+      const deterministic = isDeterministicRankingEnabled();
       const sorted = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
           return {
             ...memory,
             score: semanticScore,
+            // Raw cosine, kept through rerank as the first tie-break key.
+            ...(deterministic ? { vectorScore: cosineMap.get(memory.id) } : {}),
             __keywordRescued: keywordRescueIds.has(memory.id),
           } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        .sort(recallRankComparator());
 
       const RERANK_POOL = sorted.length;
 
@@ -702,11 +722,21 @@ export class MemoryQueryService {
 
     // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
     const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
+    // PR #327 (flag-gated): rerank a bounded deeper page, then cap each
+    // near-duplicate cluster so one repeated fact cannot fill the page.
+    const clusterLimit = nearDuplicateClusterLimit();
     scoredMemories = await this.rankingService.applyReranking(
       scoredMemories,
       rerankQuery,
-      limit,
+      clusterLimit ? Math.max(limit, CLUSTER_SCAN_DEPTH) : limit,
     );
+    if (clusterLimit) {
+      scoredMemories = selectNearDuplicateDiverse(
+        scoredMemories,
+        limit,
+        clusterLimit,
+      );
+    }
 
     // v1.7: Agent-scoped filter
     if (dto.filterAgentId) {
@@ -723,7 +753,7 @@ export class MemoryQueryService {
         }
         return m;
       });
-      scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      scoredMemories.sort(recallRankComparator());
     }
 
     let result: MemoryWithScore[] = this.filterRecallSurvivors(scoredMemories);
@@ -889,7 +919,7 @@ export class MemoryQueryService {
 
         return { ...memory, score: adjustedScore } as MemoryWithScore;
       })
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      .sort(recallRankComparator());
 
     // Apply the same post-processing chain as the standard path so multi-query
     // is not silently downgraded to cosine-only ranking (retrieval H4), then
