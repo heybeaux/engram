@@ -242,6 +242,33 @@ describe('ConversationObserverService', () => {
       );
     });
 
+    it('should use sessionId as the agent session key when explicit key is absent', async () => {
+      const extracted = [
+        {
+          content: 'A fact',
+          importance: 0.8,
+          signals: [],
+          source: { turnIndex: 0, role: MessageRole.USER },
+        },
+      ];
+      mockAutoExtractor.extract.mockResolvedValue(extracted);
+
+      await service.observe(userId, {
+        ...basicDto,
+        sessionId: 'openclaw-session-key',
+      });
+
+      expect(mockMemoryService.remember).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({
+          context: expect.objectContaining({
+            sessionId: 'openclaw-session-key',
+          }),
+          agentSessionKey: 'openclaw-session-key',
+        }),
+      );
+    });
+
     describe('with summarization enabled', () => {
       beforeEach(() => {
         mockSummarizationService.isEnabled = true;
@@ -267,6 +294,14 @@ describe('ConversationObserverService', () => {
 
         expect(result.created).toBe(1);
         expect(result.memories).toHaveLength(1);
+        expect(mockSummarizationService.addTurnsToBuffer).toHaveBeenCalledWith(
+          userId,
+          'session-1',
+          expect.any(Array),
+          expect.objectContaining({
+            agentSessionKey: 'session-1',
+          }),
+        );
         expect(mockAutoExtractor.extract).not.toHaveBeenCalled();
       });
 

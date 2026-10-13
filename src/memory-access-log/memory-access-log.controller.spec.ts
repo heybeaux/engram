@@ -63,8 +63,10 @@ describe('MemoryAccessLogController', () => {
         status: 'ACTIVE',
         memoriesCreated: 5,
         memoriesAccessed: 10,
+        uniqueMemories: 8,
         uniqueMemoriesAccessed: 8,
-        duration: '45m',
+        duration: 45,
+        topTopics: [],
       };
       service.getSessionSummary.mockResolvedValue(mockResult);
 

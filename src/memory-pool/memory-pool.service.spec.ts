@@ -11,6 +11,7 @@ describe('MemoryPoolService', () => {
     prisma = {
       memoryPool: {
         create: jest.fn(),
+        count: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -49,6 +50,41 @@ describe('MemoryPoolService', () => {
 
       const result = await service.create(dto);
       expect(result.name).toBe('test-pool');
+      expect(result.createdBySession).toBe('agent:main');
+    });
+  });
+
+  describe('listByUser', () => {
+    it('should return dashboard-compatible pool list envelope', async () => {
+      prisma.memoryPool.findMany.mockResolvedValue([
+        {
+          id: 'p1',
+          name: 'global',
+          description: null,
+          visibility: 'GLOBAL',
+          createdBy: 'system',
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+          updatedAt: new Date('2026-01-01T00:00:00Z'),
+          archivedAt: null,
+          _count: { memberships: 2, grants: 0 },
+        },
+      ]);
+      prisma.memoryPool.count.mockResolvedValue(1);
+
+      const result = await service.listByUser('u1');
+
+      expect(result.total).toBe(1);
+      expect(result.pools).toEqual([
+        expect.objectContaining({
+          id: 'p1',
+          createdBySession: 'system',
+          memberCount: 2,
+          grantCount: 0,
+        }),
+      ]);
+      expect(prisma.memoryPool.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 50, skip: 0 }),
+      );
     });
   });
 
@@ -64,13 +100,72 @@ describe('MemoryPoolService', () => {
       const pool = {
         id: 'p1',
         name: 'test',
-        memberships: [],
-        grants: [],
+        description: null,
+        visibility: 'SHARED',
+        createdBy: 'agent:main',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+        archivedAt: null,
+        _count: { memberships: 1, grants: 1 },
+        memberships: [
+          {
+            id: 'mpm-1',
+            memoryId: 'mem-1',
+            poolId: 'p1',
+            addedBy: 'agent:main',
+            addedAt: new Date('2026-01-01T00:01:00Z'),
+            memory: {
+              id: 'mem-1',
+              raw: 'hello',
+              layer: 'SESSION',
+              createdAt: new Date('2026-01-01T00:00:30Z'),
+              importanceScore: 0.75,
+            },
+          },
+        ],
+        grants: [
+          {
+            id: 'grant-1',
+            poolId: 'p1',
+            agentSessionId: 'sess-1',
+            agentId: null,
+            permission: 'READ',
+            grantedBy: 'agent:main',
+            grantedAt: new Date('2026-01-01T00:02:00Z'),
+            expiresAt: null,
+            agentSession: {
+              id: 'sess-1',
+              sessionKey: 'agent:main',
+              label: 'Main',
+            },
+          },
+        ],
       };
       prisma.memoryPool.findUnique.mockResolvedValue(pool);
 
       const result = await service.getById('p1', true);
-      expect(result).toEqual(pool);
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: 'p1',
+          createdBySession: 'agent:main',
+          memberCount: 1,
+          grantCount: 1,
+          memberships: [
+            expect.objectContaining({
+              memoryId: 'mem-1',
+              raw: 'hello',
+              layer: 'SESSION',
+              importanceScore: 0.75,
+            }),
+          ],
+          grants: [
+            expect.objectContaining({
+              sessionKey: 'agent:main',
+              permissions: 'READ',
+            }),
+          ],
+        }),
+      );
       expect(prisma.memoryPool.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({
           include: expect.objectContaining({
@@ -136,7 +231,13 @@ describe('MemoryPoolService', () => {
         visibility: 'SHARED',
         createdBy: 'agent:sub',
       });
-      expect(result).toEqual(created);
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: created.id,
+          name: created.name,
+          visibility: created.visibility,
+        }),
+      );
     });
   });
 
