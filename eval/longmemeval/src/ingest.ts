@@ -221,6 +221,12 @@ export async function fetchWithRetry(url: string, init: RequestInit, maxRetries 
         await sleep(retryAfter * 1000);
         continue;
       }
+      // Transient upstream errors (500, 502, 503, 529 overloaded): back off and
+      // retry; on the final attempt return the response so the caller reports it.
+      if (res.status >= 500 && attempt < maxRetries - 1) {
+        await sleep(1000 * (attempt + 1));
+        continue;
+      }
       return res;
     } catch (err) {
       lastError = err as Error;
