@@ -30,6 +30,9 @@ import {
   type QueryScore,
 } from './scoring';
 import { saveReport, getGitInfo } from './history';
+import { writeFileSync } from 'fs';
+import { performance } from 'perf_hooks';
+import { buildOpsSummary, type QueryOpsSample } from './ops-metrics';
 import { generateCorpusEmbeddings } from '../helpers/generate-embeddings';
 
 // Generous timeout — corpus seeding + 80+ queries through full stack
@@ -67,6 +70,8 @@ describe('Recall Benchmark', () => {
 
   // Run all gold queries and collect scores
   const allScores: QueryScore[] = [];
+  // Per-query latency and recall payload size (S5 cost signals)
+  const opsSamples: QueryOpsSample[] = [];
 
   /**
    * Execute a single recall query through the HTTP API.
@@ -85,6 +90,7 @@ describe('Recall Benchmark', () => {
     const headers = asUser(user.apiKey, user.userId);
 
     try {
+      const started = performance.now();
       const res = await request(app.getHttpServer())
         .post('/v1/memories/query')
         .set(headers)
@@ -98,8 +104,22 @@ describe('Recall Benchmark', () => {
           }
         });
 
-      const body = res.body as { memories?: Array<{ id: string }> };
-      return (body.memories ?? []).map((m) => m.id);
+      const latencyMs = performance.now() - started;
+      const body = res.body as {
+        memories?: Array<{ id: string; raw?: string; content?: string }>;
+      };
+      const memories = body.memories ?? [];
+      opsSamples.push({
+        queryId: query.id,
+        latencyMs,
+        resultCount: memories.length,
+        contentChars: memories.reduce(
+          (sum, m) => sum + (m.raw ?? m.content ?? '').length,
+          0,
+        ),
+        payloadChars: JSON.stringify(memories).length,
+      });
+      return memories.map((m) => m.id);
     } catch (error) {
       console.error(
         `Query execution failed for [${query.id}]: ${(error as Error).message}`,
@@ -145,6 +165,17 @@ describe('Recall Benchmark', () => {
       // Save to history
       const savedPath = saveReport(report);
       console.log(`📁 Report saved: ${savedPath}`);
+
+      const opsPath = savedPath.replace(/\.json$/, '.ops.json');
+      writeFileSync(
+        opsPath,
+        JSON.stringify(
+          { summary: buildOpsSummary(opsSamples), samples: opsSamples },
+          null,
+          2,
+        ),
+      );
+      console.log(`📁 Ops metrics saved: ${opsPath}`);
     });
 
     it('should have zero isolation failures', () => {
