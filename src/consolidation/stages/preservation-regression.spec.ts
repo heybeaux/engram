@@ -60,16 +60,18 @@ describe('audit preservation regressions', () => {
     });
   });
 
-  it('rechecks pin, age and access guards at archival update and reports actual writes', async () => {
+  it('applies pin, age and access guards at selection and fails closed without a preservation verifier', async () => {
     const findMany = jest
       .fn()
       .mockResolvedValue([{ id: 'm', layer: 'SESSION', usedCount: 0 }]);
-    const updateMany = jest.fn().mockResolvedValue({ count: 0 }); // pinned after selection
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const stage = new DreamCycleArchivalStage(
       { memory: { findMany, updateMany } } as any,
       config as any,
     );
-    expect((await stage.run('u', false)).archived).toBe(0);
+    const result = await stage.run('u', false);
+    expect(result.archived).toBe(0);
+    expect(result.skippedUnverifiedPreservation).toBe(1);
     const selection = findMany.mock.calls[0][0].where;
     expect(selection).toMatchObject({
       userPinned: false,
@@ -86,10 +88,7 @@ describe('audit preservation regressions', () => {
         },
       ],
     });
-    expect(updateMany.mock.calls[0][0].where).toEqual({
-      ...selection,
-      id: { in: ['m'] },
-    });
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects zero-row model writes and never uses a separate connection when given a transaction', async () => {
