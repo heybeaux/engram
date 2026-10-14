@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- PROPOSED (ENG-8), not installed. Replaces ~/Library/LaunchAgents/com.engram.embed.plist.
-     Changes vs current:
+<!-- ENG-8. Items 1-3 installed 2026-10-14 (approved by Beaux). Item 4 installed
+     2026-10-14T19:25Z (card f76864cf accepted by Beaux).
+     Changes vs the original plist:
      1. KeepAlive true (was {SuccessfulExit=false}). engram-embed handles
         SIGTERM/SIGINT gracefully and exits 0, so launchd treated the
         2026-10-08T06:45Z shutdown as "successful" and never restarted it.
         To stop it on purpose: launchctl bootout gui/$UID/com.engram.embed
      2. NumberOfFiles 8192 (inherited soft limit is 256; the log shows
         "accept error: Too many open files (os error 24)" on 2026-08-23).
-     3. ThrottleInterval 10 (was 5) to avoid a tight crash loop. -->
+     3. ThrottleInterval 10 (was 5) to avoid a tight crash loop.
+     4. EMBED_MAX_CONCURRENT=1 (the default is 4). The ENG-8 load test showed that
+        concurrent Metal inference returns NaN vectors for about 75% of requests
+        at 4+ concurrent clients (400 "non-finite value NaN"). With 1, the error
+        count was 0 at 8 and 32 clients, and throughput was the same or higher.
+        Raw output: ~/.engram-team/scorecard/raw/2026-10-14/s5-load/ -->
 <plist version="1.0">
 <dict>
     <key>Label</key>
@@ -25,6 +31,8 @@
         <string>8080</string>
         <key>EMBED_MODELS</key>
         <string>bge-base,minilm,gte-base,nomic</string>
+        <key>EMBED_MAX_CONCURRENT</key>
+        <string>1</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
