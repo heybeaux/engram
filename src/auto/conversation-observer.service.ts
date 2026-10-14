@@ -75,6 +75,7 @@ export class ConversationObserverService {
           userName,
           poolId: dto.poolId,
           agentSessionKey,
+          agentName: dto.agentName,
         },
       );
 
@@ -87,7 +88,7 @@ export class ConversationObserverService {
             signals: [],
             source: {
               turnIndex: f.sourceTurnIndices[0] ?? 0,
-              role: 'user' as any,
+              role: (f.sourceRole ?? 'user') as any,
             },
           })),
           created: summaryResult.created,
@@ -111,6 +112,7 @@ export class ConversationObserverService {
     const extractorContext: ExtractorContext = {
       userName,
       timestamp: new Date(),
+      agentName: dto.agentName,
     };
 
     // 3. Detect importance signals

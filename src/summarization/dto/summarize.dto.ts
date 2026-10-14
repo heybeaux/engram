@@ -6,7 +6,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { MessageTurnDto } from '../../auto/dto/observe.dto';
+import { MessageRole, MessageTurnDto } from '../../auto/dto/observe.dto';
 
 export class SummarizeDto {
   @IsArray()
@@ -32,6 +32,8 @@ export interface SummaryFact {
   category: 'fact' | 'decision' | 'preference' | 'action_item';
   confidence: number;
   sourceTurnIndices: number[];
+  /** Role of the first cited source turn (set when OBSERVE_SPEAKER_AWARE). */
+  sourceRole?: MessageRole;
 }
 
 export interface SummarizeResult {

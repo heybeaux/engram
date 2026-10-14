@@ -53,6 +53,11 @@ export class ObserveDto {
   @IsOptional()
   @IsString()
   agentSessionKey?: string;
+
+  // ENG-59: name of the assistant that produced ASSISTANT turns ("Rook")
+  @IsOptional()
+  @IsString()
+  agentName?: string;
 }
 
 export interface ImportanceSignal {

@@ -339,4 +339,75 @@ describe('AutoExtractorService', () => {
     const userMessage = callArgs[1].content;
     expect(userMessage).not.toContain('High-importance signals detected');
   });
+  // =========================================================================
+  // ENG-59: speaker-aware formation (flag-gated)
+  // =========================================================================
+
+  describe('ENG-59 speaker-aware extraction', () => {
+    const assistantTurns: MessageTurnDto[] = [
+      {
+        role: MessageRole.ASSISTANT,
+        content: 'I copied four M4 files and will run R1, R2 and R3 tomorrow.',
+      },
+    ];
+    const llmFacts = {
+      facts: [
+        { content: 'Beaux has copied four M4 files', turnIndex: 0 },
+        { content: 'Rook reported copying four M4 files', turnIndex: 0 },
+        { content: 'Beaux has 9 in progress tickets', turnIndex: 0 },
+      ],
+    };
+
+    afterEach(() => {
+      delete process.env.OBSERVE_SPEAKER_AWARE;
+      delete process.env.OBSERVE_STATUS_FILTER;
+    });
+
+    it('flag off: prompt unchanged and nothing dropped', async () => {
+      mockLlm.json.mockResolvedValue(llmFacts);
+      const out = await service.extract(assistantTurns, [], {
+        userName: 'Beaux',
+      });
+      expect(out).toHaveLength(3);
+      expect(mockLlm.json.mock.calls[0][0][0].content).not.toContain(
+        'SPEAKER RULES',
+      );
+    });
+
+    it('flag on: adds speaker rules and drops user-subject facts from assistant turns', async () => {
+      process.env.OBSERVE_SPEAKER_AWARE = 'true';
+      mockLlm.json.mockResolvedValue(llmFacts);
+      const out = await service.extract(assistantTurns, [], {
+        userName: 'Beaux',
+        agentName: 'Rook',
+      });
+      const prompt = mockLlm.json.mock.calls[0][0][0].content;
+      expect(prompt).toContain('SPEAKER RULES');
+      expect(prompt).toContain('Rook reported');
+      expect(out.map((m) => m.content)).toEqual([
+        'Rook reported copying four M4 files',
+      ]);
+    });
+
+    it('status filter drops in-flight counts', async () => {
+      process.env.OBSERVE_STATUS_FILTER = 'true';
+      mockLlm.json.mockResolvedValue(llmFacts);
+      const out = await service.extract(assistantTurns, [], {
+        userName: 'Beaux',
+      });
+      expect(out.map((m) => m.content)).not.toContain(
+        'Beaux has 9 in progress tickets',
+      );
+      expect(out).toHaveLength(2);
+    });
+
+    it('flag on does not touch user-sourced facts', async () => {
+      process.env.OBSERVE_SPEAKER_AWARE = 'true';
+      mockLlm.json.mockResolvedValue({
+        facts: [{ content: 'Beaux prefers dark mode', turnIndex: 0 }],
+      });
+      const out = await service.extract(turns, signals, { userName: 'Beaux' });
+      expect(out).toHaveLength(1);
+    });
+  });
 });

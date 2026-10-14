@@ -4,6 +4,11 @@ import Redis from 'ioredis';
 import { LLMService } from '../llm/llm.service';
 import { MemoryService } from '../memory/memory.service';
 import { MessageTurnDto } from '../auto/dto/observe.dto';
+import {
+  buildFormationPromptAddendum,
+  guardFact,
+  speakerAwareEnabled,
+} from '../auto/formation-guard';
 import { SummaryFact, SummarizeResult } from './dto/summarize.dto';
 import { MemoryLayer, MemorySource } from '@prisma/client';
 
@@ -98,6 +103,7 @@ export class SummarizationService implements OnModuleDestroy {
   async summarize(
     turns: MessageTurnDto[],
     userName?: string,
+    agentName?: string,
   ): Promise<SummaryFact[]> {
     if (turns.length === 0) return [];
 
@@ -105,9 +111,11 @@ export class SummarizationService implements OnModuleDestroy {
       .map((t, i) => `[${i}] ${t.role.toUpperCase()}: ${t.content}`)
       .join('\n\n');
 
-    const systemPrompt = userName
-      ? `${SUMMARIZATION_PROMPT}\n\nThe user's name is "${userName}".`
-      : SUMMARIZATION_PROMPT;
+    const systemPrompt =
+      (userName
+        ? `${SUMMARIZATION_PROMPT}\n\nThe user's name is "${userName}".`
+        : SUMMARIZATION_PROMPT) +
+      buildFormationPromptAddendum(userName, agentName);
 
     try {
       const result = await this.llm.json<LLMSummarizationResponse>(
@@ -122,17 +130,34 @@ export class SummarizationService implements OnModuleDestroy {
         { temperature: 0.2 },
       );
 
-      const facts = (result.facts || []).map((f) => ({
-        content: f.content,
-        category: this.normalizeCategory(f.category),
-        confidence:
-          typeof f.confidence === 'number'
-            ? Math.max(0, Math.min(1, f.confidence))
-            : 0.7,
-        sourceTurnIndices: Array.isArray(f.sourceTurnIndices)
-          ? f.sourceTurnIndices
-          : [],
-      }));
+      const facts = (result.facts || [])
+        .map((f) => ({
+          content: f.content,
+          category: this.normalizeCategory(f.category),
+          confidence:
+            typeof f.confidence === 'number'
+              ? Math.max(0, Math.min(1, f.confidence))
+              : 0.7,
+          sourceTurnIndices: Array.isArray(f.sourceTurnIndices)
+            ? f.sourceTurnIndices
+            : [],
+        }))
+        .filter((f) => {
+          const verdict = guardFact(
+            { content: f.content, turnIndices: f.sourceTurnIndices },
+            turns,
+            userName,
+          );
+          if (!verdict.keep) {
+            this.logger.debug(`[observe] dropped fact (${verdict.reason})`);
+          }
+          return verdict.keep;
+        })
+        .map((f) =>
+          speakerAwareEnabled()
+            ? { ...f, sourceRole: turns[f.sourceTurnIndices[0]]?.role }
+            : f,
+        );
 
       return facts;
     } catch (error) {
@@ -154,12 +179,17 @@ export class SummarizationService implements OnModuleDestroy {
       minImportance?: number;
       poolId?: string;
       agentSessionKey?: string;
+      agentName?: string;
     },
   ): Promise<SummarizeResult> {
     const startTime = Date.now();
     const minImportance = options?.minImportance ?? 0.4;
 
-    const facts = await this.summarize(turns, options?.userName);
+    const facts = await this.summarize(
+      turns,
+      options?.userName,
+      options?.agentName,
+    );
     const toStore = facts.filter((f) => f.confidence >= minImportance);
 
     let created = 0;
@@ -286,6 +316,7 @@ export class SummarizationService implements OnModuleDestroy {
       userName?: string;
       poolId?: string;
       agentSessionKey?: string;
+      agentName?: string;
     },
   ): Promise<SummarizeResult | null> {
     if (!this.enabled) return null;
@@ -305,6 +336,7 @@ export class SummarizationService implements OnModuleDestroy {
         userName: options?.userName,
         poolId: options?.poolId,
         agentSessionKey: options?.agentSessionKey,
+        agentName: options?.agentName,
       });
     }
 
@@ -322,6 +354,7 @@ export class SummarizationService implements OnModuleDestroy {
       userName?: string;
       poolId?: string;
       agentSessionKey?: string;
+      agentName?: string;
     },
   ): Promise<SummarizeResult | null> {
     const buffer = await this.getRedisBuffer(sessionId);
@@ -334,6 +367,7 @@ export class SummarizationService implements OnModuleDestroy {
       userName: options?.userName,
       poolId: options?.poolId,
       agentSessionKey: options?.agentSessionKey,
+      agentName: options?.agentName,
     });
   }
 

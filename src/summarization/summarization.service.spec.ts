@@ -122,6 +122,73 @@ describe('SummarizationService', () => {
     });
   });
 
+  describe('ENG-59 speaker-aware summarization', () => {
+    const assistantBatch = [
+      { role: MessageRole.ASSISTANT, content: 'I copied four M4 files.' },
+      { role: MessageRole.ASSISTANT, content: 'Next I will run R1-R3.' },
+    ];
+    const facts = {
+      facts: [
+        {
+          content: 'Beaux has copied four M4 files',
+          category: 'fact',
+          confidence: 0.8,
+          sourceTurnIndices: [0],
+        },
+        {
+          content: 'Rook reported copying four M4 files',
+          category: 'fact',
+          confidence: 0.8,
+          sourceTurnIndices: [0],
+        },
+        {
+          content: 'Beaux has 9 tickets in progress',
+          category: 'fact',
+          confidence: 0.8,
+          sourceTurnIndices: [1],
+        },
+      ],
+    };
+
+    afterEach(() => {
+      delete process.env.OBSERVE_SPEAKER_AWARE;
+      delete process.env.OBSERVE_STATUS_FILTER;
+    });
+
+    it('flag off: prompt unchanged, all facts kept, no sourceRole', async () => {
+      (llmService.json as jest.Mock).mockResolvedValueOnce(facts);
+      const out = await service.summarize(assistantBatch, 'Beaux', 'Rook');
+      expect(out).toHaveLength(3);
+      expect(out[0].sourceRole).toBeUndefined();
+      const prompt = (llmService.json as jest.Mock).mock.calls[0][0][0].content;
+      expect(prompt).not.toContain('SPEAKER RULES');
+    });
+
+    it('flag on: speaker rules in prompt, assistant-sourced user facts dropped, sourceRole set', async () => {
+      process.env.OBSERVE_SPEAKER_AWARE = 'true';
+      (llmService.json as jest.Mock).mockResolvedValueOnce(facts);
+      const out = await service.summarize(assistantBatch, 'Beaux', 'Rook');
+      const prompt = (llmService.json as jest.Mock).mock.calls[0][0][0].content;
+      expect(prompt).toContain('Rook reported');
+      expect(out.map((f) => f.content)).toEqual([
+        'Rook reported copying four M4 files',
+      ]);
+      expect(out[0].sourceRole).toBe(MessageRole.ASSISTANT);
+    });
+
+    it('status filter drops in-flight counts and stores nothing for them', async () => {
+      process.env.OBSERVE_STATUS_FILTER = 'true';
+      (llmService.json as jest.Mock).mockResolvedValueOnce(facts);
+      const result = await service.summarizeAndStore('u1', assistantBatch, {
+        userName: 'Beaux',
+      });
+      expect(result.facts.map((f) => f.content)).not.toContain(
+        'Beaux has 9 tickets in progress',
+      );
+      expect(memoryService.remember).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('summarizeAndStore', () => {
     it('should store facts as memories', async () => {
       const result = await service.summarizeAndStore('user-1', mockTurns, {
