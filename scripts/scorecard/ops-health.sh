@@ -23,6 +23,9 @@ ENV_FILE="${ENGRAM_ENV_FILE:-$LIVE_DIR/.env}"
 BACKUP_ROOT="${BACKUP_ROOT:-$HOME/engram-backups}"
 BACKUP_MAX_AGE_H="${BACKUP_MAX_AGE_H:-36}"
 REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+LIVE_RECALL_DIR="${LIVE_RECALL_DIR:-$HOME/.engram-team/scorecard/live}"
+LIVE_SINCE="${LIVE_SINCE:-2026-10-14T03:20:00Z}"
+LIVE_DAYS="${LIVE_DAYS:-7}"
 JSON=0
 [ "${1:-}" = "--json" ] && JSON=1
 
@@ -87,6 +90,8 @@ if [ -n "$PROD_URL" ]; then
   PROD_SHA=$(jget "$PROD" 'd.get("gitSha")')
   put prod_git_sha "$PROD_SHA"
   put prod_embed_status "$(jget "$PROD" 'd["dependencies"]["engramEmbed"]["status"]')"
+  put prod_db_latency_ms "$(jget "$PROD" 'd["dependencies"]["database"]["latencyMs"]')"
+  put prod_embed_latency_ms "$(jget "$PROD" 'd["dependencies"]["engramEmbed"]["latencyMs"]')"
   put dream_prod_last_run "$(jget "$PROD" 'd["dreamCycle"]["lastRun"]')"
   put dream_prod_status "$(jget "$PROD" 'd["dreamCycle"]["status"]')"
   if [ -z "$(jget "$PROD" 'd["dreamCycle"]["lastRun"]')" ]; then
@@ -151,6 +156,48 @@ else
 fi
 # Engram does not record tokens injected per recall anywhere today.
 put tokens_per_recall not_measured_no_instrumentation
+
+# ── 6b. live recall latency (passive: S6 hook JSONL, ENG-27) ──
+# Server = response `latencyMs`; client = hook fetch incl. TLS + body; hook =
+# whole hook process. pct() matches s6-report.mjs so both tools agree.
+# LIVE_SINCE excludes the install-verification calls; window is also capped
+# at LIVE_DAYS. Target (ENG-27): hook p95 <= 1500 ms.
+if [ -d "$LIVE_RECALL_DIR" ] && command -v node >/dev/null; then
+  LR=$(node -e '
+const fs = require("fs"), path = require("path");
+const [dir, since, days] = process.argv.slice(1);
+// Same interpolation as s6-report.mjs pct().
+const pct = (xs, p) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b);
+  const k = (s.length - 1) * p, f = Math.floor(k), c = Math.min(f + 1, s.length - 1);
+  return Math.round(s[f] + (s[c] - s[f]) * (k - f)); };
+const from = Math.max(Date.now() - Number(days) * 86400000, Date.parse(since) || 0);
+const a = [];
+for (const fn of fs.readdirSync(dir).filter((x) => /^recalls-.*\.jsonl$/.test(x)).sort())
+  for (const l of fs.readFileSync(path.join(dir, fn), "utf8").split("\n")) {
+    try { const r = JSON.parse(l); if (Date.parse(r.ts) >= from && r.status !== "skipped") a.push(r); } catch {}
+  }
+const num = (k) => a.map((r) => r[k]).filter((v) => typeof v === "number");
+const srv = num("server_latency_ms"), cli = num("latency_ms"), tot = num("total_ms");
+const out = [a.length, pct(srv, 0.5), pct(srv, 0.95), pct(cli, 0.5), pct(cli, 0.95), pct(tot, 0.95),
+  a.length ? (a.filter((r) => r.status === "timeout").length / a.length).toFixed(3) : null];
+console.log(out.map((v) => v ?? "").join("|"));' "$LIVE_RECALL_DIR" "$LIVE_SINCE" "$LIVE_DAYS" 2>/dev/null || true)
+  f() { printf '%s\n' "$LR" | cut -d'|' -f"$1"; }
+  LN=$(f 1); LS50=$(f 2); LS95=$(f 3); LC50=$(f 4); LC95=$(f 5); LH95=$(f 6); LTO=$(f 7)
+  put live_recall_attempted "${LN:-not_measured}"
+  if [ -n "${LN:-}" ] && [ "$LN" -gt 0 ] 2>/dev/null; then
+    put live_recall_server_p50_ms "${LS50:-not_measured_no_server_latency}"
+    put live_recall_server_p95_ms "${LS95:-not_measured_no_server_latency}"
+    put live_recall_client_p50_ms "$LC50"
+    put live_recall_client_p95_ms "$LC95"
+    put live_recall_hook_p95_ms "$LH95"
+    put live_recall_timeout_rate "$LTO"
+    [ -n "$LH95" ] && [ "$LH95" -gt 1500 ] && alert "live recall hook p95 ${LH95} ms > 1500 ms target (n=$LN)"
+  else
+    put live_recall_hook_p95_ms "not_measured_no_live_recalls_since_${LIVE_SINCE}"
+  fi
+else
+  put live_recall_hook_p95_ms not_measured_no_s6_dir
+fi
 
 # ── 7. host ──
 put disk_used_pct "$(df -P "$HOME" | awk 'NR==2{gsub("%","",$5); print $5}')"

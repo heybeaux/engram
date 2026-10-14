@@ -390,6 +390,9 @@ export class MemoryQueryService {
       // In pool-auth mode (no userId), scope FTS via pool-membership subquery.
       // When account auth resolves multiple users, search all resolved users
       // instead of collapsing keyword rescue to the first user.
+      // Match and rank on the stored search_vector column so the GIN index
+      // idx_memories_search_vector is used; an inline to_tsvector(raw) re-parses
+      // every row of the user (~0.8 s at 58k rows, ENG-27).
       const ftsResultIds = new Set<string>();
       const poolOnlyMode = poolIds && poolIds.length > 0 && !singleUserId;
       const resolvedUserIds = Array.isArray(userId)
@@ -405,13 +408,13 @@ export class MemoryQueryService {
                  SELECT mpm.memory_id FROM memory_pool_memberships mpm
                  WHERE mpm.pool_id = ANY($1::text[])
                )
-                 AND to_tsvector('english', m.raw) @@ websearch_to_tsquery('english', $2)
+                 AND m.search_vector @@ websearch_to_tsquery('english', $2)
                  AND m.deleted_at IS NULL
                  AND m.superseded_by_id IS NULL
                  AND m.searchable IS NOT FALSE
                  AND m.embedding_status != 'DUPLICATE'
                  AND m.is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak('m.id')}
+               ORDER BY ts_rank(m.search_vector, websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak('m.id')}
                LIMIT 100`,
               poolIds,
               searchQuery,
@@ -420,26 +423,26 @@ export class MemoryQueryService {
             ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                 `SELECT id FROM memories
                WHERE user_id = ANY($1::text[])
-                 AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
+                 AND search_vector @@ websearch_to_tsquery('english', $2)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak()}
+               ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak()}
                LIMIT 100`,
                 resolvedUserIds,
                 searchQuery,
               )
             : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                 `SELECT id FROM memories
-               WHERE to_tsvector('english', raw) @@ websearch_to_tsquery('english', $1)
+               WHERE search_vector @@ websearch_to_tsquery('english', $1)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC${rescueSqlTiebreak()}
+               ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC${rescueSqlTiebreak()}
                LIMIT 100`,
                 searchQuery,
               );
