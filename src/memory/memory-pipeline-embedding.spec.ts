@@ -14,7 +14,10 @@ describe('MemoryPipelineService — Embedding Decoupling (HEY-345)', () => {
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn().mockResolvedValue(null),
       },
-      memoryExtraction: { create: jest.fn().mockResolvedValue({}) },
+      memoryExtraction: {
+        create: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       entity: { upsert: jest.fn().mockResolvedValue({ id: 'ent-1' }) },
       memoryEntity: { upsert: jest.fn().mockResolvedValue({}) },
       memoryChainLink: { upsert: jest.fn().mockResolvedValue({}) },

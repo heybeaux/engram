@@ -62,6 +62,25 @@ export class MemoryPipelineService {
       userName: context?.userName,
     });
 
+    // ENG-62: a replayed job (e.g. a FAILED memory requeued on
+    // memory-embedding) finds the extraction from its first run. Only the
+    // vector is missing, so embed and stop: re-extracting would hit the
+    // memory_id unique constraint, re-spend the LLM call, and repeat the
+    // non-idempotent side effects (GraphEntity mentionCount increments,
+    // IDENTITY entity memories, graph and hierarchy processing).
+    const existingExtraction = await this.prisma.memoryExtraction.findUnique({
+      where: { memoryId },
+      select: { id: true },
+    });
+    if (existingExtraction) {
+      this.logger.log(
+        '[Memory] extractAndEmbed replay — extraction exists, embedding only:',
+        memoryId,
+      );
+      await this.generateAndStoreEmbedding(memoryId, raw, userId);
+      return;
+    }
+
     // HEY-350: Run extraction and embedding generation in parallel.
     // These are the two slowest operations and have no data dependency on each other.
     const [extracted, embeddingResult] = await Promise.all([

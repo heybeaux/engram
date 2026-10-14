@@ -9,7 +9,10 @@ describe('MemoryPipelineService', () => {
 
   beforeEach(() => {
     prisma = {
-      memoryExtraction: { create: jest.fn() },
+      memoryExtraction: {
+        create: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       memory: { update: jest.fn() },
       entity: { upsert: jest.fn() },
       memoryEntity: { upsert: jest.fn() },
