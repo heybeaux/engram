@@ -52,6 +52,10 @@ import {
   nearDuplicateClusterLimit,
   selectNearDuplicateDiverse,
 } from './memory-diversity.util';
+import {
+  gatedLexicalRescue,
+  isGatedLexicalRescueEnabled,
+} from './lexical-rescue.util';
 
 @Injectable()
 export class MemoryQueryService {
@@ -502,9 +506,17 @@ export class MemoryQueryService {
                   poolIds,
                   ...ilikeParams,
                 )
-              : hasResolvedUsers
-                ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                    `SELECT id FROM memories
+              : hasResolvedUsers && isGatedLexicalRescueEnabled()
+                ? (
+                    await gatedLexicalRescue(
+                      this.prisma,
+                      resolvedUserIds,
+                      words,
+                    )
+                  ).rows
+                : hasResolvedUsers
+                  ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                      `SELECT id FROM memories
                    WHERE user_id = ANY($1::text[])
                      AND (${ilikeConditions})
                      AND deleted_at IS NULL
@@ -514,11 +526,11 @@ export class MemoryQueryService {
                      AND is_duplicate_of IS NULL
                    ORDER BY importance_score DESC, created_at DESC${rescueSqlTiebreak()}
                    LIMIT 20`,
-                    resolvedUserIds,
-                    ...ilikeParams,
-                  )
-                : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                    `SELECT id FROM memories
+                      resolvedUserIds,
+                      ...ilikeParams,
+                    )
+                  : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                      `SELECT id FROM memories
                    WHERE (${ilikeConditions})
                      AND deleted_at IS NULL
                      AND superseded_by_id IS NULL
@@ -527,8 +539,8 @@ export class MemoryQueryService {
                      AND is_duplicate_of IS NULL
                    ORDER BY importance_score DESC, created_at DESC${rescueSqlTiebreak()}
                    LIMIT 20`,
-                    ...ilikeParams,
-                  );
+                      ...ilikeParams,
+                    );
             let ilikeAdded = 0;
             for (const row of ilikeResults) {
               ftsResultIds.add(row.id);
