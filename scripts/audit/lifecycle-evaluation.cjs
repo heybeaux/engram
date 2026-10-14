@@ -45,7 +45,7 @@ const save = () => fs.writeFileSync(output, JSON.stringify(report, null, 2));
    await prisma.$executeRawUnsafe("ALTER TYPE \"MemorySource\" ADD VALUE IF NOT EXISTS 'DREAM_CYCLE'");
    report.config.diagnosticEnumRepair = true;
   }
-  const userId = 'lifecycle-user'; const accountId = 'lifecycle-account'; const key = 'eng_lifecycle_synthetic_only';
+  const userId = 'lifecycle-user'; const accountId = 'lifecycle-account'; const key = `eng_${crypto.randomBytes(24).toString('hex')}`; // synthetic, per-run; never a real key
   await prisma.$executeRawUnsafe("INSERT INTO accounts(id,email,password_hash,created_at,updated_at) VALUES ($1,'lifecycle@synthetic.invalid','unused',now(),now())", accountId);
   await prisma.$executeRawUnsafe("INSERT INTO agents(id,name,account_id,api_key_hash,api_key_hint,created_at,updated_at) VALUES ('lifecycle-agent','lifecycle',$1,$2,'only',now(),now())", accountId, crypto.createHash('sha256').update(key).digest('hex'));
   await prisma.$executeRawUnsafe("INSERT INTO users(id,external_id,account_id,is_default,created_at,updated_at) VALUES ($1,$1,$2,false,now(),now())",userId,accountId);
