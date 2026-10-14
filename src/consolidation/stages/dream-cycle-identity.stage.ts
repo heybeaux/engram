@@ -43,6 +43,7 @@ export interface IdentitySnapshotData {
 @Injectable()
 export class DreamCycleIdentityStage {
   private readonly maxSourceMemories: number;
+  private readonly maxTokens: number;
 
   constructor(
     private readonly prisma: ServicePrismaService,
@@ -51,6 +52,13 @@ export class DreamCycleIdentityStage {
   ) {
     this.maxSourceMemories = parseInt(
       this.config.get('DREAM_IDENTITY_MAX_MEMORIES') ?? '100',
+      10,
+    );
+    // Was 1500. One local user's profile failed to parse every night for
+    // 102 nights; truncation is the suspected cause, and the parse-failure
+    // log below reports completionTokens vs maxTokens to confirm it.
+    this.maxTokens = parseInt(
+      this.config.get('DREAM_IDENTITY_MAX_TOKENS') ?? '4000',
       10,
     );
   }
@@ -83,6 +91,12 @@ export class DreamCycleIdentityStage {
 
     // 3. Extract identity data via LLM
     const identityData = await this.extractIdentity(memories, previousSnapshot);
+
+    // Unparseable output must not overwrite the previous snapshot with an
+    // empty one; keep the last good profile and retry next cycle.
+    if (!identityData) {
+      return { ...this.emptyResult(), llmCalls: 1 };
+    }
 
     if (dryRun) {
       console.log(
@@ -191,7 +205,7 @@ export class DreamCycleIdentityStage {
       createdAt: Date;
     }>,
     previousSnapshot: any | null,
-  ): Promise<IdentitySnapshotData> {
+  ): Promise<IdentitySnapshotData | null> {
     const memorySummary = memories
       .slice(0, 60)
       .map(
@@ -240,6 +254,8 @@ Respond in JSON:
   ]
 }
 
+Limits: at most 15 capabilities, 10 preferences, 10 trust scores and 10 behavioral traits. Keep each evidence string under 25 words. Return only the JSON object.
+
 Be specific. Use real data from the memories. Don't invent traits that aren't evidenced.`,
         },
         {
@@ -251,26 +267,24 @@ Be specific. Use real data from the memories. Don't invent traits that aren't ev
         provider: 'openai',
         model: 'gpt-4o-mini',
         temperature: 0.3,
-        maxTokens: 1500,
+        maxTokens: this.maxTokens,
       },
     );
 
     try {
-      return this.parseJsonResponse(response.content);
+      return this.normalize(this.parseJsonResponse(response.content));
     } catch {
+      const completionTokens = response.usage?.completionTokens ?? 0;
       console.warn(
-        '[DreamCycle:Identity] Failed to parse LLM response, returning empty snapshot',
+        '[DreamCycle:Identity] Failed to parse LLM response, skipping snapshot ' +
+          `(chars=${response.content?.length ?? 0}, completionTokens=${completionTokens}, ` +
+          `maxTokens=${this.maxTokens}, likelyTruncated=${completionTokens >= this.maxTokens})`,
       );
-      return {
-        capabilities: [],
-        preferences: {},
-        trustScores: {},
-        behavioralTraits: [],
-      };
+      return null;
     }
   }
 
-  private parseJsonResponse(content: string): IdentitySnapshotData {
+  private parseJsonResponse(content: string): unknown {
     try {
       return JSON.parse(content);
     } catch {
@@ -278,8 +292,42 @@ Be specific. Use real data from the memories. Don't invent traits that aren't ev
       if (jsonMatch) {
         return JSON.parse(jsonMatch[1]);
       }
+      const start = content.indexOf('{');
+      const end = content.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        return JSON.parse(content.slice(start, end + 1));
+      }
       throw new Error('Could not parse JSON');
     }
+  }
+
+  private normalize(parsed: unknown): IdentitySnapshotData {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Identity response is not a JSON object');
+    }
+    const p = parsed as Partial<IdentitySnapshotData>;
+    const isRecord = (v: unknown) =>
+      !!v && typeof v === 'object' && !Array.isArray(v);
+    const data: IdentitySnapshotData = {
+      capabilities: Array.isArray(p.capabilities) ? p.capabilities : [],
+      preferences: isRecord(p.preferences) ? p.preferences! : {},
+      trustScores: isRecord(p.trustScores) ? p.trustScores! : {},
+      behavioralTraits: Array.isArray(p.behavioralTraits)
+        ? p.behavioralTraits
+        : [],
+    };
+    // An all-empty profile from a user with identity memories is a failed
+    // extraction, not a real result; treat it like a parse failure so it
+    // cannot overwrite the last good snapshot.
+    if (
+      data.capabilities.length === 0 &&
+      data.behavioralTraits.length === 0 &&
+      Object.keys(data.preferences).length === 0 &&
+      Object.keys(data.trustScores).length === 0
+    ) {
+      throw new Error('Identity response has no usable fields');
+    }
+    return data;
   }
 
   private emptyResult(): IdentityStageResult {
