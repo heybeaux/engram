@@ -1,5 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
+import {
+  DreamCycleRunTrackerService,
+  DREAM_CYCLE_STALE_MS,
+} from './dream-cycle-run-tracker.service';
 import { ServicePrismaService } from '../prisma/service-prisma.service';
 
 const mockRecord = {
@@ -14,6 +17,9 @@ const mockPrisma = {
   dreamCycleStageRun: {
     create: jest.fn().mockResolvedValue(mockRecord),
     update: jest.fn().mockResolvedValue({}),
+  },
+  dreamCycleReport: {
+    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
   },
   memory: {
     count: jest.fn().mockResolvedValue(42),
@@ -177,6 +183,35 @@ describe('DreamCycleRunTrackerService', () => {
       mockPrisma.memory.count.mockResolvedValueOnce(0);
       const count = await service.getTotalMemoryCount();
       expect(count).toBe(0);
+    });
+  });
+
+  describe('failStaleReports', () => {
+    it('should mark RUNNING reports older than the threshold as FAILED', async () => {
+      mockPrisma.dreamCycleReport.updateMany.mockResolvedValueOnce({
+        count: 3,
+      });
+      const before = Date.now();
+
+      const count = await service.failStaleReports();
+
+      expect(count).toBe(3);
+      const call = mockPrisma.dreamCycleReport.updateMany.mock.calls[0][0];
+      expect(call.where.status).toBe('RUNNING');
+      const cutoff = call.where.startedAt.lt.getTime();
+      expect(cutoff).toBeLessThanOrEqual(Date.now() - DREAM_CYCLE_STALE_MS);
+      expect(cutoff).toBeGreaterThanOrEqual(before - DREAM_CYCLE_STALE_MS);
+      expect(call.data.status).toBe('FAILED');
+      expect(call.data.completedAt).toBeInstanceOf(Date);
+      expect(call.data.errors.push).toContain('orphaned');
+    });
+
+    it('should honour a custom threshold', async () => {
+      await service.failStaleReports(60_000);
+      const call = mockPrisma.dreamCycleReport.updateMany.mock.calls[0][0];
+      expect(Date.now() - call.where.startedAt.lt.getTime()).toBeLessThan(
+        60_000 + 5_000,
+      );
     });
   });
 });

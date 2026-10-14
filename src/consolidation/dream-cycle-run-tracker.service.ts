@@ -1,6 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ServicePrismaService } from '../prisma/service-prisma.service';
 
+/**
+ * A per-user report still RUNNING after this long was orphaned by a crash or
+ * redeploy (local nightly runs finish in about an hour for 265 users).
+ */
+export const DREAM_CYCLE_STALE_MS = 6 * 60 * 60 * 1000;
+
 export interface StageRunRecord {
   id: string;
   runId: string;
@@ -79,6 +85,29 @@ export class DreamCycleRunTrackerService {
         durationMs: now.getTime() - startedAt.getTime(),
       },
     });
+  }
+
+  /**
+   * Marks orphaned RUNNING reports as FAILED. Without this an orphan stays the
+   * newest report and /v1/health shows lastRun=null, status=RUNNING until the
+   * next cycle starts.
+   */
+  async failStaleReports(staleMs = DREAM_CYCLE_STALE_MS): Promise<number> {
+    const { count } = await this.prisma.dreamCycleReport.updateMany({
+      where: {
+        status: 'RUNNING',
+        startedAt: { lt: new Date(Date.now() - staleMs) },
+      },
+      data: {
+        status: 'FAILED',
+        completedAt: new Date(),
+        errors: { push: 'orphaned: still RUNNING past stale threshold' },
+      },
+    });
+    if (count > 0) {
+      this.logger.warn(`Marked ${count} orphaned Dream Cycle report(s) FAILED`);
+    }
+    return count;
   }
 
   async getTotalMemoryCount(userId?: string): Promise<number> {

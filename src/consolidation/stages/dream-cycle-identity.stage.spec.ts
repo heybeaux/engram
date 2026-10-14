@@ -247,11 +247,150 @@ describe('HEY-176: Dream Cycle Identity Consolidation Stage', () => {
 
       mockLlm.chat.mockResolvedValue({
         content:
-          '```json\n{"capabilities":[],"preferences":{},"trustScores":{},"behavioralTraits":[]}\n```',
+          '```json\n{"capabilities":[{"name":"Go","confidence":0.6,"lastSeen":"2026-01-01"}],"preferences":{},"trustScores":{},"behavioralTraits":[]}\n```',
       });
 
       const result = await stage.run('user-1', false, 5);
       expect(result.snapshotId).toBe('snap-1');
+    });
+
+    describe('unparseable LLM output', () => {
+      const memories = Array.from({ length: 10 }, (_, i) => ({
+        id: `mem-${i}`,
+        raw: `Memory ${i}`,
+        layer: 'IDENTITY',
+        memoryType: null,
+        subjectType: 'USER',
+        agentId: null,
+        source: 'EXPLICIT_STATEMENT',
+        effectiveScore: 0.8,
+        createdAt: new Date(),
+        metadata: null,
+      }));
+
+      beforeEach(() => {
+        mockPrisma.memory.findMany.mockResolvedValue(memories);
+        mockPrisma.identitySnapshot.findFirst.mockResolvedValue(null);
+        mockPrisma.identitySnapshot.create.mockResolvedValue({ id: 'snap-1' });
+        jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      });
+
+      afterEach(() => jest.restoreAllMocks());
+
+      it('should not persist an empty snapshot when output is truncated', async () => {
+        // Real failure shape: max_tokens hit inside an unclosed ```json fence
+        mockLlm.chat.mockResolvedValue({
+          content: '```json\n{\n  "capabilities": [\n    { "name": "Type',
+          usage: {
+            promptTokens: 1890,
+            completionTokens: 4000,
+            totalTokens: 5890,
+          },
+        });
+
+        const result = await stage.run('user-1', false, 5);
+
+        expect(result.snapshotId).toBeNull();
+        expect(result.llmCalls).toBe(1);
+        expect(mockPrisma.identitySnapshot.create).not.toHaveBeenCalled();
+        expect(mockPrisma.memory.updateMany).not.toHaveBeenCalled();
+        expect(console.warn).toHaveBeenCalledWith(
+          expect.stringContaining('likelyTruncated=true'),
+        );
+      });
+
+      it('should not persist a snapshot when every field is empty or invalid', async () => {
+        mockLlm.chat.mockResolvedValue({
+          content: JSON.stringify({
+            capabilities: 'none',
+            preferences: [],
+            trustScores: {},
+            behavioralTraits: [],
+          }),
+        });
+
+        const result = await stage.run('user-1', false, 5);
+
+        expect(result.snapshotId).toBeNull();
+        expect(mockPrisma.identitySnapshot.create).not.toHaveBeenCalled();
+        expect(mockPrisma.memory.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('should not persist a snapshot when output is a JSON array', async () => {
+        mockLlm.chat.mockResolvedValue({ content: '[]' });
+
+        const result = await stage.run('user-1', false, 5);
+
+        expect(result.snapshotId).toBeNull();
+        expect(mockPrisma.identitySnapshot.create).not.toHaveBeenCalled();
+      });
+    });
+
+    it('should request DREAM_IDENTITY_MAX_TOKENS (default 4000) from the LLM', async () => {
+      const memories = Array.from({ length: 5 }, (_, i) => ({
+        id: `mem-${i}`,
+        raw: `Memory ${i}`,
+        layer: 'IDENTITY',
+        memoryType: null,
+        subjectType: 'USER',
+        agentId: null,
+        source: 'EXPLICIT_STATEMENT',
+        effectiveScore: 0.8,
+        createdAt: new Date(),
+        metadata: null,
+      }));
+      mockPrisma.memory.findMany.mockResolvedValue(memories);
+      mockPrisma.identitySnapshot.findFirst.mockResolvedValue(null);
+      mockPrisma.identitySnapshot.create.mockResolvedValue({ id: 'snap-1' });
+      mockLlm.chat.mockResolvedValue({ content: '{}' });
+
+      await stage.run('user-1', false, 5);
+      expect(mockLlm.chat.mock.calls[0][1].maxTokens).toBe(4000);
+
+      mockConfig.get.mockImplementation((key: string) =>
+        key === 'DREAM_IDENTITY_MAX_TOKENS' ? '2500' : undefined,
+      );
+      const configured = new DreamCycleIdentityStage(
+        mockPrisma,
+        mockLlm,
+        mockConfig,
+      );
+      await configured.run('user-1', false, 5);
+      expect(mockLlm.chat.mock.calls[1][1].maxTokens).toBe(2500);
+    });
+
+    it('should parse JSON preceded by prose and fill missing fields', async () => {
+      const memories = Array.from({ length: 5 }, (_, i) => ({
+        id: `mem-${i}`,
+        raw: `Memory ${i}`,
+        layer: 'IDENTITY',
+        memoryType: null,
+        subjectType: 'USER',
+        agentId: null,
+        source: 'EXPLICIT_STATEMENT',
+        effectiveScore: 0.8,
+        createdAt: new Date(),
+        metadata: null,
+      }));
+      mockPrisma.memory.findMany.mockResolvedValue(memories);
+      mockPrisma.identitySnapshot.findFirst.mockResolvedValue(null);
+      mockPrisma.identitySnapshot.create.mockResolvedValue({ id: 'snap-2' });
+      mockLlm.chat.mockResolvedValue({
+        content:
+          'Here is the profile:\n{"capabilities":[{"name":"Rust","confidence":0.7,"lastSeen":"2026-10-01"}]}',
+      });
+
+      const result = await stage.run('user-1', false, 5);
+
+      expect(result.snapshotId).toBe('snap-2');
+      expect(result.capabilitiesExtracted).toBe(1);
+      expect(mockPrisma.identitySnapshot.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          preferences: {},
+          trustScores: {},
+          behavioralTraits: [],
+        }),
+      });
     });
   });
 });

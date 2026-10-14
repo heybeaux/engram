@@ -10,7 +10,7 @@
   },
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "build": "prisma generate && nest build",
+    "build": "prisma generate && nest build && node scripts/write-build-info.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

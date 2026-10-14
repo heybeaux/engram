@@ -26,6 +26,7 @@ jest.config.*
 .DS_Store
 worktrees/
 scripts/
+!scripts/write-build-info.mjs
 docker-compose.override.yml*
 .eslintrc*
 .prettierrc*

@@ -3,6 +3,7 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { CronJob } from 'cron';
 import { DreamCycleService } from './dream-cycle.service';
+import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
 
 @Injectable()
 export class DreamCycleSchedulerService implements OnModuleInit {
@@ -12,6 +13,7 @@ export class DreamCycleSchedulerService implements OnModuleInit {
 
   constructor(
     private readonly dreamCycle: DreamCycleService,
+    private readonly runTracker: DreamCycleRunTrackerService,
     private readonly config: ConfigService,
     private readonly schedulerRegistry: SchedulerRegistry,
   ) {
@@ -46,6 +48,12 @@ export class DreamCycleSchedulerService implements OnModuleInit {
 
     this.logger.log('Starting scheduled Dream Cycle run');
     const start = Date.now();
+
+    try {
+      await this.runTracker.failStaleReports();
+    } catch (error) {
+      this.logger.error(`Stale Dream Cycle cleanup failed: ${error.message}`);
+    }
 
     try {
       // ENG-97: Prefer BullMQ-based execution; falls back to sequential automatically
