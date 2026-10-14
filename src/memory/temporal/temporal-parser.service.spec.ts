@@ -43,6 +43,27 @@ describe('TemporalParserService', () => {
       expect(daysDiff).toBe(7);
     });
 
+    it.each([
+      ['What did I do recently?', 'recently'],
+      ['What have I been up to lately?', 'lately'],
+      ['What did we discuss earlier?', 'earlier'],
+      ['What happened last month?', 'last month'],
+    ])('marks vague phrase %s as soft', (query, expr) => {
+      const f = service.parse(query, NOW).temporalFilter!;
+      expect(f.expression).toBe(expr);
+      expect(f.soft).toBe(true);
+    });
+
+    it.each([
+      ['What happened yesterday?'],
+      ['What happened 5 days ago?'],
+      ['What happened 2 hours ago?'],
+      ['What happened last week?'],
+      ['What happened today?'],
+    ])('keeps explicit phrase %s hard', (query) => {
+      expect(service.parse(query, NOW).temporalFilter!.soft).toBeUndefined();
+    });
+
     it('should detect "2 hours ago"', () => {
       const result = service.parse('What was discussed 2 hours ago?', NOW);
 
@@ -277,7 +298,8 @@ describe('TemporalParserService', () => {
 
       const expanded = service.expandWindow(filter, 3.0);
 
-      const expandedMid = (expanded.start.getTime() + expanded.end.getTime()) / 2;
+      const expandedMid =
+        (expanded.start.getTime() + expanded.end.getTime()) / 2;
       expect(expandedMid).toBeCloseTo(mid, -3);
     });
 

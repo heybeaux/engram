@@ -8,6 +8,11 @@ export interface TemporalFilter {
   end: Date;
   expression: string; // Original temporal phrase matched
   confidence: number; // How confident we are in the parse (0-1)
+  /**
+   * True for vague phrases ("recently", "earlier", "last month") whose window
+   * is a hint about relevance, not a boundary the answer must fall inside.
+   */
+  soft?: boolean;
 }
 
 /**
@@ -55,7 +60,8 @@ export class TemporalParserService {
     now: Date = new Date(),
     timezone: string = 'UTC',
   ): ParsedQuery {
-    const firstMentionIntent = TemporalParserService.FIRST_MENTION_RE.test(query);
+    const firstMentionIntent =
+      TemporalParserService.FIRST_MENTION_RE.test(query);
 
     // Try fast pattern matching
     const result = this.patternMatch(query, now);
@@ -286,7 +292,7 @@ export class TemporalParserService {
       // "last month" / "past month"
       {
         regex: /\b(?:last|past)\s+month\b/i,
-        resolve: (m) => this.lastNDays(now, 30, m[0]),
+        resolve: (m) => ({ ...this.lastNDays(now, 30, m[0]), soft: true }),
       },
       // "this month"
       {
@@ -296,12 +302,12 @@ export class TemporalParserService {
       // "recently" / "lately" / "recent"
       {
         regex: /\b(recently|lately|recent)\b/i,
-        resolve: (m) => this.lastNDays(now, 3, m[0]),
+        resolve: (m) => ({ ...this.lastNDays(now, 3, m[0]), soft: true }),
       },
       // "earlier today" / "earlier"
       {
         regex: /\b(earlier today|earlier)\b/i,
-        resolve: (m) => this.dayRange(now, 0, m[0]),
+        resolve: (m) => ({ ...this.dayRange(now, 0, m[0]), soft: true }),
       },
     ];
   }

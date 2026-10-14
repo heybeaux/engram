@@ -12,7 +12,10 @@ import {
 } from './dto/trace-timeline.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
-import { TemporalParserService } from './temporal/temporal-parser.service';
+import {
+  TemporalParserService,
+  type TemporalFilter,
+} from './temporal/temporal-parser.service';
 import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import { MultiQueryService } from '../multi-query/multi-query.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
@@ -56,6 +59,8 @@ import {
   gatedLexicalRescue,
   isGatedLexicalRescueEnabled,
 } from './lexical-rescue.util';
+
+const SOFT_WINDOW_BOOST = 1.1;
 
 @Injectable()
 export class MemoryQueryService {
@@ -130,6 +135,13 @@ export class MemoryQueryService {
     const now = this.resolveReferenceDate(dto);
     const parsed = this.temporalParser.parse(dto.query, now);
     const hasTemporalIntent = parsed.temporalFilter !== null;
+    // TEMPORAL_SOFT_WINDOWS: vague phrases ("recently", "earlier", "last month")
+    // rank instead of filter, so sparse or stale windows cannot empty the pool.
+    const softTemporal =
+      hasTemporalIntent &&
+      parsed.temporalFilter!.soft === true &&
+      process.env.TEMPORAL_SOFT_WINDOWS === 'true';
+    const useTemporalPath = hasTemporalIntent && !softTemporal;
     // Date filters constrain eligibility; the full phrase still carries meaning
     // for semantic ranking, especially when no cross-encoder is available.
     const searchQuery = hasTemporalIntent ? dto.query : parsed.semanticQuery;
@@ -167,7 +179,7 @@ export class MemoryQueryService {
 
     let scoredMemories: MemoryWithScore[];
 
-    if (hasTemporalIntent) {
+    if (useTemporalPath) {
       // TEMPORAL PATH — HEY-575: Adaptive window expansion
       // ENG-48 after/before merging is applied on the first expansion pass below
       const adaptiveEnabled = process.env.TEMPORAL_QUERY_ADAPTIVE !== 'false';
@@ -645,9 +657,17 @@ export class MemoryQueryService {
       const sorted = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
+          const windowBoost =
+            softTemporal &&
+            this.inTemporalWindow(
+              memory.observedAt ?? memory.createdAt,
+              parsed.temporalFilter!,
+            )
+              ? SOFT_WINDOW_BOOST
+              : 1;
           return {
             ...memory,
-            score: semanticScore,
+            score: semanticScore * windowBoost,
             // Raw cosine, kept through rerank as the first tie-break key.
             ...(deterministic ? { vectorScore: cosineMap.get(memory.id) } : {}),
             __keywordRescued: keywordRescueIds.has(memory.id),
@@ -863,6 +883,11 @@ export class MemoryQueryService {
     if (dto.multiQuery?.enabled === false) return false;
     if (dto.multiQuery?.enabled === true) return true;
     return this.multiQueryService.isEnabled();
+  }
+
+  private inTemporalWindow(at: Date, filter: TemporalFilter): boolean {
+    const t = new Date(at).getTime();
+    return t >= filter.start.getTime() && t <= filter.end.getTime();
   }
 
   /** Query-side "now": caller-supplied referenceDate, else the server clock. */
