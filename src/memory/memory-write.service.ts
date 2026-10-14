@@ -594,6 +594,7 @@ export class MemoryWriteService {
       memories: chunks.map((chunk, index) => ({
         raw: chunk,
         layer: dto.layer,
+        ...(dto.observedAt ? { observedAt: dto.observedAt } : {}),
         ...(isRound ? { sessionPosition: index } : {}),
       })),
       context: dto.context

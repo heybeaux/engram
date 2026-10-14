@@ -9,7 +9,7 @@
  */
 
 import * as fs from 'fs';
-import type { LongMemEvalQuestion, RunConfig } from './types';
+import type { LongMemEvalQuestion, RoundEntry, RunConfig } from './types';
 import { historyToTranscript } from './loader';
 
 export interface IngestResult {
@@ -19,6 +19,100 @@ export interface IngestResult {
   agentId: string;
   memoryIds: string[];
   chunks: number;
+}
+
+/**
+ * LME dates look like "2023/05/30 (Tue) 23:40". Returns an ISO 8601 UTC string
+ * (the dataset carries no zone), or undefined when the input doesn't parse.
+ */
+export function lmeDateToIso(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const m = /^(\d{4})\/(\d{2})\/(\d{2})(?:\s*\([A-Za-z]{3}\))?(?:\s+(\d{2}):(\d{2}))?/.exec(raw.trim());
+  if (!m) return undefined;
+  const [, y, mo, d, h = '00', mi = '00'] = m;
+  const iso = `${y}-${mo}-${d}T${h}:${mi}:00.000Z`;
+  return Number.isNaN(new Date(iso).getTime()) ? undefined : iso;
+}
+
+export interface SessionSegment {
+  /** ISO observedAt for the session, when its date parsed */
+  observedAt?: string;
+  rounds: RoundEntry[];
+}
+
+/**
+ * Split the flattened history back into per-session segments. A session's
+ * marker ("--- Session N (date) ---") is appended to the PREVIOUS segment, so
+ * each chunk's text matches what the single-transcript ingest produces and the
+ * only variable under test is observedAt.
+ */
+export function splitSessionSegments(history: RoundEntry[]): SessionSegment[] {
+  const markerDate = (r: RoundEntry): string | undefined =>
+    /^--- Session \d+ \((.*)\) ---$/.exec(r.content)?.[1];
+  const segments: SessionSegment[] = [];
+  let cur: SessionSegment = { rounds: [] };
+  let hasBody = false;
+
+  for (const entry of history) {
+    if (entry.marker) {
+      if (hasBody) {
+        cur.rounds.push(entry);
+        segments.push(cur);
+        cur = { observedAt: lmeDateToIso(markerDate(entry)), rounds: [] };
+        hasBody = false;
+      } else {
+        cur.rounds.push(entry);
+        cur.observedAt ??= lmeDateToIso(markerDate(entry));
+      }
+      continue;
+    }
+    cur.observedAt ??= lmeDateToIso(entry.timestamp);
+    cur.rounds.push(entry);
+    hasBody = true;
+  }
+  if (cur.rounds.length > 0) segments.push(cur);
+  return segments;
+}
+
+/** LME_OBSERVED_AT=1: ingest one bulk call per session, stamped with its dataset date. */
+export function observedAtIngestEnabled(): boolean {
+  return process.env.LME_OBSERVED_AT === '1';
+}
+
+/** LME_REFERENCE_DATE=1: send question_date as the recall referenceDate. */
+export function referenceDateEnabled(): boolean {
+  return process.env.LME_REFERENCE_DATE === '1';
+}
+
+async function postBulkText(
+  config: Pick<RunConfig, 'apiBase' | 'apiKey'>,
+  question: LongMemEvalQuestion,
+  ids: { userId: string; agentId: string; sessionId: string },
+  text: string,
+  observedAt?: string,
+): Promise<{ created: number; chunks: number; memoryIds: string[] }> {
+  const response = await fetchWithRetry(`${config.apiBase}/v1/memories/bulk/text`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-AM-API-Key': config.apiKey,
+      'X-AM-User-ID': ids.userId,
+      'X-AM-Agent-ID': ids.agentId,
+    },
+    body: JSON.stringify({
+      text,
+      granularity: 'ROUND',
+      layer: 'SESSION',
+      context: { sessionId: ids.sessionId },
+      ...(observedAt ? { observedAt } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Ingest failed for ${question.question_id}: HTTP ${response.status} — ${body}`);
+  }
+  return response.json() as Promise<{ created: number; chunks: number; memoryIds: string[] }>;
 }
 
 /**
@@ -35,35 +129,22 @@ export async function ingestQuestion(
   const userId = `lme-${question.question_id}`;
   const sessionId = `lme-${question.question_id}`;
 
-  const transcript = historyToTranscript(question.session_history);
+  const ids = { userId, agentId, sessionId };
 
-  const body = {
-    text: transcript,
-    granularity: 'ROUND',
-    layer: 'SESSION',
-    context: {
-      sessionId,
-    },
-  };
-
-  const url = `${config.apiBase}/v1/memories/bulk/text`;
-  const response = await fetchWithRetry(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-AM-API-Key': config.apiKey,
-      'X-AM-User-ID': userId,
-      'X-AM-Agent-ID': agentId,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Ingest failed for ${question.question_id}: HTTP ${response.status} — ${text}`);
+  if (observedAtIngestEnabled()) {
+    const memoryIds: string[] = [];
+    let chunks = 0;
+    for (const segment of splitSessionSegments(question.session_history)) {
+      const data = await postBulkText(
+        config, question, ids, historyToTranscript(segment.rounds), segment.observedAt,
+      );
+      memoryIds.push(...(data.memoryIds ?? []));
+      chunks += data.chunks ?? data.created ?? 0;
+    }
+    return { questionId: question.question_id, sessionId, userId, agentId, memoryIds, chunks };
   }
 
-  const data = await response.json() as { created: number; chunks: number; memoryIds: string[] };
+  const data = await postBulkText(config, question, ids, historyToTranscript(question.session_history));
 
   return {
     questionId: question.question_id,

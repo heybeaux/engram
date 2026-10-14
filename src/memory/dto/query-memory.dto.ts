@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsArray,
   IsEnum,
+  IsISO8601,
   IsObject,
   ValidateNested,
   Min,
@@ -167,6 +168,18 @@ export class QueryMemoryDto {
   @IsOptional()
   @IsString()
   before?: string;
+
+  // ENG-10 / temporal-anchoring T18: query-side anchor, the read-side mirror of observedAt.
+  @ApiPropertyOptional({
+    description:
+      'Reference "now" for resolving relative time phrases in the query ("10 days ago", ' +
+      '"last month"). ISO 8601. Defaults to the server clock; set it when replaying ' +
+      'historical conversations.',
+    example: '2023-05-30T10:00:00Z',
+  })
+  @IsOptional()
+  @IsISO8601()
+  referenceDate?: string;
 
   @ApiPropertyOptional({
     description: 'Filter by arc tag (prep for Phase 3)',

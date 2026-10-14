@@ -123,7 +123,7 @@ export class MemoryQueryService {
     }
 
     // 1. Parse temporal intent from query
-    const now = new Date();
+    const now = this.resolveReferenceDate(dto);
     const parsed = this.temporalParser.parse(dto.query, now);
     const hasTemporalIntent = parsed.temporalFilter !== null;
     // Date filters constrain eligibility; the full phrase still carries meaning
@@ -850,6 +850,15 @@ export class MemoryQueryService {
     return this.multiQueryService.isEnabled();
   }
 
+  /** Query-side "now": caller-supplied referenceDate, else the server clock. */
+  private resolveReferenceDate(dto: QueryMemoryDto): Date {
+    if (dto.referenceDate) {
+      const ref = new Date(dto.referenceDate);
+      if (!Number.isNaN(ref.getTime())) return ref;
+    }
+    return new Date();
+  }
+
   /**
    * Perform recall using multi-query retrieval
    */
@@ -859,7 +868,7 @@ export class MemoryQueryService {
     startTime: number,
     poolIds?: string[],
   ): Promise<QueryResult> {
-    const now = new Date();
+    const now = this.resolveReferenceDate(dto);
     const parsed = this.temporalParser.parse(dto.query, now);
     const hasTemporalIntent = parsed.temporalFilter !== null;
 

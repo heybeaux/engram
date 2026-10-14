@@ -143,6 +143,16 @@ export class BulkTextImportDto {
     projectId?: string;
     sessionId?: string;
   };
+
+  @ApiPropertyOptional({
+    description:
+      'When the imported text actually happened (vs when it is recorded). ISO 8601, applied to every chunk. Reject if >1h in future.',
+    example: '2023-05-30T23:40:00Z',
+  })
+  @IsOptional()
+  @IsISO8601()
+  @Validate(ObservedAtNotFarFutureConstraint)
+  observedAt?: string;
 }
 
 export class ExportFilteredQueryDto {

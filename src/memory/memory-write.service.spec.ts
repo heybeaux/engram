@@ -794,6 +794,37 @@ describe('MemoryWriteService', () => {
       });
     });
 
+    it('stamps observedAt on every chunk when the DTO carries one (T22)', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.createMany.mockResolvedValue({ count: 2 });
+      mockPrisma.memoryPool = undefined;
+      mockPrisma.account = { findUnique: jest.fn().mockResolvedValue(null) };
+
+      await service.bulkTextImport('user-456', {
+        text: 'User: Q1?\nAssistant: A1.\nUser: Q2?\nAssistant: A2.',
+        granularity: 'ROUND',
+        observedAt: '2023-05-30T23:40:00Z',
+      });
+
+      const data = mockPrisma.memory.createMany.mock.calls[0][0].data;
+      expect(data).toHaveLength(2);
+      data.forEach((row: any) => {
+        expect(row.observedAt).toEqual(new Date('2023-05-30T23:40:00Z'));
+        expect(row.temporalAnchorSource).toBe('EXPLICIT_CALLER');
+      });
+    });
+
+    it('leaves observedAt unset when the DTO has none (back-compat)', async () => {
+      mockImportance.calculate.mockReturnValue(0.5);
+      mockPrisma.memory.createMany.mockResolvedValue({ count: 1 });
+      mockPrisma.account = { findUnique: jest.fn().mockResolvedValue(null) };
+
+      await service.bulkTextImport('user-456', { text: 'Short text.' });
+
+      const data = mockPrisma.memory.createMany.mock.calls[0][0].data;
+      expect(data[0].observedAt).toBeNull();
+    });
+
     it('should default to CHUNK granularity (back-compat — no sessionPosition)', async () => {
       const text = 'Short text for testing.';
 

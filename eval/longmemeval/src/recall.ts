@@ -12,7 +12,7 @@
  * function handles parsing with a plain-text fallback.
  */
 
-import { fetchWithRetry, type IngestResult } from './ingest';
+import { fetchWithRetry, lmeDateToIso, referenceDateEnabled, type IngestResult } from './ingest';
 import { callClaude } from './llm';
 import type { LmeCategory, RunConfig } from './types';
 
@@ -87,6 +87,9 @@ export async function recallQuestion(
     chainOfNote: true,
     note: question,  // HEY-576: question field for CoN prompt interpolation
     limit: recallLimit,
+    ...(referenceDateEnabled() && lmeDateToIso(question_date)
+      ? { referenceDate: lmeDateToIso(question_date) }
+      : {}),
   };
 
   const recallRes = await fetchWithRetry(recallUrl, {
