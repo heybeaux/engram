@@ -11,12 +11,15 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbedHealthService } from './embed-health.service';
 import { SkipRateLimit } from '../rate-limit/rate-limit.decorator';
+import { DREAM_CYCLE_STALE_MS } from '../consolidation/dream-cycle-run-tracker.service';
+import { resolveBuildInfo } from './build-info';
 
 @ApiTags('health')
 @Controller()
 @SkipRateLimit()
 export class HealthController {
   private readonly startTime = Date.now();
+  private readonly buildInfo = resolveBuildInfo();
 
   constructor(
     private prisma: PrismaService,
@@ -65,15 +68,37 @@ export class HealthController {
     // 2. engram-embed health (cached)
     const embedStatus = await this.embedHealth.getStatus();
 
-    // 3. Last Dream Cycle run
-    let lastDreamCycle: { completedAt: Date | null; status: string } | null =
-      null;
+    // 3. Dream Cycle: lastRun is the newest completed run, so one orphaned
+    // RUNNING report cannot hide when the cycle last actually finished.
+    let dreamCycle: {
+      lastRun: string | null;
+      status: string;
+      runningSince: string | null;
+      stale: boolean;
+    } | null = null;
     try {
-      const report = await this.prisma.dreamCycleReport.findFirst({
-        orderBy: { startedAt: 'desc' },
-        select: { completedAt: true, status: true },
-      });
-      lastDreamCycle = report;
+      const [latest, lastCompleted] = await Promise.all([
+        this.prisma.dreamCycleReport.findFirst({
+          orderBy: { startedAt: 'desc' },
+          select: { startedAt: true, status: true },
+        }),
+        this.prisma.dreamCycleReport.findFirst({
+          where: { status: 'COMPLETED' },
+          orderBy: { startedAt: 'desc' },
+          select: { completedAt: true },
+        }),
+      ]);
+      if (latest) {
+        const running = latest.status === 'RUNNING';
+        dreamCycle = {
+          lastRun: lastCompleted?.completedAt?.toISOString() ?? null,
+          status: latest.status,
+          runningSince: running ? latest.startedAt.toISOString() : null,
+          stale:
+            running &&
+            Date.now() - latest.startedAt.getTime() > DREAM_CYCLE_STALE_MS,
+        };
+      }
     } catch {
       // table might not exist yet
     }
@@ -107,6 +132,9 @@ export class HealthController {
         hasCriticalAlerts && overallStatus === 'healthy'
           ? 'degraded'
           : overallStatus,
+      version: this.buildInfo.version,
+      gitSha: this.buildInfo.gitSha,
+      builtAt: this.buildInfo.builtAt,
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       dependencies: {
         database: {
@@ -120,12 +148,7 @@ export class HealthController {
           lastUp: embedStatus.lastUp?.toISOString() ?? null,
         },
       },
-      dreamCycle: lastDreamCycle
-        ? {
-            lastRun: lastDreamCycle.completedAt?.toISOString() ?? null,
-            status: lastDreamCycle.status,
-          }
-        : null,
+      dreamCycle,
       memory: {
         heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
         heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,

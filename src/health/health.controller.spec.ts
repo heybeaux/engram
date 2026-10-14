@@ -61,6 +61,17 @@ describe('HealthController', () => {
       expect(result.memory.heapUsed).toMatch(/\d+MB/);
     });
 
+    it('should expose version, gitSha and builtAt keys', async () => {
+      const result = await controller.check();
+
+      expect(result.version).toMatch(/^\d+\.\d+\.\d+/);
+      expect(result).toHaveProperty('gitSha');
+      expect(result).toHaveProperty('builtAt');
+      if (result.gitSha !== null) {
+        expect(result.gitSha).toMatch(/^[0-9a-f]{7,40}$/);
+      }
+    });
+
     it('should throw 503 when database is down', async () => {
       mockPrisma.memory.count.mockRejectedValue(
         new Error('Connection refused'),
@@ -103,17 +114,64 @@ describe('HealthController', () => {
     });
 
     it('should include dream cycle info when available', async () => {
+      const startedAt = new Date('2026-02-14T02:00:00Z');
       const completedAt = new Date('2026-02-14T03:00:00Z');
-      mockPrisma.dreamCycleReport.findFirst.mockResolvedValue({
-        completedAt,
-        status: 'completed',
-      });
+      mockPrisma.dreamCycleReport.findFirst.mockImplementation((args: any) =>
+        Promise.resolve(
+          args.where?.status === 'COMPLETED'
+            ? { completedAt }
+            : { startedAt, status: 'COMPLETED' },
+        ),
+      );
 
       const result = await controller.check();
 
       expect(result.dreamCycle).toEqual({
         lastRun: completedAt.toISOString(),
-        status: 'completed',
+        status: 'COMPLETED',
+        runningSince: null,
+        stale: false,
+      });
+    });
+
+    it('should report the last completed run while a newer run is RUNNING', async () => {
+      const completedAt = new Date(Date.now() - 20 * 3600_000);
+      const startedAt = new Date(Date.now() - 30 * 60_000);
+      mockPrisma.dreamCycleReport.findFirst.mockImplementation((args: any) =>
+        Promise.resolve(
+          args.where?.status === 'COMPLETED'
+            ? { completedAt }
+            : { startedAt, status: 'RUNNING' },
+        ),
+      );
+
+      const result = await controller.check();
+
+      expect(result.dreamCycle).toEqual({
+        lastRun: completedAt.toISOString(),
+        status: 'RUNNING',
+        runningSince: startedAt.toISOString(),
+        stale: false,
+      });
+    });
+
+    it('should flag an orphaned RUNNING report as stale', async () => {
+      const startedAt = new Date(Date.now() - 7 * 3600_000);
+      mockPrisma.dreamCycleReport.findFirst.mockImplementation((args: any) =>
+        Promise.resolve(
+          args.where?.status === 'COMPLETED'
+            ? null
+            : { startedAt, status: 'RUNNING' },
+        ),
+      );
+
+      const result = await controller.check();
+
+      expect(result.dreamCycle).toEqual({
+        lastRun: null,
+        status: 'RUNNING',
+        runningSince: startedAt.toISOString(),
+        stale: true,
       });
     });
 
