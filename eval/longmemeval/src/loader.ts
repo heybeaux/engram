@@ -15,7 +15,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
-import type { LongMemEvalQuestion, LmeDataset, LmeCategory, RunConfig, RoundEntry } from './types';
+import type { EvidenceTurn, LongMemEvalQuestion, LmeDataset, LmeCategory, RunConfig, RoundEntry } from './types';
 
 const FIXTURE_PATH =
   process.env.LONGMEMEVAL_FIXTURE_PATH ??
@@ -26,7 +26,9 @@ const FIXTURE_PATH =
  * - subset=smoke: always load from fixture file
  * - subset=full: try HuggingFace, fall back to fixture with a warning
  */
-export async function loadDataset(config: Pick<RunConfig, 'subset' | 'limit' | 'category'>): Promise<LongMemEvalQuestion[]> {
+export async function loadDataset(
+  config: Pick<RunConfig, 'subset' | 'limit' | 'category' | 'questionIds'>,
+): Promise<LongMemEvalQuestion[]> {
   let questions: LongMemEvalQuestion[];
 
   if (config.subset === 'smoke') {
@@ -36,6 +38,10 @@ export async function loadDataset(config: Pick<RunConfig, 'subset' | 'limit' | '
     // loudly so the harness doesn't quietly run a 20-question smoke set
     // against benchmarks expecting 500.
     questions = await fetchFromHuggingFace();
+  }
+
+  if (config.questionIds && config.questionIds.length > 0) {
+    questions = filterByQuestionIds(questions, config.questionIds);
   }
 
   if (config.category) {
@@ -151,6 +157,9 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
       session_history,
       sessions: sessions.length > 1 ? sessions : undefined,
       question_date: item.question_date ?? undefined,
+      answer_session_ids: Array.isArray(item.answer_session_ids) ? item.answer_session_ids : undefined,
+      haystack_session_ids: Array.isArray(item.haystack_session_ids) ? item.haystack_session_ids : undefined,
+      evidence_turns: extractEvidenceTurns(sessions, item.haystack_session_ids ?? [], sessionDates),
     } as LongMemEvalQuestion;
   });
 
@@ -164,6 +173,54 @@ export async function fetchFromHuggingFace(): Promise<LongMemEvalQuestion[]> {
     );
   }
   return questions;
+}
+
+/** --question-ids takes a file (one ID per line, or comma-separated) or an inline list. */
+export function parseQuestionIds(value: string): string[] {
+  const text = fs.existsSync(value) ? fs.readFileSync(value, 'utf-8') : value;
+  return [...new Set(text.split(/[\s,]+/).map(s => s.trim()).filter(Boolean))];
+}
+
+/**
+ * Keep only the requested question IDs, in dataset order. Throws when an ID is
+ * missing so a typo can't silently shrink the run.
+ */
+export function filterByQuestionIds(
+  questions: LongMemEvalQuestion[],
+  questionIds: string[],
+): LongMemEvalQuestion[] {
+  const wanted = new Set(questionIds);
+  const found = questions.filter(q => wanted.has(q.question_id));
+  const foundIds = new Set(found.map(q => q.question_id));
+  const missing = [...wanted].filter(id => !foundIds.has(id));
+  if (missing.length > 0) {
+    throw new Error(`Question IDs not in dataset: ${missing.join(', ')}`);
+  }
+  return found;
+}
+
+/** Collect dataset turns flagged `has_answer` with their session context. */
+export function extractEvidenceTurns(
+  sessions: RoundEntry[][],
+  sessionIds: string[] = [],
+  sessionDates: string[] = [],
+): EvidenceTurn[] {
+  const turns: EvidenceTurn[] = [];
+  sessions.forEach((session, sessionIndex) => {
+    session.forEach((round, turnIndex) => {
+      if (round.has_answer) {
+        turns.push({
+          sessionId: sessionIds[sessionIndex] ?? `session-${sessionIndex + 1}`,
+          sessionIndex,
+          sessionDate: sessionDates[sessionIndex],
+          turnIndex,
+          role: round.role,
+          content: round.content,
+        });
+      }
+    });
+  });
+  return turns;
 }
 
 /** Minimal validation to catch malformed fixture data early. */

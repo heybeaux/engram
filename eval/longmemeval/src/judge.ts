@@ -6,7 +6,9 @@
  * Uses binary judgement: correct (semantic match) or incorrect.
  */
 
-const JUDGE_MODEL: string =
+import { callClaude, type LlmTransport } from './llm';
+
+export const JUDGE_MODEL: string =
   process.env.LONGMEMEVAL_JUDGE_MODEL ?? 'claude-opus-4-7';
 const JUDGE_SYSTEM_PROMPT = `You are an answer correctness judge for a memory benchmark.
 
@@ -40,12 +42,14 @@ export interface JudgeResult {
  * @param expected    Gold answer from the dataset
  * @param predicted   Answer produced by the recall+reading pipeline
  * @param apiKey      Anthropic API key
+ * @param transport   api (default) or claude-cli — see llm.ts
  */
 export async function judgeAnswer(
   question: string,
   expected: string | number,
   predicted: string,
   apiKey: string,
+  transport: LlmTransport = 'api',
 ): Promise<JudgeResult> {
   // Normalize expected to string — integer answers in the dataset crash .trim()
   const expectedStr = typeof expected === 'string' ? expected : String(expected);
@@ -71,28 +75,15 @@ Predicted answer: ${predicted}
 
 Is the predicted answer correct?`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: JUDGE_MODEL,
-      max_tokens: 256,
-      system: JUDGE_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-    }),
+  // Through callClaude so transient 5xx/529 from the judge are retried too.
+  const raw = await callClaude({
+    system: JUDGE_SYSTEM_PROMPT,
+    user: userMessage,
+    model: JUDGE_MODEL,
+    maxTokens: 256,
+    apiKey,
+    transport,
   });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Judge API call failed: HTTP ${response.status} — ${text}`);
-  }
-
-  const data = await response.json() as { content: Array<{ type: string; text: string }> };
-  const raw = data.content?.[0]?.text ?? '';
 
   return parseJudgeResponse(raw, predicted, expectedStr);
 }
