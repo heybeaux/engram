@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- PROPOSED (ENG-8), not installed. Replaces ~/Library/LaunchAgents/com.engram.embed.plist.
+     Changes vs current:
+     1. KeepAlive true (was {SuccessfulExit=false}). engram-embed handles
+        SIGTERM/SIGINT gracefully and exits 0, so launchd treated the
+        2026-10-08T06:45Z shutdown as "successful" and never restarted it.
+        To stop it on purpose: launchctl bootout gui/$UID/com.engram.embed
+     2. NumberOfFiles 8192 (inherited soft limit is 256; the log shows
+        "accept error: Too many open files (os error 24)" on 2026-08-23).
+     3. ThrottleInterval 10 (was 5) to avoid a tight crash loop. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.engram.embed</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/beauxwalton/projects/engram-embed/target/release/engram-embed</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/beauxwalton/projects/engram-embed</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>8080</string>
+        <key>EMBED_MODELS</key>
+        <string>bge-base,minilm,gte-base,nomic</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>8192</integer>
+    </dict>
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>8192</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/beauxwalton/projects/engram-embed/logs/embed.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/beauxwalton/projects/engram-embed/logs/embed.stderr.log</string>
+</dict>
+</plist>
