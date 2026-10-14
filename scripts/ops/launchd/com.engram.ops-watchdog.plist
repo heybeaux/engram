@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- PROPOSED (ENG-8), not installed. Runs ops-health every 5 minutes and
+<!-- ENG-8: installed 2026-10-14 (approved by Beaux). Runs ops-health every 5 minutes and
      raises a macOS notification when the set of alerts changes (and again
      every 6h while still failing). Scripts are installed to ~/.engram-ops/bin
      so a branch switch in the shared worktree cannot change what runs. -->

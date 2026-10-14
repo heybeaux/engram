@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- PROPOSED (ENG-8), not installed. Daily verified local backup at 02:15
+<!-- ENG-8: installed 2026-10-14 (approved by Beaux). Daily verified local backup at 02:15
      local time (before the 03:00 UTC-scheduled dream cycle on this host
      runs at 20:00 PDT, so no overlap). Keeps 7 verified dumps (~14 GB).
      If the Mac is asleep at 02:15, launchd runs it on wake. -->
