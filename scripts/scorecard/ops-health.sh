@@ -70,7 +70,9 @@ API=$(curl -s -m 10 "$API_URL/v1/health" || true)
 API_STATUS=$(jget "$API" 'd["status"]')
 put api_status "${API_STATUS:-down}"
 [ "$API_STATUS" = "healthy" ] || alert "local api not healthy: ${API_STATUS:-no response}"
-put api_db_memory_count "$(jget "$API" 'd["dependencies"]["database"]["memoryCount"]')"
+put api_db_status "$(jget "$API" 'd["dependencies"]["database"]["status"]')"
+# pg_class.reltuples estimate since ENG-48 (memoryCount on older builds was exact)
+put api_db_memory_count "$(jget "$API" 'd["dependencies"]["database"].get("memoryCountEstimate", d["dependencies"]["database"].get("memoryCount"))')"
 put api_git_sha "$(jget "$API" 'd.get("gitSha")')"   # null until ENG-16 build ships
 put dream_local_last_run "$(jget "$API" 'd["dreamCycle"]["lastRun"]')"
 put dream_local_status "$(jget "$API" 'd["dreamCycle"]["status"]')"

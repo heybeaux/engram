@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { HealthController } from './health.controller';
+import { DB_PROBE_TIMEOUT_MS, HealthController } from './health.controller';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbedHealthService } from './embed-health.service';
-import { MonitoringService } from '../monitoring/monitoring.service';
 
 describe('HealthController', () => {
   let controller: HealthController;
@@ -13,6 +12,7 @@ describe('HealthController', () => {
 
   beforeEach(async () => {
     mockPrisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{ estimate: BigInt(42) }]),
       memory: {
         count: jest.fn().mockResolvedValue(42),
       },
@@ -55,6 +55,7 @@ describe('HealthController', () => {
 
       expect(result.status).toBe('healthy');
       expect(result.dependencies.database.status).toBe('up');
+      expect(result.dependencies.database.memoryCountEstimate).toBe(42);
       expect(result.dependencies.database.memoryCount).toBe(42);
       expect(result.dependencies.engramEmbed.status).toBe('up');
       expect(result.uptime).toBeGreaterThanOrEqual(0);
@@ -72,10 +73,53 @@ describe('HealthController', () => {
       }
     });
 
+    it('should read the pg_class estimate instead of an exact COUNT(*)', async () => {
+      await controller.check();
+
+      expect(mockPrisma.memory.count).not.toHaveBeenCalled();
+      const sql = mockPrisma.$queryRaw.mock.calls[0][0].join('');
+      expect(sql).toMatch(/reltuples::bigint/);
+      expect(sql).toMatch(/'memories'::regclass/);
+    });
+
+    it('should report a null estimate when the table was never analyzed', async () => {
+      mockPrisma.$queryRaw.mockResolvedValue([{ estimate: BigInt(-1) }]);
+
+      const result = await controller.check();
+
+      expect(result.status).toBe('healthy');
+      expect(result.dependencies.database.status).toBe('up');
+      expect(result.dependencies.database.memoryCountEstimate).toBeNull();
+      expect(result.dependencies.database.memoryCount).toBeNull();
+    });
+
+    it('should report degraded instead of hanging when the DB probe is slow', async () => {
+      jest.useFakeTimers();
+      try {
+        mockPrisma.$queryRaw.mockReturnValue(new Promise(() => {}));
+        mockPrisma.dreamCycleReport.findFirst.mockReturnValue(
+          new Promise(() => {}),
+        );
+
+        const pending = controller.check();
+        // Both probes time out concurrently: one timeout window is enough.
+        await jest.advanceTimersByTimeAsync(DB_PROBE_TIMEOUT_MS + 10);
+        const result = await pending;
+
+        expect(result.status).toBe('degraded');
+        expect(result.dependencies.database.status).toBe('degraded');
+        expect(result.dependencies.database.latencyMs).toBeGreaterThanOrEqual(
+          DB_PROBE_TIMEOUT_MS,
+        );
+        expect(result.dependencies.database.memoryCountEstimate).toBeNull();
+        expect(result.dreamCycle).toBeNull();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('should throw 503 when database is down', async () => {
-      mockPrisma.memory.count.mockRejectedValue(
-        new Error('Connection refused'),
-      );
+      mockPrisma.$queryRaw.mockRejectedValue(new Error('Connection refused'));
 
       await expect(controller.check()).rejects.toThrow(HttpException);
       try {
