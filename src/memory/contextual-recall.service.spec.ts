@@ -48,6 +48,21 @@ describe('ContextualRecallService', () => {
   });
 
   describe('recall', () => {
+    it('excludes hidden semantic hits', async () => {
+      embedding.search.mockResolvedValue([{ id: 'hidden', score: 0.9 }] as any);
+      (prisma.memory.findMany as jest.Mock).mockImplementation(
+        async ({ where }) => {
+          expect(where.userHidden).toBe(false);
+          return [];
+        },
+      );
+      const result = await service.recall(userId, {
+        text: 'hello',
+        sessionKey: 'hidden-case',
+      } as any);
+      expect(result.memories).toEqual([]);
+    });
+
     it('should trigger recall on first message (topic shift)', async () => {
       embedding.search.mockResolvedValue([{ id: 'm1', score: 0.8 }] as any);
 

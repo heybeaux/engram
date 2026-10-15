@@ -413,8 +413,22 @@ describe('TimelineService', () => {
       await service.findByDateDeep(agentId, '2026-03-22');
 
       expect(prisma.memory.findMany).toHaveBeenCalledWith({
-        where: { id: { in: ['mem-1', 'mem-2'] } },
+        where: {
+          id: { in: ['mem-1', 'mem-2'] },
+          userHidden: false,
+          deletedAt: null,
+        },
       });
+    });
+
+    it('excludes hidden memories from deep timeline results', async () => {
+      prisma.timeline.findUnique.mockResolvedValue(mockTimelineRecord);
+      prisma.memory.findMany.mockImplementation(async ({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return [];
+      });
+      const result = await service.findByDateDeep(agentId, '2026-03-22');
+      expect(result?.memories).toEqual([]);
     });
 
     it('should return null when timeline not found', async () => {

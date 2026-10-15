@@ -28,6 +28,20 @@ describe('TemporalGapService', () => {
   });
 
   describe('detectGaps', () => {
+    it('does not count hidden memories as coverage', async () => {
+      mockPrisma.$queryRawUnsafe.mockImplementation(async (sql: string) => {
+        expect(sql).toContain('user_hidden = false');
+        return [];
+      });
+      const result = await service.detectGaps(
+        'hidden',
+        new Date('2026-03-01'),
+        new Date('2026-03-01'),
+        AGENT_ID,
+      );
+      expect(result.totalMemories).toBe(0);
+    });
+
     it('should detect absolute gaps when days have no memories', async () => {
       // 3-day range, only day 2 has memories
       mockPrisma.$queryRawUnsafe.mockResolvedValue([

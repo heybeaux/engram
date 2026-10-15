@@ -189,6 +189,7 @@ export class IdentityService {
   ): Promise<PreferenceDto[]> {
     const memories = await this.prisma.memory.findMany({
       where: {
+        userHidden: false,
         OR: [
           // Agent self-memories with preference type
           {
@@ -276,6 +277,7 @@ export class IdentityService {
   ): Promise<TrustSignalsSummaryDto> {
     const memories = await this.prisma.memory.findMany({
       where: {
+        userHidden: false,
         OR: [
           { agentId, deletedAt: null },
           { userId, subjectId: agentId, deletedAt: null },
@@ -327,6 +329,7 @@ export class IdentityService {
   ): Promise<BehavioralPatternDto[]> {
     const recentMemories = await this.prisma.memory.findMany({
       where: {
+        userHidden: false,
         OR: [{ agentId }, { userId, subjectId: agentId }],
         deletedAt: null,
         createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },

@@ -4,6 +4,7 @@ import { MemoryService } from './memory.service';
 describe('MemoryCoreController', () => {
   let controller: MemoryCoreController;
   let memoryService: jest.Mocked<MemoryService>;
+  let prismaService: any;
 
   const userId = 'user-123';
 
@@ -17,7 +18,7 @@ describe('MemoryCoreController', () => {
       markUsed: jest.fn(),
     } as any;
 
-    const prismaService = {
+    prismaService = {
       user: { findMany: jest.fn().mockResolvedValue([]) },
       memory: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -35,6 +36,40 @@ describe('MemoryCoreController', () => {
       prismaService,
       memoryJobQueue,
     );
+  });
+
+  describe('listMemories', () => {
+    it('excludes hidden rows by default from results and count', async () => {
+      prismaService.memory.findMany.mockImplementation(
+        async ({ where }: any) => {
+          expect(where.userHidden).toBe(false);
+          return [];
+        },
+      );
+      prismaService.memory.count.mockImplementation(async ({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return 0;
+      });
+      const result = await controller.listMemories({}, userId);
+      expect(result.memories).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it('allows an explicit management listing of hidden rows', async () => {
+      await controller.listMemories(
+        {},
+        userId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'true',
+      );
+      expect(
+        prismaService.memory.findMany.mock.calls[0][0].where.userHidden,
+      ).toBeUndefined();
+    });
   });
 
   describe('remember', () => {

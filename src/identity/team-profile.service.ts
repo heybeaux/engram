@@ -257,6 +257,7 @@ export class TeamProfileService implements OnModuleInit, OnModuleDestroy {
           subjectType: SubjectType.AGENT,
           subjectId: agentId,
           deletedAt: null,
+          userHidden: false,
         },
         orderBy: { effectiveScore: 'desc' },
         take: 50,
@@ -318,6 +319,7 @@ export class TeamProfileService implements OnModuleInit, OnModuleDestroy {
         const sharedMemories = await this.prisma.memory.findMany({
           where: {
             deletedAt: null,
+            userHidden: false,
             source: MemorySource.SYSTEM,
             OR: [
               { subjectId: agentA, raw: { contains: agentB } },

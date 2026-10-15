@@ -74,6 +74,7 @@ export class MemoryFailureService {
         WHERE m.user_id = ANY($${paramIdx + 1}::text[])
           AND m.agent_id = $${paramIdx + 2}
           AND m.searchable IS NOT FALSE
+          AND m.user_hidden = false
           AND m.deleted_at IS NULL
           AND m.superseded_by_id IS NULL
           AND (m.raw ILIKE ANY($${paramIdx + 3}::text[])
@@ -97,6 +98,7 @@ export class MemoryFailureService {
         JOIN memory_embeddings me ON me.memory_id = m.id
         WHERE m.user_id = ANY($${paramIdx + 1}::text[])
           AND m.searchable IS NOT FALSE
+          AND m.user_hidden = false
           AND m.deleted_at IS NULL
           AND m.superseded_by_id IS NULL
           AND (m.raw ILIKE ANY($${paramIdx + 2}::text[])
@@ -119,6 +121,7 @@ export class MemoryFailureService {
         FROM memories m
         JOIN memory_embeddings me ON me.memory_id = m.id
         WHERE m.searchable IS NOT FALSE
+          AND m.user_hidden = false
           AND m.deleted_at IS NULL
           AND m.superseded_by_id IS NULL
           AND (m.raw ILIKE ANY($${paramIdx + 1}::text[])
@@ -169,6 +172,8 @@ export class MemoryFailureService {
     const chainLinks = await this.prisma.memoryChainLink.findMany({
       where: {
         OR: [{ sourceId: { in: memoryIds } }, { targetId: { in: memoryIds } }],
+        source: { userHidden: false, deletedAt: null },
+        target: { userHidden: false, deletedAt: null },
       },
       include: {
         source: true,

@@ -292,6 +292,14 @@ describe('TrustMemoryService', () => {
   });
 
   describe('getTrustNarrative', () => {
+    it('excludes hidden trust narratives', async () => {
+      mockPrisma.memory.findMany.mockImplementation(({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return Promise.resolve([]);
+      });
+      expect(await service.getTrustNarrative('user1')).toEqual([]);
+    });
+
     it('should return formatted narrative history', async () => {
       mockPrisma.memory.findMany.mockResolvedValue([
         {

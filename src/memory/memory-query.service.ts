@@ -257,6 +257,7 @@ export class MemoryQueryService {
             deletedAt: null,
             supersededById: null,
             searchable: { not: false },
+            userHidden: false,
             embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
             isDuplicateOf: null,
             OR: [
@@ -449,6 +450,7 @@ export class MemoryQueryService {
                  AND m.deleted_at IS NULL
                  AND m.superseded_by_id IS NULL
                  AND m.searchable IS NOT FALSE
+                 AND m.user_hidden = false
                  AND m.embedding_status != 'DUPLICATE'
                  AND m.is_duplicate_of IS NULL
                ORDER BY ts_rank(m.search_vector, websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak('m.id')}
@@ -464,6 +466,7 @@ export class MemoryQueryService {
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
+                 AND user_hidden = false
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
                ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak()}
@@ -477,6 +480,7 @@ export class MemoryQueryService {
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
+                 AND user_hidden = false
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
                ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC${rescueSqlTiebreak()}
@@ -532,6 +536,7 @@ export class MemoryQueryService {
                      AND m.deleted_at IS NULL
                      AND m.superseded_by_id IS NULL
                      AND m.searchable IS NOT FALSE
+                     AND m.user_hidden = false
                      AND m.embedding_status != 'DUPLICATE'
                      AND m.is_duplicate_of IS NULL
                    ORDER BY m.importance_score DESC, m.created_at DESC${rescueSqlTiebreak('m.id')}
@@ -555,6 +560,7 @@ export class MemoryQueryService {
                      AND deleted_at IS NULL
                      AND superseded_by_id IS NULL
                      AND searchable IS NOT FALSE
+                     AND user_hidden = false
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
                    ORDER BY importance_score DESC, created_at DESC${rescueSqlTiebreak()}
@@ -568,6 +574,7 @@ export class MemoryQueryService {
                      AND deleted_at IS NULL
                      AND superseded_by_id IS NULL
                      AND searchable IS NOT FALSE
+                     AND user_hidden = false
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
                    ORDER BY importance_score DESC, created_at DESC${rescueSqlTiebreak()}
@@ -604,6 +611,7 @@ export class MemoryQueryService {
                 deletedAt: null,
                 supersededById: null,
                 searchable: { not: false },
+                userHidden: false,
                 embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
                 isDuplicateOf: null,
                 OR: [
@@ -662,6 +670,7 @@ export class MemoryQueryService {
           deletedAt: null,
           supersededById: null,
           searchable: { not: false },
+          userHidden: false,
           embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
           isDuplicateOf: null,
           ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
@@ -965,6 +974,7 @@ export class MemoryQueryService {
         deletedAt: null,
         supersededById: null,
         searchable: { not: false },
+        userHidden: false,
         embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
         isDuplicateOf: null,
         ...subjectTypeFilter,
@@ -1061,15 +1071,21 @@ export class MemoryQueryService {
       }
     }
 
+    const visibleMultiQueryResult = {
+      ...multiQueryResult,
+      results: multiQueryResult.results.filter((entry) =>
+        resultIds.includes(entry.memoryId),
+      ),
+    };
     const multiQueryMetadata = this.multiQueryService!.generateMetadata(
-      multiQueryResult,
+      visibleMultiQueryResult,
       dto.multiQuery,
     );
 
     let explanations: Record<string, ResultExplanationDto> | undefined;
     if (dto.multiQuery?.includeExplanations) {
       explanations = this.multiQueryService!.generateExplanations(
-        multiQueryResult.results,
+        visibleMultiQueryResult.results,
         multiQueryResult.expansion,
       );
     }
@@ -1171,7 +1187,8 @@ export class MemoryQueryService {
         (memory as any).isDuplicateOf == null &&
         (memory as any).supersededById == null &&
         (memory as any).deletedAt == null &&
-        (memory as any).searchable !== false
+        (memory as any).searchable !== false &&
+        (memory as any).userHidden !== true
       );
     });
   }
@@ -1245,6 +1262,7 @@ export class MemoryQueryService {
       deletedAt: null,
       supersededById: null,
       searchable: { not: false },
+      userHidden: false,
       embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
       isDuplicateOf: null,
       importanceScore: { gte: 0.6 },
@@ -1365,6 +1383,7 @@ export class MemoryQueryService {
        FROM memories
        WHERE agent_id = $1
          AND searchable = true
+         AND user_hidden = false
          AND deleted_at IS NULL
          AND raw ILIKE '%' || $2 || '%'
          AND created_at >= $3

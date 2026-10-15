@@ -100,7 +100,8 @@ export class MemoryCoreController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Batch created. `warnings` present when any item triggered a non-fatal ingest warning.',
+    description:
+      'Batch created. `warnings` present when any item triggered a non-fatal ingest warning.',
     type: BatchCreateResponseDto,
   })
   async rememberAll(
@@ -168,7 +169,7 @@ export class MemoryCoreController {
   @ApiOperation({
     summary: 'List memories',
     description:
-      'List memories with pagination, ordered by newest first. Supports layer and userId filters.',
+      'List visible memories with pagination, ordered by newest first. Set includeHidden=true to manage hidden memories.',
   })
   async listMemories(
     @Req() req: any,
@@ -178,6 +179,7 @@ export class MemoryCoreController {
     @Query('layer') layer?: string,
     @Query('userId') filterUserId?: string,
     @Query('agentId') agentId?: string,
+    @Query('includeHidden') includeHidden?: string,
   ): Promise<{
     memories: any[];
     total: number;
@@ -198,6 +200,7 @@ export class MemoryCoreController {
 
     const where: any = {
       deletedAt: null,
+      ...(includeHidden === 'true' ? {} : { userHidden: false }),
       userId:
         filterUserId && userIds.includes(filterUserId)
           ? filterUserId

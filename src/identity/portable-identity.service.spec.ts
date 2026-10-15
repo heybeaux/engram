@@ -40,6 +40,20 @@ describe('PortableIdentityService', () => {
   });
 
   describe('exportIdentity', () => {
+    it('excludes hidden memories from portable profile aggregates', async () => {
+      for (const method of ['findMany', 'findFirst', 'count', 'groupBy']) {
+        mockPrisma.memory[method].mockImplementation(({ where }: any) => {
+          expect(where.userHidden).toBe(false);
+          return Promise.resolve(
+            method === 'count' ? 0 : method === 'findFirst' ? null : [],
+          );
+        });
+      }
+      const result = await service.exportIdentity('agent-1');
+      expect(result.preferences).toEqual({});
+      expect(result.workHistorySummary.totalMemories).toBe(0);
+    });
+
     it('should export a complete identity profile', async () => {
       const result = await service.exportIdentity('agent-1');
 

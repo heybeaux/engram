@@ -270,7 +270,11 @@ describe('HierarchyService', () => {
         updatedAt: new Date(),
       });
 
-      const result = await service.processMemory('mem-1', 'sentence.', 'user-1');
+      const result = await service.processMemory(
+        'mem-1',
+        'sentence.',
+        'user-1',
+      );
 
       expect(result.unitsCreated).toBeGreaterThan(0);
       expect(mockServicePrisma.hierarchyUnit.create).toHaveBeenCalledTimes(
@@ -393,6 +397,15 @@ describe('HierarchyService', () => {
       expect(result.levelsSearched).toBeDefined();
     });
 
+    it('excludes hierarchy hits whose source memory is hidden', async () => {
+      mockPrisma.memory.findMany.mockImplementation(async ({ where }: any) => {
+        expect(where).toEqual(expect.objectContaining({ userHidden: false }));
+        return [];
+      });
+      const result = await service.search('test query', 'user-456');
+      expect(result.results).toEqual([]);
+    });
+
     it('should use auto routing by default', async () => {
       await service.search('test query', 'user-456');
 
@@ -432,7 +445,10 @@ describe('HierarchyService', () => {
       const result = await service.getUnitsForMemory('mem-123');
 
       expect(mockPrisma.hierarchyUnit.findMany).toHaveBeenCalledWith({
-        where: { sourceMemoryId: 'mem-123' },
+        where: {
+          sourceMemoryId: 'mem-123',
+          sourceMemory: { userHidden: false, deletedAt: null },
+        },
         orderBy: [{ level: 'asc' }, { position: 'asc' }],
       });
       expect(result).toEqual(mockUnits);

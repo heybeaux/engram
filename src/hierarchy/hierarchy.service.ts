@@ -424,9 +424,27 @@ export class HierarchyService {
 
     // Deduplicate (prefer higher-level results for same source)
     const deduplicated = this.deduplicateResults(allResults);
+    const sourceIds = deduplicated
+      .map((result) => result.sourceMemoryId)
+      .filter((id): id is string => id !== null);
+    const visibleSources = await this.prisma.memory.findMany({
+      where: {
+        id: { in: sourceIds },
+        userId,
+        deletedAt: null,
+        userHidden: false,
+      },
+      select: { id: true },
+    });
+    const visibleIds = new Set(visibleSources.map((memory) => memory.id));
 
     return {
-      results: deduplicated.slice(0, topK),
+      results: deduplicated
+        .filter(
+          (result) =>
+            result.sourceMemoryId && visibleIds.has(result.sourceMemoryId),
+        )
+        .slice(0, topK),
       routing,
       levelsSearched: levels,
     };
@@ -514,7 +532,10 @@ export class HierarchyService {
    */
   async getUnitsForMemory(memoryId: string): Promise<HierarchyUnit[]> {
     return this.prisma.hierarchyUnit.findMany({
-      where: { sourceMemoryId: memoryId },
+      where: {
+        sourceMemoryId: memoryId,
+        sourceMemory: { userHidden: false, deletedAt: null },
+      },
       orderBy: [{ level: 'asc' }, { position: 'asc' }],
     });
   }
@@ -529,12 +550,12 @@ export class HierarchyService {
   }> {
     const counts = await this.prisma.hierarchyUnit.groupBy({
       by: ['level'],
-      where: { userId },
+      where: { userId, sourceMemory: { userHidden: false, deletedAt: null } },
       _count: { id: true },
     });
 
     const latest = await this.prisma.hierarchyUnit.findFirst({
-      where: { userId },
+      where: { userId, sourceMemory: { userHidden: false, deletedAt: null } },
       orderBy: { updatedAt: 'desc' },
       select: { updatedAt: true },
     });

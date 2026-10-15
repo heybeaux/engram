@@ -73,6 +73,17 @@ describe('MemoryContradictionService', () => {
       expect(result.contradictions).toEqual([]);
     });
 
+    it('excludes hidden contradiction candidates', async () => {
+      mockPrisma.$queryRawUnsafe.mockImplementation(async (sql: string) => {
+        expect(sql).toContain('m.user_hidden = false');
+        return [];
+      });
+      const result = await service.findContradictions('user-1', {
+        text: 'Coffee is good',
+      });
+      expect(result.contradictions).toEqual([]);
+    });
+
     it('should succeed with memoryId only', async () => {
       mockPrisma.memory.findUnique.mockResolvedValue({
         id: 'mem-1',

@@ -86,6 +86,16 @@ describe('GraphService', () => {
     });
   });
 
+  it('excludes hidden memories from direct entity lookup', async () => {
+    mockPrismaService.graphEntityMention.findMany.mockImplementation(
+      async ({ where }: any) => {
+        expect(where.memory.userHidden).toBe(false);
+        return [];
+      },
+    );
+    expect(await service.getMemoriesForEntity('entity-1')).toEqual([]);
+  });
+
   describe('getEntityProfile', () => {
     it('should get entity profile with relationships and memories', async () => {
       const mockEntity = {
@@ -131,6 +141,15 @@ describe('GraphService', () => {
       expect(result).not.toBeNull();
       expect(result!.entity).toEqual(mockEntityWithRels);
       expect(result!.recentMemories).toHaveLength(1);
+      expect(
+        mockPrismaService.graphEntityMention.findMany,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            memory: { userHidden: false, deletedAt: null },
+          }),
+        }),
+      );
     });
 
     it('should find entity by name if not found by ID', async () => {

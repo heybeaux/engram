@@ -25,6 +25,21 @@ describe('MemoryQueryService', () => {
   const userId = 'user-123';
   const mockEmbedding = [0.1, 0.2, 0.3];
 
+  it('excludes hidden memories from topic timelines', async () => {
+    (prisma as any).$queryRawUnsafe = jest
+      .fn()
+      .mockImplementation(async (sql: string) => {
+        expect(sql).toContain('user_hidden = false');
+        return [];
+      });
+    const result = await service.traceTimeline('agent-1', {
+      topic: 'topic',
+      startDate: '2026-01-01',
+      endDate: '2026-01-02',
+    } as any);
+    expect(result.entries).toEqual([]);
+  });
+
   beforeEach(() => {
     prisma = {
       memory: {
@@ -105,6 +120,43 @@ describe('MemoryQueryService', () => {
   });
 
   describe('recall', () => {
+    it('excludes hidden vector hits before ranking', async () => {
+      embedding.search.mockResolvedValue([
+        { id: 'hidden', score: 0.95 },
+      ] as any);
+      (prisma.memory.findMany as jest.Mock).mockImplementation(
+        async ({ where }) => {
+          expect(where.userHidden).toBe(false);
+          return [];
+        },
+      );
+      const result = await service.recall(userId, {
+        query: 'test query',
+      } as any);
+      expect(result.memories).toEqual([]);
+    });
+
+    it('excludes hidden temporal hits', async () => {
+      temporalParser.parse.mockReturnValue({
+        semanticQuery: 'meeting',
+        temporalFilter: {
+          expression: 'yesterday',
+          start: new Date('2026-02-14'),
+          end: new Date('2026-02-15'),
+        },
+      } as any);
+      (prisma.memory.findMany as jest.Mock).mockImplementation(
+        async ({ where }) => {
+          expect(where.userHidden).toBe(false);
+          return [];
+        },
+      );
+      const result = await service.recall(userId, {
+        query: 'yesterday meeting',
+      } as any);
+      expect(result.memories).toEqual([]);
+    });
+
     it('should perform standard semantic search', async () => {
       embedding.search.mockResolvedValue([
         { id: 'm1', score: 0.9 },
@@ -1108,6 +1160,33 @@ describe('MemoryQueryService', () => {
   });
 
   describe('recall with multiQuery', () => {
+    it('excludes hidden multi-query hits and their explanations', async () => {
+      multiQueryService.isEnabled.mockReturnValue(true);
+      multiQueryService.search.mockResolvedValue({
+        results: [{ memoryId: 'hidden', score: 0.9 }],
+        metadata: {},
+      } as any);
+      multiQueryService.generateExplanations = jest.fn().mockReturnValue({});
+      (prisma.memory.findMany as jest.Mock).mockImplementation(
+        async ({ where }) => {
+          expect(where.userHidden).toBe(false);
+          return [];
+        },
+      );
+      const result = await service.recall(userId, {
+        query: 'hidden query',
+        multiQuery: { enabled: true, includeExplanations: true },
+      } as any);
+      expect(result.memories).toEqual([]);
+      expect(multiQueryService.generateMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ results: [] }),
+        expect.anything(),
+      );
+      expect(
+        (multiQueryService.generateExplanations as jest.Mock).mock.calls[0][0],
+      ).toEqual([]);
+    });
+
     it('should use multi-query path when enabled', async () => {
       multiQueryService.isEnabled.mockReturnValue(true);
       multiQueryService.search.mockResolvedValue({

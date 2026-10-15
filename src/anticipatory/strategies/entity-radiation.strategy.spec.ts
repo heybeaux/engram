@@ -92,6 +92,27 @@ describe('EntityRadiationStrategy', () => {
   // ── Happy paths ───────────────────────────────────────────────────────────
 
   describe('execute — happy paths', () => {
+    it('excludes hidden memories during entity radiation', async () => {
+      const entity = makeEntity('e-1', 'Engram');
+      mockEntityService.findByNameOrAlias.mockResolvedValue(entity);
+      mockRelationshipService.traverse.mockResolvedValue(
+        makeTraversal(
+          [entity, makeEntity('e-2', 'Railway')],
+          [{ sourceId: 'e-1', targetId: 'e-2', weight: 0.9 }],
+        ),
+      );
+      mockPrisma.memory.findMany.mockImplementation(async ({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return [];
+      });
+      expect(
+        await strategy.execute(makeSignals(), {
+          maxResults: 5,
+          timeoutMs: 5000,
+        }),
+      ).toEqual([]);
+    });
+
     it('should return empty array when no entities in signals', async () => {
       const signals = makeSignals({ entities: [] });
       const result = await strategy.execute(signals, {

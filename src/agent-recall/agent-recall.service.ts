@@ -398,7 +398,7 @@ export class AgentRecallService {
   private async getMemories(profileId: string, limit: number) {
     // 1. Explicitly attached memories via join table
     const attached = await this.prisma.entityProfileMemory.findMany({
-      where: { profileId },
+      where: { profileId, memory: { userHidden: false, deletedAt: null } },
       include: {
         memory: {
           select: {
@@ -423,7 +423,10 @@ export class AgentRecallService {
     const entityMemories: typeof attached = [];
     if (profile?.entityId) {
       const memoryEntities = await this.prisma.memoryEntity.findMany({
-        where: { entityId: profile.entityId },
+        where: {
+          entityId: profile.entityId,
+          memory: { userHidden: false, deletedAt: null },
+        },
         include: {
           memory: {
             select: {

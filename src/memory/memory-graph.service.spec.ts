@@ -58,6 +58,18 @@ describe('MemoryGraphService', () => {
     ...overrides,
   });
 
+  it('excludes hidden nodes from the graph', async () => {
+    mockPrisma.memory.findMany.mockImplementation(async ({ where }: any) => {
+      expect(where.userHidden).toBe(false);
+      return [];
+    });
+    mockPrisma.graphEntityMention.findMany.mockResolvedValue([]);
+    mockPrisma.graphRelationship.findMany.mockResolvedValue([]);
+    mockPrisma.memoryChainLink.findMany.mockResolvedValue([]);
+    const result = await service.getGraphData('user-1');
+    expect(result.nodes).toEqual([]);
+  });
+
   it('should return nodes, edges, and entities for a user', async () => {
     mockPrisma.memory.findMany.mockResolvedValue([
       baseMemory('m1'),

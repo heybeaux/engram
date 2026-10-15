@@ -86,6 +86,20 @@ describe('PgVectorEnsembleProvider', () => {
   });
 
   describe('queryByModel', () => {
+    it('excludes hidden memories at the ensemble SQL boundary', async () => {
+      mockPrisma.$queryRawUnsafe.mockImplementation(async (sql: string) => {
+        expect(sql).toContain('m.user_hidden = false');
+        return [];
+      });
+      const result = await provider.queryByModel({
+        userId: 'user1',
+        modelId: 'bge-base',
+        embedding: Array(768).fill(0.1),
+        limit: 5,
+      } as any);
+      expect(result).toEqual([]);
+    });
+
     it('should return search results with scores', async () => {
       mockPrisma.$queryRawUnsafe.mockResolvedValue([
         { memory_id: 'mem-1', score: 0.95 },

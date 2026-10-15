@@ -77,6 +77,7 @@ export class SelfAssessmentService {
         agentId,
         memoryType: 'SELF_ASSESSMENT',
         deletedAt: null,
+        userHidden: false,
       },
       orderBy: { createdAt: 'desc' },
       take: options?.limit ?? 50,

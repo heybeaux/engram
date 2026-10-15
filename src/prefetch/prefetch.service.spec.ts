@@ -5,6 +5,7 @@ import { PrefetchCacheService } from './prefetch-cache.service';
 import { PrefetchMetricsService } from './prefetch-metrics.service';
 import { MemoryService } from '../memory/memory.service';
 import { EmbeddingService } from '../memory/embedding.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { TopicScore } from './prefetch.types';
 
 describe('PrefetchService', () => {
@@ -14,6 +15,7 @@ describe('PrefetchService', () => {
   let mockMetrics: any;
   let mockMemoryService: any;
   let mockEmbeddingService: any;
+  let mockPrisma: any;
 
   const mockTopics: TopicScore[] = [
     { topic: 'family', confidence: 0.8, source: 'merged' },
@@ -115,6 +117,10 @@ describe('PrefetchService', () => {
       generate: jest.fn().mockResolvedValue([0.1, 0.2, 0.3]),
     } as any;
 
+    mockPrisma = {
+      memory: { findMany: jest.fn().mockResolvedValue([{ id: 'mem-1' }]) },
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PrefetchService,
@@ -123,6 +129,7 @@ describe('PrefetchService', () => {
         { provide: PrefetchMetricsService, useValue: mockMetrics },
         { provide: MemoryService, useValue: mockMemoryService },
         { provide: EmbeddingService, useValue: mockEmbeddingService },
+        { provide: PrismaService, useValue: mockPrisma },
       ],
     }).compile();
 
@@ -209,6 +216,21 @@ describe('PrefetchService', () => {
   });
 
   describe('loadContextWithPrefetch', () => {
+    it('excludes memories hidden since cache population', async () => {
+      mockCache.getByTopic.mockReturnValue([{ id: 'hidden', score: 0.9 }]);
+      mockPrisma.memory.findMany.mockImplementation(async ({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return [];
+      });
+      const result = await service.loadContextWithPrefetch(
+        'user-1',
+        'family',
+        10,
+      );
+      expect(result.memories).toEqual([]);
+      expect(result.cacheHits).toBe(0);
+    });
+
     it('should return enhanced context result', async () => {
       const result = await service.loadContextWithPrefetch(
         'user-1',

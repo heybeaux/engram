@@ -161,6 +161,7 @@ export class PortableIdentityService {
         subjectId: agentId,
         memoryType: 'TASK_OUTCOME',
         deletedAt: null,
+        userHidden: false,
       },
       orderBy: { effectiveScore: 'desc' },
       take: 100,
@@ -200,6 +201,7 @@ export class PortableIdentityService {
         subjectId: agentId,
         memoryType: 'PREFERENCE',
         deletedAt: null,
+        userHidden: false,
       },
       take: 50,
     });
@@ -220,6 +222,7 @@ export class PortableIdentityService {
         subjectId: agentId,
         source: { in: [MemorySource.SYSTEM, MemorySource.AGENT_OBSERVATION] },
         deletedAt: null,
+        userHidden: false,
       },
       select: { importanceScore: true, raw: true },
     });
@@ -259,13 +262,14 @@ export class PortableIdentityService {
     const [totalMemories, taskCompletions, reflections, oldest, typeCounts] =
       await Promise.all([
         this.prisma.memory.count({
-          where: { subjectId: agentId, deletedAt: null },
+          where: { subjectId: agentId, deletedAt: null, userHidden: false },
         }),
         this.prisma.memory.count({
           where: {
             subjectId: agentId,
             source: MemorySource.SYSTEM,
             deletedAt: null,
+            userHidden: false,
           },
         }),
         this.prisma.memory.count({
@@ -273,10 +277,11 @@ export class PortableIdentityService {
             subjectId: agentId,
             source: MemorySource.AGENT_REFLECTION,
             deletedAt: null,
+            userHidden: false,
           },
         }),
         this.prisma.memory.findFirst({
-          where: { subjectId: agentId, deletedAt: null },
+          where: { subjectId: agentId, deletedAt: null, userHidden: false },
           orderBy: { createdAt: 'asc' },
           select: { createdAt: true },
         }),
@@ -286,6 +291,7 @@ export class PortableIdentityService {
             subjectId: agentId,
             deletedAt: null,
             memoryType: { not: null },
+            userHidden: false,
           },
           _count: true,
           orderBy: { _count: { memoryType: 'desc' } },
@@ -316,6 +322,7 @@ export class PortableIdentityService {
         subjectId: agentId,
         deletedAt: null,
         source: MemorySource.SYSTEM,
+        userHidden: false,
       },
       select: { raw: true, importanceScore: true },
       take: 200,
@@ -359,6 +366,7 @@ export class PortableIdentityService {
         subjectType: SubjectType.AGENT,
         memoryType: 'TASK_OUTCOME',
         deletedAt: null,
+        userHidden: false,
       },
       orderBy: { effectiveScore: 'desc' },
       take: 20,

@@ -97,6 +97,26 @@ describe('AgentRecallService', () => {
       );
     });
 
+    it('excludes hidden memories on both profile attachment paths', async () => {
+      mockPrisma.entityProfile.findFirst.mockResolvedValue(baseProfile);
+      mockPrisma.entityProfileMemory.findMany.mockImplementation(
+        async ({ where }: any) => {
+          expect(where.memory.userHidden).toBe(false);
+          return [];
+        },
+      );
+      mockPrisma.entityProfile.findUnique.mockResolvedValue(baseProfile);
+      mockPrisma.memoryEntity.findMany.mockImplementation(
+        async ({ where }: any) => {
+          expect(where.memory.userHidden).toBe(false);
+          return [];
+        },
+      );
+      mockPrisma.graphEntity.findFirst.mockResolvedValue(null);
+      const result = await service.recallEntity(ACCOUNT_ID, 'Alice');
+      expect(result?.memories).toEqual([]);
+    });
+
     it('should return null when no profile matched', async () => {
       mockPrisma.entityProfile.findFirst.mockResolvedValue(null);
       mockPrisma.$queryRawUnsafe.mockResolvedValue([]);

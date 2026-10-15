@@ -124,6 +124,17 @@ describe('TeamProfileService', () => {
   });
 
   describe('aggregateCapabilities', () => {
+    it('excludes hidden capability and collaboration memories', async () => {
+      mockPrisma.memory.findMany.mockImplementation(({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return Promise.resolve([]);
+      });
+      expect(await service.aggregateCapabilities(['agent-1'])).toEqual([]);
+      expect(
+        await service.calculateCollaborationScore(['agent-1', 'agent-2']),
+      ).toBe(0);
+    });
+
     it('should extract capabilities from agent memories', async () => {
       mockPrisma.memory.findMany.mockResolvedValue([
         {

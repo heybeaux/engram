@@ -8,6 +8,7 @@
 import { Injectable, OnModuleInit, Optional, Logger } from '@nestjs/common';
 import { MemoryService, MemoryWithScore } from '../memory/memory.service';
 import { EmbeddingService } from '../memory/embedding.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { TopicDetectionService } from './topic-detection.service';
 import { PrefetchCacheService } from './prefetch-cache.service';
 import { PrefetchMetricsService } from './prefetch-metrics.service';
@@ -62,6 +63,7 @@ export class PrefetchService implements OnModuleInit {
     private topicDetection: TopicDetectionService,
     private cache: PrefetchCacheService,
     private metrics: PrefetchMetricsService,
+    private prisma: PrismaService,
     @Optional() private memoryService?: MemoryService,
     @Optional() private embeddingService?: EmbeddingService,
   ) {
@@ -165,7 +167,6 @@ export class PrefetchService implements OnModuleInit {
 
     // Try to get memories from cache
     const cachedMemories: CachedMemory[] = [];
-    let cacheHits = 0;
     let cacheMisses = 0;
 
     for (const topicScore of detection.topics) {
@@ -173,22 +174,40 @@ export class PrefetchService implements OnModuleInit {
       for (const mem of topicMemories) {
         if (!cachedMemories.some((m) => m.id === mem.id)) {
           cachedMemories.push(mem);
-          cacheHits++;
-          this.metrics.recordCacheResult(true);
         }
       }
     }
 
+    const visible = cachedMemories.length
+      ? await this.prisma.memory.findMany({
+          where: {
+            id: { in: cachedMemories.map((memory) => memory.id) },
+            userId,
+            deletedAt: null,
+            userHidden: false,
+          },
+          select: { id: true },
+        })
+      : [];
+    const visibleIds = new Set(visible.map((memory) => memory.id));
+    const eligibleMemories = cachedMemories.filter((memory) =>
+      visibleIds.has(memory.id),
+    );
+    const cacheHits = eligibleMemories.length;
+    for (let index = 0; index < cacheHits; index++) {
+      this.metrics.recordCacheResult(true);
+    }
+
     // Record cache misses if we didn't get enough
-    if (cachedMemories.length < limit) {
-      cacheMisses = limit - cachedMemories.length;
+    if (eligibleMemories.length < limit) {
+      cacheMisses = limit - eligibleMemories.length;
       for (let i = 0; i < cacheMisses; i++) {
         this.metrics.recordCacheResult(false);
       }
     }
 
     // Sort by score and limit
-    const sortedMemories = cachedMemories
+    const sortedMemories = eligibleMemories
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
@@ -548,7 +567,7 @@ export class PrefetchService implements OnModuleInit {
     for (const id of memoryIds.slice(0, this.config.maxPrefetchBatchSize)) {
       try {
         const mem = await this.memoryService.getById(id);
-        if (mem) {
+        if (mem && !mem.userHidden && mem.userId === userId) {
           results.push({ ...mem, score: 0.5 });
         }
       } catch {

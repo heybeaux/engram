@@ -20,6 +20,7 @@ export class TemporalGapService {
        FROM memories
        WHERE agent_id = $1
          AND searchable = true
+         AND user_hidden = false
          AND deleted_at IS NULL
          AND raw ILIKE '%' || $2 || '%'
          AND created_at >= $3
