@@ -51,7 +51,9 @@ export class MemoryBulkController {
   ) {}
 
   @Post('memories/bulk/workspace-file')
-  @ApiOperation({ summary: 'Import dated OpenClaw workspace Markdown (disabled by default)' })
+  @ApiOperation({
+    summary: 'Import dated OpenClaw workspace Markdown (disabled by default)',
+  })
   async importWorkspaceFile(
     @UserId() userId: string,
     @Body() dto: WorkspaceFileImportDto,
