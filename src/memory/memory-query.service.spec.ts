@@ -241,6 +241,70 @@ describe('MemoryQueryService', () => {
         expect(temporalParser.blendScores).toHaveBeenCalled();
       });
 
+      describe('empty hard window', () => {
+        const todayFilter = () =>
+          ({
+            semanticQuery: 'meeting',
+            temporalFilter: {
+              expression: 'today',
+              start: new Date('2026-02-14T00:00:00Z'),
+              end: new Date('2026-02-14T23:59:59Z'),
+            },
+          }) as any;
+        // Window query (OR on observedAt/createdAt) finds nothing; the standard
+        // path's id lookup returns the memories.
+        const emptyWindowThenMems = () =>
+          jest
+            .fn()
+            .mockImplementation(async (args: any) =>
+              args.where?.id ? mems : [],
+            );
+
+        it('falls back to the standard path and keeps results when the flag is on', async () => {
+          process.env.TEMPORAL_SOFT_WINDOWS = 'true';
+          temporalParser.parse.mockReturnValue(todayFilter());
+          prisma.memory.findMany = emptyWindowThenMems();
+          embedding.search.mockResolvedValue([
+            { id: 'old', score: 0.52 },
+            { id: 'new', score: 0.5 },
+          ] as any);
+
+          const result = await service.recall(userId, {
+            query: 'today meeting',
+          } as any);
+
+          expect(temporalParser.blendScores).not.toHaveBeenCalled();
+          expect(result.memories.map((m: any) => m.id)).toEqual(['new', 'old']);
+        });
+
+        it('returns the empty window result when the flag is off', async () => {
+          temporalParser.parse.mockReturnValue(todayFilter());
+          prisma.memory.findMany = emptyWindowThenMems();
+          embedding.search.mockResolvedValue([
+            { id: 'old', score: 0.9 },
+          ] as any);
+
+          const result = await service.recall(userId, {
+            query: 'today meeting',
+          } as any);
+
+          expect(result.memories).toHaveLength(0);
+        });
+
+        it('keeps a non-empty hard window on the temporal path when the flag is on', async () => {
+          process.env.TEMPORAL_SOFT_WINDOWS = 'true';
+          temporalParser.parse.mockReturnValue(todayFilter());
+          prisma.memory.findMany = jest.fn().mockResolvedValue([mems[1]]);
+          embedding.search.mockResolvedValue([
+            { id: 'new', score: 0.9 },
+          ] as any);
+
+          await service.recall(userId, { query: 'today meeting' } as any);
+
+          expect(temporalParser.blendScores).toHaveBeenCalled();
+        });
+      });
+
       it('keeps a hard window on the temporal path when the flag is on', async () => {
         process.env.TEMPORAL_SOFT_WINDOWS = 'true';
         temporalParser.parse.mockReturnValue(softFilter(undefined));

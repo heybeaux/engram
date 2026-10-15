@@ -36,6 +36,7 @@ Sequencing: Phase 1 ships the field model and ingest contract (no behavior chang
 
 - **T17.** Add `timeFilter: { instant?, rangeStart?, rangeEnd? }` to recall request DTO.
 - **T18.** Query-side pass-1 extractor: extract dates from query string at recall time, anchor to `now()`, build implicit `timeFilter` if explicit one absent.
+  - *Status (ENG-10):* partial. Recall accepts `referenceDate` so the parser anchors to the conversation time instead of the server clock. Vague windows (recently/earlier/last month) rank with a 1.1x boost instead of filtering, and an empty hard window falls back to the standard path, both behind `TEMPORAL_SOFT_WINDOWS` (default off). Explicit `timeFilter` and extracted event times are not built.
 - **T19.** Scoring layer: temporal boost/penalty as described in design.md. Initial constants `α=0.05`, `β=0.10`, both behind config.
 - **T20.** Recall response includes `temporalEvidence: { matched: [...], conflicted: [...] }` for debug.
 - **T21.** Existing recall regression tests must still pass (P@5 ≥ 98.1% on the gold queries).
@@ -43,6 +44,7 @@ Sequencing: Phase 1 ships the field model and ingest contract (no behavior chang
 ## Phase 5 — Eval + tune
 
 - **T22.** Extend LongMemEval sync script with `--observed-at-from <field>` flag. Default to the dataset's per-question timestamp field.
+  - *Status (ENG-10):* partial. The harness ingests per-session `observedAt` behind `LME_OBSERVED_AT=1` and sends `question_date` as `referenceDate` behind `LME_REFERENCE_DATE=1`; it is not a sync-script flag. Alone, both flags dropped gold-in-topK on the temporal-path IDs from 11/16 to 3/16 (ENG-32); with `TEMPORAL_SOFT_WINDOWS` it recovered to 14/16 (ENG-60).
 - **T23.** Re-run LongMemEval full subset with anchoring enabled (pass 1 only) and capture all 5 category scores.
 - **T24.** Re-run with pass 2 enabled. Capture cost delta and category scores.
 - **T25.** Tune `α`/`β` against the eval. Document final values + their measured effect in design.md.
