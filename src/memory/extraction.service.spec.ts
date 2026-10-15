@@ -32,6 +32,21 @@ describe('ExtractionService', () => {
   });
 
   describe('extract', () => {
+    it('normalizes structured LLM topics before Prisma persistence', async () => {
+      mockLlmService.json.mockResolvedValue({
+        topics: [
+          'rules',
+          { topic: 'authorization', confidence: 1 },
+          null,
+          4,
+          {},
+          '',
+        ],
+      });
+      const result = await service.extract('Authorization requires a witness.');
+      expect(result.topics).toEqual(['rules', 'authorization']);
+    });
+
     it('should extract 5W1H structure using LLM', async () => {
       const llmResponse = {
         who: 'John',

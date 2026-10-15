@@ -1,3 +1,4 @@
+import { withLocalEmbeddingSlot } from './local-embedding-limiter';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -43,6 +44,13 @@ export class LocalEmbedProvider implements EmbeddingProvider {
   }
 
   async embed(texts: string[], options?: EmbedOptions): Promise<number[][]> {
+    return withLocalEmbeddingSlot(() => this.embedAdmitted(texts, options));
+  }
+
+  private async embedAdmitted(
+    texts: string[],
+    options?: EmbedOptions,
+  ): Promise<number[][]> {
     const input = texts.length === 1 ? texts[0] : texts;
 
     const headers: Record<string, string> = {
@@ -58,9 +66,12 @@ export class LocalEmbedProvider implements EmbeddingProvider {
       body: JSON.stringify({ input, model: this.model }),
     };
 
-    if (options?.timeoutMs) {
+    if (options?.timeoutMs !== 0) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+      const timeout = setTimeout(
+        () => controller.abort(),
+        options?.timeoutMs ?? 30_000,
+      );
       fetchOptions.signal = controller.signal;
       try {
         return await this.doFetch(fetchOptions);
@@ -136,30 +147,42 @@ export class LocalEmbedProvider implements EmbeddingProvider {
   }
 
   async healthCheck(): Promise<boolean> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const controller = new AbortController();
       // Increased from 5s → 30s: engram-embed /health can be delayed when
       // the embed queue is busy (CPU-bound inference on same Tokio threads).
       // The real fix is spawn_blocking in engram-embed, but this prevents
       // false "down" reports in the meantime.
-      const timeout = setTimeout(() => controller.abort(), 30_000);
+      timeout = setTimeout(() => controller.abort(), 30_000);
 
       const response = await fetch(`${this.baseUrl}/health`, {
         method: 'GET',
         signal: controller.signal,
       }).catch(() =>
-        fetch(`${this.baseUrl}/v1/embeddings`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input: 'health check', model: this.model }),
-          signal: controller.signal,
-        }),
+        withLocalEmbeddingSlot(() =>
+          (async () => {
+            const fallback = await fetch(`${this.baseUrl}/v1/embeddings`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                input: 'health check',
+                model: this.model,
+              }),
+              signal: controller.signal,
+            });
+            await fallback.body?.cancel();
+            return fallback;
+          })(),
+        ),
       );
 
-      clearTimeout(timeout);
+      await response.body?.cancel();
       return response.ok;
     } catch {
       return false;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

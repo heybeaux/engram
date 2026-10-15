@@ -7,6 +7,7 @@ import {
   assertValidEmbedding,
   isTransientEmbeddingError,
 } from '../embedding/embedding-validation.util';
+import { QueryEmbeddingCache } from './query-embedding-cache';
 
 export interface VectorSearchResult {
   id: string;
@@ -32,6 +33,9 @@ export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
 
   private static readonly RECALL_TIMEOUT_MS = 5_000;
+
+  // ENG-36 F4: off unless RECALL_QUERY_EMBED_CACHE_SIZE > 0.
+  private readonly queryEmbeddingCache = QueryEmbeddingCache.fromEnv();
 
   constructor(
     private llm: LLMService,
@@ -111,6 +115,38 @@ export class EmbeddingService {
    * Falls back to standard generate() if the facade is unavailable.
    */
   async generateForRecall(text: string): Promise<number[]> {
+    const cache = this.queryEmbeddingCache;
+    if (!cache.enabled) return (await this.embedForRecall(text)).embedding;
+    const key = this.recallCacheKey(text);
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const { embedding, cacheable } = await this.embedForRecall(text);
+    if (cacheable) cache.set(key, embedding);
+    return embedding;
+  }
+
+  /** Hit/miss counters for the recall query-embedding cache (ENG-36 F4). */
+  getQueryEmbeddingCacheStats() {
+    return this.queryEmbeddingCache.stats();
+  }
+
+  // The provider is fixed at boot, but keying on it keeps a vector from one
+  // model from ever being served for another.
+  private recallCacheKey(text: string): string {
+    const facade = this.embedFacade as
+      | { getProviderName?: () => string; getModelName?: () => string }
+      | undefined;
+    const provider = facade?.getProviderName?.() ?? (facade ? 'facade' : 'llm');
+    const model = facade?.getModelName?.() ?? '';
+    return `${provider}\u0000${model}\u0000${text}`;
+  }
+
+  // `cacheable` is false when the facade's recall call failed and the vector
+  // came from the generate() fallback: the cache key names the facade's
+  // provider/model, so a fallback vector must never be stored under it.
+  private async embedForRecall(
+    text: string,
+  ): Promise<{ embedding: number[]; cacheable: boolean }> {
     if (this.embedFacade) {
       try {
         const embedding = await this.embedFacade.embedOneWithOptions(text, {
@@ -125,14 +161,16 @@ export class EmbeddingService {
           );
         }
         this.consecutiveFailures = 0;
-        return embedding;
+        return { embedding, cacheable: true };
       } catch (error) {
         this.logger.warn(
           `[Recall] Priority embed failed, falling back to standard: ${(error as Error).message}`,
         );
       }
+      return { embedding: await this.generate(text), cacheable: false };
     }
-    return this.generate(text);
+    // No facade: generate() is the only provider and the key says 'llm'.
+    return { embedding: await this.generate(text), cacheable: true };
   }
 
   /**

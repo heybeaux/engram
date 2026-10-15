@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "memories": [
+    ["harbor_original", "According to dispatch memo H-17 dated 2026-08-01, the Kestrel harbor shuttle departs at 07:40 and costs 18 CAD."],
+    ["harbor_correction", "Correction in dispatch memo H-18 dated 2026-08-03: the Kestrel harbor shuttle departs at 08:15, not 07:40; the fare remains 18 CAD."],
+    ["harbor_exception", "The Kestrel harbor shuttle departs at 08:15 and costs 18 CAD, except on statutory holidays when there is no service; dispatch memo H-19."],
+    ["harbor_added", "The Kestrel harbor shuttle departs at 08:15 and costs 18 CAD; bicycles require a reservation 24 hours ahead, according to dispatch memo H-20."],
+    ["orchid_a", "Orchid sensor calibration record O-31: use buffer pH 6.8 at 22 Celsius; technician Mira measured drift of 0.04."],
+    ["orchid_b", "Orchid sensor calibration record O-32: use buffer pH 6.8 at 22 Celsius; technician Tomas measured drift of 0.09, disagreeing with Mira's 0.04."],
+    ["orchid_c", "Orchid sensor calibration record O-33: use buffer pH 6.8 at 22 Celsius; do not recalibrate during rain, and retain both Mira and Tomas measurements."],
+    ["archive_a", "Juniper locker access note J-41: the inspection code is 7319 and inspection closes on 2026-11-14."],
+    ["archive_b", "Juniper locker access note J-42: the inspection code is 7319 and inspection requires two witnesses, except emergency repairs."],
+    ["archive_c", "Juniper locker access note J-43: the inspection code is 7319 and caretaker Nola holds the brass key."],
+    ["noise_a", "The Kestrel restaurant serves harbor chowder for 18 CAD; dinner reservations open at 08:15."],
+    ["noise_b", "The Orchid theatre's opening performance starts at 22:00. Tomas booked seat 68."],
+    ["noise_c", "Juniper paint costs 73.19 CAD and comes in brass and rain grey colours."]
+  ],
+  "queries": [
+    {"id":"correction","query":"What is the corrected departure time of the Kestrel harbor shuttle?","relevant":["harbor_correction","harbor_exception","harbor_added"],"facts":["08:15"]},
+    {"id":"date_provenance","query":"Which dispatch memo corrected the Kestrel harbor shuttle time and on what date?","relevant":["harbor_correction"],"facts":["H-18","2026-08-03"]},
+    {"id":"exception","query":"Does the Kestrel harbor shuttle run on statutory holidays?","relevant":["harbor_exception"],"facts":["statutory holidays","no service"]},
+    {"id":"added_fact","query":"How far ahead do bicycles need reservations on the Kestrel harbor shuttle?","relevant":["harbor_added"],"facts":["24 hours"]},
+    {"id":"conflict","query":"What conflicting drift measurements did Mira and Tomas record for the Orchid sensor?","relevant":["orchid_a","orchid_b"],"facts":["Mira","Tomas","0.04","0.09"]},
+    {"id":"rain_exception","query":"When should the Orchid sensor not be recalibrated?","relevant":["orchid_c"],"facts":["rain"]},
+    {"id":"numeric","query":"What buffer pH and temperature does Orchid sensor calibration use?","relevant":["orchid_a","orchid_b","orchid_c"],"facts":["6.8","22"]},
+    {"id":"archive_date","query":"What is the Juniper locker inspection code and closing date?","relevant":["archive_a"],"facts":["7319","2026-11-14"]},
+    {"id":"archive_exception","query":"When is the two-witness rule waived for Juniper locker inspection?","relevant":["archive_b"],"facts":["two witnesses","emergency repairs"]},
+    {"id":"provenance","query":"Who holds the Juniper locker brass key?","relevant":["archive_c"],"facts":["Nola"]},
+    {"id":"no_answer_near","query":"What is the Kestrel harbor shuttle captain's phone number?","relevant":[],"facts":[]},
+    {"id":"no_answer_far","query":"What is the diameter of planet Vesper's largest moon?","relevant":[],"facts":[]}
+  ]
+}

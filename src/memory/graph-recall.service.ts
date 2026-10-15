@@ -253,17 +253,24 @@ export class GraphRecallService {
     const entityNames = this.extractEntities(query);
     if (entityNames.length === 0) return [];
 
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const result = await Promise.race<MemoryWithScore[]>([
         this.doGraphRecall(entityNames, userId, limit),
-        new Promise<MemoryWithScore[]>((_, reject) =>
-          setTimeout(() => reject(new Error('Graph recall timeout')), 3000),
+        new Promise<MemoryWithScore[]>(
+          (_, reject) =>
+            (timeout = setTimeout(
+              () => reject(new Error('Graph recall timeout')),
+              3000,
+            )),
         ),
       ]);
       return result;
     } catch (error) {
       this.logger.warn(`[GraphRecall] Failed: ${(error as Error).message}`);
       return [];
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

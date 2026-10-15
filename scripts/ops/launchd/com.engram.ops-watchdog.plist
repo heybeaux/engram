@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- ENG-8: installed 2026-10-14 (approved by Beaux). Runs ops-health every 5 minutes and
+     raises a macOS notification when the set of alerts changes (and again
+     every 6h while still failing). Scripts are installed to ~/.engram-ops/bin
+     so a branch switch in the shared worktree cannot change what runs. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.engram.ops-watchdog</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/beauxwalton/.engram-ops/bin/ops-watchdog.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>OPS_HEALTH</key>
+        <string>/Users/beauxwalton/.engram-ops/bin/ops-health.sh</string>
+        <key>REPO_DIR</key>
+        <string>/Users/beauxwalton/projects/engram</string>
+    </dict>
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/beauxwalton/Library/Logs/engram-ops-watchdog.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/beauxwalton/Library/Logs/engram-ops-watchdog.log</string>
+</dict>
+</plist>

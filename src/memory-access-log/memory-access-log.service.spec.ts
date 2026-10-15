@@ -179,12 +179,19 @@ describe('MemoryAccessLogService', () => {
   describe('getSessionSummary', () => {
     it('should return session summary', async () => {
       prisma.agentSession.findUnique.mockResolvedValue(mockCompletedSession);
-      prisma.memoryAccessLog.count.mockResolvedValue(5);
-      prisma.memoryAccessLog.findMany.mockResolvedValue([
-        { memoryId: 'mem-1' },
-        { memoryId: 'mem-2' },
-        { memoryId: 'mem-1' }, // duplicate
-      ]);
+      prisma.memoryAccessLog.findMany
+        .mockResolvedValueOnce([
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-1' },
+        ])
+        .mockResolvedValueOnce([
+          { memoryId: 'mem-1' },
+          { memoryId: 'mem-2' },
+          { memoryId: 'mem-1' }, // duplicate
+        ]);
 
       const result = await service.getSessionSummary('agent:main:subagent:abc');
 
@@ -192,8 +199,10 @@ describe('MemoryAccessLogService', () => {
       expect(result.status).toBe('COMPLETED');
       expect(result.memoriesCreated).toBe(5);
       expect(result.memoriesAccessed).toBe(3);
+      expect(result.uniqueMemories).toBe(2);
       expect(result.uniqueMemoriesAccessed).toBe(2);
-      expect(result.duration).toBe('PT45M');
+      expect(result.duration).toBe(45 * 60 * 1000);
+      expect(result.topTopics).toEqual([]);
     });
 
     it('should handle unknown session', async () => {

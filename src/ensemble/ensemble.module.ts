@@ -18,6 +18,7 @@ import { EnsembleController } from './ensemble.controller';
 import { NightlyReembedService } from './nightly-reembed.service';
 import { CheckpointService } from './checkpoint.service';
 import { DriftDetectionService } from './drift-detection.service';
+import { DriftAnalysisJobService } from './drift-analysis-job.service';
 import { ModelRegistryService } from './model-registry.service';
 import { PgVectorEnsembleProvider } from './pgvector-ensemble.provider';
 import { AccountModule } from '../account/account.module';
@@ -31,12 +32,14 @@ import { AccountModule } from '../account/account.module';
     NightlyReembedService,
     CheckpointService,
     DriftDetectionService,
+    DriftAnalysisJobService,
     ModelRegistryService,
   ],
   exports: [
     EnsembleService,
     NightlyReembedService,
     DriftDetectionService,
+    DriftAnalysisJobService,
     ModelRegistryService,
     PgVectorEnsembleProvider,
   ],

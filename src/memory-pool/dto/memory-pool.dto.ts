@@ -14,7 +14,8 @@ export class CreateMemoryPoolDto {
   name: string;
 
   @IsString()
-  userId: string;
+  @IsOptional()
+  userId?: string;
 
   @ApiPropertyOptional({ enum: ['GLOBAL', 'SHARED', 'PRIVATE'], type: String })
   @IsEnum(PoolVisibility)

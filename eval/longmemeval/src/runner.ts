@@ -7,6 +7,7 @@
  *                    [--resume PATH] [--results-dir DIR] [--output PATH]
  *                    [--batch-ingest] [--ingest-concurrency N]
  *                    [--skip-ingest] [--post-ingest-wait MS]
+ *                    [--question-ids FILE|ID,ID,...] [--trace PATH] [--ingest-only]
  *
  * Env vars:
  *   ENGRAM_API_BASE          — default: http://localhost:3000
@@ -14,6 +15,7 @@
  *   ANTHROPIC_API_KEY        — required (for judge + reading model)
  *   LONGMEMEVAL_READ_MODEL   — default: claude-opus-4-7
  *   HUGGINGFACE_TOKEN        — required only for --subset=full
+ *   LONGMEMEVAL_LLM_TRANSPORT — api (default) | claude-cli (no API key needed)
  *
  * Output:
  *   eval/longmemeval/results/<subset>-<ts>.jsonl  (streamed, one line per question)
@@ -22,10 +24,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadDataset } from './loader';
+import { loadDataset, parseQuestionIds } from './loader';
 import { ingestQuestion, batchIngest, waitForEmbeddingDrain } from './ingest';
 import { recallQuestion } from './recall';
-import { judgeAnswer } from './judge';
+import { judgeAnswer, JUDGE_MODEL } from './judge';
+import { resolveTransport } from './llm';
+import { evidenceCoverage, traceMemories } from './trace';
 import { buildSummary, formatSummary, loadResultsFromJsonl } from './scorer';
 import type { RunConfig, QuestionResult, LmeCategory } from './types';
 
@@ -37,6 +41,7 @@ interface ParsedArgs extends Partial<RunConfig> {
   resultsDir: string;
   resumePath?: string;
   skipIngest?: boolean;
+  ingestOnly?: boolean;
 }
 
 function parseArgs(): ParsedArgs {
@@ -76,6 +81,14 @@ function parseArgs(): ParsedArgs {
       opts.batchIngest = true;
     } else if (arg === '--ingest-concurrency' && args[i + 1]) {
       opts.ingestConcurrency = parseInt(args[++i], 10);
+    } else if (arg === '--question-ids' && args[i + 1]) {
+      opts.questionIds = parseQuestionIds(args[++i]);
+    } else if (arg === '--ingest-only') {
+      // Batch-ingest, then exit before recall (caller waits for embeddings itself)
+      opts.ingestOnly = true;
+      opts.batchIngest = true;
+    } else if (arg === '--trace' && args[i + 1]) {
+      opts.tracePath = path.resolve(args[++i]);
     }
   }
 
@@ -108,13 +121,14 @@ function buildConfig(parsed: ParsedArgs): RunConfig {
   const apiKey = process.env.ENGRAM_API_KEY ?? process.env.X_AM_API_KEY ?? '';
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY ?? '';
   const readModel = process.env.LONGMEMEVAL_READ_MODEL ?? 'claude-opus-4-7';
+  const llmTransport = resolveTransport(process.env.LONGMEMEVAL_LLM_TRANSPORT);
 
   if (!apiKey) {
     console.error('Error: ENGRAM_API_KEY env var is required');
     process.exit(1);
   }
-  if (!anthropicApiKey) {
-    console.error('Error: ANTHROPIC_API_KEY env var is required');
+  if (!anthropicApiKey && llmTransport === 'api') {
+    console.error('Error: ANTHROPIC_API_KEY env var is required (or LONGMEMEVAL_LLM_TRANSPORT=claude-cli)');
     process.exit(1);
   }
 
@@ -136,6 +150,9 @@ function buildConfig(parsed: ParsedArgs): RunConfig {
     postIngestWaitMs: parsed.postIngestWaitMs ?? 8000,
     batchIngest: parsed.batchIngest,
     ingestConcurrency: parsed.ingestConcurrency,
+    questionIds: parsed.questionIds,
+    tracePath: parsed.tracePath,
+    llmTransport,
   };
 }
 
@@ -161,6 +178,9 @@ async function main() {
   console.log(`  resume:    ${config.resume ? 'yes' : 'no'}`);
   console.log(`  skipIngest: ${config.skipIngest ? 'yes (reusing existing sessions)' : 'no'}`);
   console.log(`  batchIngest: ${config.batchIngest ? `yes (concurrency ${config.ingestConcurrency ?? 4})` : 'no'}`);
+  console.log(`  questionIds: ${config.questionIds ? config.questionIds.length : 'all'}`);
+  console.log(`  trace:     ${config.tracePath ?? 'off'}`);
+  console.log(`  llmTransport: ${config.llmTransport}`);
   console.log('');
 
   // Load dataset
@@ -206,6 +226,10 @@ async function main() {
         },
       );
       console.log(`Batch ingest complete: ${ingested} ingested, ${skipped} already in manifest`);
+      if (parsed.ingestOnly) {
+        console.log('--ingest-only: stopping before recall. Run the same questions again with --skip-ingest.');
+        return;
+      }
 
       // Queue is FIFO — once the last-ingested sessions are searchable, all are.
       const probes = toIngest.slice(-3).map(q => ({ questionId: q.question_id, query: q.question }));
@@ -286,6 +310,7 @@ async function main() {
         question.answer,
         recallResult.answer,
         config.anthropicApiKey,
+        config.llmTransport,
       );
       const latencyMs = Date.now() - start;
       result = {
@@ -299,6 +324,47 @@ async function main() {
         judgeReasoning: judgeResult.reasoning,
         timestamp: new Date().toISOString(),
       };
+      if (config.tracePath) {
+        const evidence = question.evidence_turns ?? [];
+        const memories = traceMemories(recallResult.trace.memories, evidence);
+        fs.appendFileSync(
+          config.tracePath,
+          JSON.stringify({
+            questionId: question.question_id,
+            category: question.category,
+            question: question.question,
+            questionDate: question.question_date ?? null,
+            goldAnswer: question.answer,
+            goldEvidenceSessionIds: question.answer_session_ids ?? [],
+            goldEvidenceSessions: (question.answer_session_ids ?? []).map(id => ({
+              sessionId: id,
+              haystackIndex: question.haystack_session_ids?.indexOf(id) ?? -1,
+            })),
+            goldEvidenceTurns: evidence,
+            evidenceCoverage: evidenceCoverage(memories, evidence.length),
+            ingest: { sessionId: ingestResult.sessionId, chunks: ingestResult.chunks, memoryIds: ingestResult.memoryIds.length },
+            recall: {
+              request: recallResult.trace.recallRequest,
+              recallId: recallResult.recallId ?? null,
+              latencyMs: recallResult.trace.recallLatencyMs ?? null,
+              topK: memories.length,
+              memories,
+            },
+            reader: {
+              model: recallResult.trace.readModel,
+              transport: recallResult.trace.llmTransport,
+              systemPrompt: recallResult.trace.readerSystemPrompt,
+              userMessage: recallResult.trace.readerUserMessage,
+              rawResponse: recallResult.rawResponse,
+            },
+            prediction: recallResult.answer,
+            judge: { model: JUDGE_MODEL, correct: judgeResult.correct, reasoning: judgeResult.reasoning },
+            latencyMs,
+            timestamp: result.timestamp,
+          }) + '\n',
+          'utf-8',
+        );
+      }
       const mark = judgeResult.correct ? '✓' : '✗';
       console.log(` ${mark} (${latencyMs}ms)`);
       consecutiveErrors = 0;

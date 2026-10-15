@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { BulkCreateMemoryDto } from './bulk.dto';
+import { BulkCreateMemoryDto, BulkTextImportDto } from './bulk.dto';
 
 describe('BulkCreateMemoryDto', () => {
   // T5a Part B: observedAt validator (IsISO8601 + ObservedAtNotFarFutureConstraint)
@@ -42,5 +42,32 @@ describe('BulkCreateMemoryDto', () => {
 
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
+  });
+});
+
+describe('BulkTextImportDto observedAt (ENG-10 / T22)', () => {
+  it('accepts a past observedAt and keeps it past whitelist stripping', async () => {
+    const dto = plainToInstance(BulkTextImportDto, {
+      text: 'User: hi',
+      observedAt: '2023-05-30T23:40:00Z',
+    });
+    expect(await validate(dto, { whitelist: true })).toHaveLength(0);
+    expect(dto.observedAt).toBe('2023-05-30T23:40:00Z');
+  });
+
+  it('rejects a non-ISO observedAt', async () => {
+    const dto = plainToInstance(BulkTextImportDto, {
+      text: 'User: hi',
+      observedAt: '2023/05/30 (Tue) 23:40',
+    });
+    expect(JSON.stringify(await validate(dto))).toMatch(/observedAt/);
+  });
+
+  it('rejects an observedAt more than 1 hour in the future', async () => {
+    const dto = plainToInstance(BulkTextImportDto, {
+      text: 'User: hi',
+      observedAt: new Date(Date.now() + 10 * 3600 * 1000).toISOString(),
+    });
+    expect(JSON.stringify(await validate(dto))).toMatch(/observedAt/);
   });
 });

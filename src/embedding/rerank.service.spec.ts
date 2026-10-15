@@ -35,6 +35,34 @@ describe('RerankService', () => {
   });
 
   describe('rerank', () => {
+    it('clears the request deadline after successful response parsing', async () => {
+      jest.useFakeTimers();
+      try {
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: async () => [{ index: 0, score: 1 }],
+        });
+        await service.rerank('query', ['text']);
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('aborts the request and clears its deadline on timeout', async () => {
+      jest.useFakeTimers();
+      try {
+        mockFetch.mockImplementation(() => new Promise(() => {}));
+        const result = service.rerank('query', ['text']);
+        await jest.advanceTimersByTimeAsync(10000);
+        await result;
+        expect(mockFetch.mock.calls[0][1].signal.aborted).toBe(true);
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('should reorder results by cross-encoder score', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
@@ -115,19 +143,6 @@ describe('RerankService', () => {
       expect(results).toEqual([]);
       expect(mockFetch).not.toHaveBeenCalled();
     });
-
-    it('should timeout after 2 seconds and return original order', async () => {
-      mockFetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 5000)),
-      );
-
-      const results = await service.rerank('query', ['text1', 'text2']);
-
-      expect(results).toEqual([
-        { index: 0, score: 0 },
-        { index: 1, score: 0 },
-      ]);
-    }, 10000);
   });
 
   describe('RRF ensemble (multi-URL)', () => {

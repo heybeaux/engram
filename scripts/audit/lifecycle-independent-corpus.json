@@ -1,0 +1,21 @@
+{
+  "memories": [
+    ["bracken_old", "Bracken observatory hatch authorization memo B-61, dated 2026-09-02: Elin approved opening the north hatch after a single pressure reading below 18 kPa. This authorization is historical and was revoked by memo B-64 on 2026-09-04."],
+    ["bracken_current", "Bracken observatory hatch authorization memo B-64, dated 2026-09-04: Elin revoked B-61's single-reading permission. Opening the north hatch now requires BOTH two pressure readings below 18 kPa taken 12 minutes apart AND Suri physically present. Neither condition alone authorizes opening."],
+    ["bracken_exception", "Bracken observatory hatch authorization memo B-65, dated 2026-09-05: B-64 remains current. Opening the north hatch requires two pressure readings below 18 kPa taken 12 minutes apart AND Suri physically present. During a lightning alert the hatch must stay closed even when both requirements are satisfied."],
+    ["owner", "At Bracken observatory, Nina is the appointed maintenance owner of the north hatch. Oren delivered its replacement gasket as a courier; mentioning Oren in the delivery log does not make him the maintenance owner."],
+    ["archive_receipt", "Bracken observatory paper receipt R-83 is stored in drawer 26. The one-time collection deadline is 2026-12-09, and the collection token is VERDIGRIS-84. This receipt is unrelated to hatch authorization."],
+    ["phone_unknown", "Bracken observatory staff directory: Suri's telephone number has not been recorded. Do not infer a telephone number from the hatch pressure figures or memo numbers."],
+    ["budget_unknown", "The Bracken observatory hatch replacement budget is still undecided. No approved monetary amount appears in the records."],
+    ["distractor", "Cinder observatory, a different facility, uses drawer 62 for its receipt R-38. Its collection deadline is 2026-12-19. Cinder's paper records do not govern Bracken observatory."]
+  ],
+  "queries": [
+    {"id":"current_authorization","query":"Under Bracken's current north-hatch rules, what must be true before opening, and what overrides permission?","relevant":["bracken_current","bracken_exception"],"facts":["two pressure readings","18 kPa","12 minutes","Suri","lightning"]},
+    {"id":"revoked_authorization","query":"Which Bracken north-hatch permission was revoked, by which memo, and on what date?","relevant":["bracken_old","bracken_current"],"facts":["B-61","B-64","2026-09-04","single"]},
+    {"id":"ownership","query":"Who owns maintenance of Bracken's north hatch, and what was Oren's actual role?","relevant":["owner"],"facts":["Nina","courier"]},
+    {"id":"receipt_collection","query":"For Bracken receipt R-83, what is the collection deadline and exact collection token?","relevant":["archive_receipt"],"facts":["2026-12-09","VERDIGRIS-84"]},
+    {"id":"no_phone","query":"What is Suri's telephone number at Bracken observatory?","relevant":[],"facts":[]},
+    {"id":"no_budget","query":"What exact monetary budget has been approved for Bracken's hatch replacement?","relevant":[],"facts":[]},
+    {"id":"no_diameter","query":"What is the diameter in kilometres of the moon Iapetus?","relevant":[],"facts":[]}
+  ]
+}

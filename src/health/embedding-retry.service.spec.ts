@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EmbeddingRetryService } from './embedding-retry.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -142,6 +143,38 @@ describe('EmbeddingRetryService', () => {
         where: { id: 'mem-1' },
         data: { embeddingId: 'emb-1' },
       });
+    });
+
+    it('reports a partial failed batch even when no embeddings succeed', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+      try {
+        mockEmbedHealth.isAvailable.mockResolvedValue(true);
+        mockPrisma.memory.findMany.mockResolvedValue([
+          { id: 'mem-1', raw: 'secret-content' },
+        ]);
+        mockEmbeddingService.generate.mockRejectedValue(
+          new TypeError('secret-content'),
+        );
+        await service.retryPendingEmbeddings();
+        expect(warn).toHaveBeenCalledWith({
+          event: 'embedding_retry.memory_failed',
+          memoryId: 'mem-1',
+          stage: 'generate',
+          errorType: 'TypeError',
+        });
+        expect(log).toHaveBeenCalledWith({
+          event: 'embedding_retry.batch_complete',
+          selected: 1,
+          succeeded: 0,
+          failed: 1,
+          unattempted: 0,
+        });
+        expect(JSON.stringify(warn.mock.calls)).not.toContain('secret-content');
+      } finally {
+        warn.mockRestore();
+        log.mockRestore();
+      }
     });
 
     it('should stop batch after 3 consecutive failures', async () => {

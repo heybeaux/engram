@@ -44,3 +44,23 @@ describe('QueryMemoryDto — sessionId field (HEY-578)', () => {
     expect(sessionIdErrors.length).toBeGreaterThan(0);
   });
 });
+
+describe('QueryMemoryDto — referenceDate field (ENG-10 / T18)', () => {
+  const refErrors = async (v: unknown) =>
+    (await validate(make({ referenceDate: v }))).filter(
+      (e) => e.property === 'referenceDate',
+    );
+
+  it('is optional', async () => {
+    expect(await refErrors(undefined)).toHaveLength(0);
+  });
+
+  it('accepts an ISO 8601 timestamp and a bare date', async () => {
+    expect(await refErrors('2023-05-30T23:40:00Z')).toHaveLength(0);
+    expect(await refErrors('2023-05-30')).toHaveLength(0);
+  });
+
+  it('rejects the raw LongMemEval date format', async () => {
+    expect((await refErrors('2023/05/30 (Tue) 23:40')).length).toBeGreaterThan(0);
+  });
+});

@@ -42,6 +42,20 @@ import { RecallWeightService } from './recall-weight.service';
 import { MemoryQueryRankingService } from './memory-query-ranking.service';
 import { MemoryQueryContextService } from './memory-query-context.service';
 import { MemoryFailureService } from './memory-failure.service';
+import {
+  isDeterministicRankingEnabled,
+  recallRankComparator,
+  rescueSqlTiebreak,
+} from './memory-ranking.util';
+import {
+  CLUSTER_SCAN_DEPTH,
+  nearDuplicateClusterLimit,
+  selectNearDuplicateDiverse,
+} from './memory-diversity.util';
+import {
+  gatedLexicalRescue,
+  isGatedLexicalRescueEnabled,
+} from './lexical-rescue.util';
 
 @Injectable()
 export class MemoryQueryService {
@@ -113,7 +127,7 @@ export class MemoryQueryService {
     }
 
     // 1. Parse temporal intent from query
-    const now = new Date();
+    const now = this.resolveReferenceDate(dto);
     const parsed = this.temporalParser.parse(dto.query, now);
     const hasTemporalIntent = parsed.temporalFilter !== null;
     // Date filters constrain eligibility; the full phrase still carries meaning
@@ -354,7 +368,7 @@ export class MemoryQueryService {
             this.rankingService.getImportanceMultiplier(memory);
           return { ...memory, score: adjustedScore } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .sort(recallRankComparator())
         .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
     } else {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
@@ -372,6 +386,7 @@ export class MemoryQueryService {
       );
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
+      const cosineMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       const memoryIds = vectorResults.map((r) => r.id);
       const keywordRescueIds = new Set<string>();
 
@@ -379,6 +394,9 @@ export class MemoryQueryService {
       // In pool-auth mode (no userId), scope FTS via pool-membership subquery.
       // When account auth resolves multiple users, search all resolved users
       // instead of collapsing keyword rescue to the first user.
+      // Match and rank on the stored search_vector column so the GIN index
+      // idx_memories_search_vector is used; an inline to_tsvector(raw) re-parses
+      // every row of the user (~0.8 s at 58k rows, ENG-27).
       const ftsResultIds = new Set<string>();
       const poolOnlyMode = poolIds && poolIds.length > 0 && !singleUserId;
       const resolvedUserIds = Array.isArray(userId)
@@ -394,13 +412,13 @@ export class MemoryQueryService {
                  SELECT mpm.memory_id FROM memory_pool_memberships mpm
                  WHERE mpm.pool_id = ANY($1::text[])
                )
-                 AND to_tsvector('english', m.raw) @@ websearch_to_tsquery('english', $2)
+                 AND m.search_vector @@ websearch_to_tsquery('english', $2)
                  AND m.deleted_at IS NULL
                  AND m.superseded_by_id IS NULL
                  AND m.searchable IS NOT FALSE
                  AND m.embedding_status != 'DUPLICATE'
                  AND m.is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', m.raw), websearch_to_tsquery('english', $2)) DESC
+               ORDER BY ts_rank(m.search_vector, websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak('m.id')}
                LIMIT 100`,
               poolIds,
               searchQuery,
@@ -409,26 +427,26 @@ export class MemoryQueryService {
             ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                 `SELECT id FROM memories
                WHERE user_id = ANY($1::text[])
-                 AND to_tsvector('english', raw) @@ websearch_to_tsquery('english', $2)
+                 AND search_vector @@ websearch_to_tsquery('english', $2)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $2)) DESC
+               ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $2)) DESC${rescueSqlTiebreak()}
                LIMIT 100`,
                 resolvedUserIds,
                 searchQuery,
               )
             : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
                 `SELECT id FROM memories
-               WHERE to_tsvector('english', raw) @@ websearch_to_tsquery('english', $1)
+               WHERE search_vector @@ websearch_to_tsquery('english', $1)
                  AND deleted_at IS NULL
                  AND superseded_by_id IS NULL
                  AND searchable IS NOT FALSE
                  AND embedding_status != 'DUPLICATE'
                  AND is_duplicate_of IS NULL
-               ORDER BY ts_rank(to_tsvector('english', raw), websearch_to_tsquery('english', $1)) DESC
+               ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC${rescueSqlTiebreak()}
                LIMIT 100`,
                 searchQuery,
               );
@@ -483,14 +501,22 @@ export class MemoryQueryService {
                      AND m.searchable IS NOT FALSE
                      AND m.embedding_status != 'DUPLICATE'
                      AND m.is_duplicate_of IS NULL
-                   ORDER BY m.importance_score DESC, m.created_at DESC
+                   ORDER BY m.importance_score DESC, m.created_at DESC${rescueSqlTiebreak('m.id')}
                    LIMIT 20`,
                   poolIds,
                   ...ilikeParams,
                 )
-              : hasResolvedUsers
-                ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                    `SELECT id FROM memories
+              : hasResolvedUsers && isGatedLexicalRescueEnabled()
+                ? (
+                    await gatedLexicalRescue(
+                      this.prisma,
+                      resolvedUserIds,
+                      words,
+                    )
+                  ).rows
+                : hasResolvedUsers
+                  ? await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                      `SELECT id FROM memories
                    WHERE user_id = ANY($1::text[])
                      AND (${ilikeConditions})
                      AND deleted_at IS NULL
@@ -498,23 +524,23 @@ export class MemoryQueryService {
                      AND searchable IS NOT FALSE
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
-                   ORDER BY importance_score DESC, created_at DESC
+                   ORDER BY importance_score DESC, created_at DESC${rescueSqlTiebreak()}
                    LIMIT 20`,
-                    resolvedUserIds,
-                    ...ilikeParams,
-                  )
-                : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
-                    `SELECT id FROM memories
+                      resolvedUserIds,
+                      ...ilikeParams,
+                    )
+                  : await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+                      `SELECT id FROM memories
                    WHERE (${ilikeConditions})
                      AND deleted_at IS NULL
                      AND superseded_by_id IS NULL
                      AND searchable IS NOT FALSE
                      AND embedding_status != 'DUPLICATE'
                      AND is_duplicate_of IS NULL
-                   ORDER BY importance_score DESC, created_at DESC
+                   ORDER BY importance_score DESC, created_at DESC${rescueSqlTiebreak()}
                    LIMIT 20`,
-                    ...ilikeParams,
-                  );
+                      ...ilikeParams,
+                    );
             let ilikeAdded = 0;
             for (const row of ilikeResults) {
               ftsResultIds.add(row.id);
@@ -561,7 +587,13 @@ export class MemoryQueryService {
                 ...sessionIdFilter,
                 ...(dto.filterAgentId ? { agentId: dto.filterAgentId } : {}),
               },
-              orderBy: [{ importanceScore: 'desc' }, { createdAt: 'desc' }],
+              orderBy: [
+                { importanceScore: 'desc' },
+                { createdAt: 'desc' },
+                ...(isDeterministicRankingEnabled()
+                  ? [{ id: 'asc' } as const]
+                  : []),
+              ],
               take: 10,
               select: { id: true },
             });
@@ -609,16 +641,19 @@ export class MemoryQueryService {
         include: { extraction: true },
       });
 
+      const deterministic = isDeterministicRankingEnabled();
       const sorted = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
           return {
             ...memory,
             score: semanticScore,
+            // Raw cosine, kept through rerank as the first tie-break key.
+            ...(deterministic ? { vectorScore: cosineMap.get(memory.id) } : {}),
             __keywordRescued: keywordRescueIds.has(memory.id),
           } as MemoryWithScore;
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        .sort(recallRankComparator());
 
       const RERANK_POOL = sorted.length;
 
@@ -702,11 +737,21 @@ export class MemoryQueryService {
 
     // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
     const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
+    // PR #327 (flag-gated): rerank a bounded deeper page, then cap each
+    // near-duplicate cluster so one repeated fact cannot fill the page.
+    const clusterLimit = nearDuplicateClusterLimit();
     scoredMemories = await this.rankingService.applyReranking(
       scoredMemories,
       rerankQuery,
-      limit,
+      clusterLimit ? Math.max(limit, CLUSTER_SCAN_DEPTH) : limit,
     );
+    if (clusterLimit) {
+      scoredMemories = selectNearDuplicateDiverse(
+        scoredMemories,
+        limit,
+        clusterLimit,
+      );
+    }
 
     // v1.7: Agent-scoped filter
     if (dto.filterAgentId) {
@@ -723,7 +768,7 @@ export class MemoryQueryService {
         }
         return m;
       });
-      scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      scoredMemories.sort(recallRankComparator());
     }
 
     let result: MemoryWithScore[] = this.filterRecallSurvivors(scoredMemories);
@@ -820,6 +865,15 @@ export class MemoryQueryService {
     return this.multiQueryService.isEnabled();
   }
 
+  /** Query-side "now": caller-supplied referenceDate, else the server clock. */
+  private resolveReferenceDate(dto: QueryMemoryDto): Date {
+    if (dto.referenceDate) {
+      const ref = new Date(dto.referenceDate);
+      if (!Number.isNaN(ref.getTime())) return ref;
+    }
+    return new Date();
+  }
+
   /**
    * Perform recall using multi-query retrieval
    */
@@ -829,7 +883,7 @@ export class MemoryQueryService {
     startTime: number,
     poolIds?: string[],
   ): Promise<QueryResult> {
-    const now = new Date();
+    const now = this.resolveReferenceDate(dto);
     const parsed = this.temporalParser.parse(dto.query, now);
     const hasTemporalIntent = parsed.temporalFilter !== null;
 
@@ -889,7 +943,7 @@ export class MemoryQueryService {
 
         return { ...memory, score: adjustedScore } as MemoryWithScore;
       })
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      .sort(recallRankComparator());
 
     // Apply the same post-processing chain as the standard path so multi-query
     // is not silently downgraded to cosine-only ranking (retrieval H4), then

@@ -1101,6 +1101,40 @@ describe('MemoryQueryService', () => {
     });
   });
 
+  describe('referenceDate (ENG-10 / T18)', () => {
+    beforeEach(() => {
+      embedding.search.mockResolvedValue([]);
+      prisma.memory.findMany = jest.fn().mockResolvedValue([]);
+    });
+
+    it('parses relative phrases against the caller referenceDate', async () => {
+      await service.recall(userId, {
+        query: 'what did I buy 10 days ago',
+        referenceDate: '2023-03-25T18:26:00Z',
+      } as any);
+
+      const now = temporalParser.parse.mock.calls[0][1] as Date;
+      expect(now.toISOString()).toBe('2023-03-25T18:26:00.000Z');
+    });
+
+    it('falls back to the server clock without referenceDate', async () => {
+      const before = Date.now();
+      await service.recall(userId, { query: 'what did I buy 10 days ago' } as any);
+      const now = temporalParser.parse.mock.calls[0][1] as Date;
+      expect(now.getTime()).toBeGreaterThanOrEqual(before);
+    });
+
+    it('falls back to the server clock when referenceDate is unparseable', async () => {
+      const before = Date.now();
+      await service.recall(userId, {
+        query: 'x',
+        referenceDate: 'not-a-date',
+      } as any);
+      const now = temporalParser.parse.mock.calls[0][1] as Date;
+      expect(now.getTime()).toBeGreaterThanOrEqual(before);
+    });
+  });
+
   // ── HEY-575 regression ───────────────────────────────────────────────────
 
   describe('temporal adaptive expansion — end boundary (HEY-575)', () => {

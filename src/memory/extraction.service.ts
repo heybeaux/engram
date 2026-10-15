@@ -136,7 +136,20 @@ export class ExtractionService {
               : null,
         why: typeof result.why === 'string' ? result.why || null : null,
         how: typeof result.how === 'string' ? result.how || null : null,
-        topics: Array.isArray(result.topics) ? result.topics : [],
+        topics: Array.isArray(result.topics)
+          ? result.topics
+              .map((topic: unknown) =>
+                typeof topic === 'string'
+                  ? topic
+                  : topic && typeof topic === 'object' && 'topic' in topic
+                    ? topic.topic
+                    : null,
+              )
+              .filter(
+                (topic): topic is string =>
+                  typeof topic === 'string' && topic.trim().length > 0,
+              )
+          : [],
         entities: normalizeEntities(result.entities, context?.userName),
         memoryType,
         typeConfidence:

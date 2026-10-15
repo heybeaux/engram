@@ -1,3 +1,4 @@
+import { flushAndDisconnectRedis } from '../queue/redis-shutdown';
 import {
   Injectable,
   Logger,
@@ -77,6 +78,7 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `[ReembeddingService] Redis connect failed, falling back to in-memory: ${err.message}`,
         );
+        this.redis?.disconnect();
         this.redis = null;
       });
     }
@@ -86,7 +88,8 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
     await this.restoreAndRecoverJobs();
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
+    const pending: Promise<unknown>[] = [];
     const runningJobs = Array.from(this.jobs.values()).filter(
       (j) => j.status === ReembeddingJobStatus.RUNNING,
     );
@@ -100,9 +103,11 @@ export class ReembeddingService implements OnModuleInit, OnModuleDestroy {
         job.error =
           (job.error ? job.error + '; ' : '') +
           'Interrupted by server shutdown';
-        this.persistJob(job).catch(() => {});
+        pending.push(this.persistJob(job));
       }
     }
+    await flushAndDisconnectRedis(this.redis, pending);
+    this.redis = null;
   }
 
   /**

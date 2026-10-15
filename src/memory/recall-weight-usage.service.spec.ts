@@ -126,20 +126,27 @@ describe('RecallWeightService — Usage Weighting (ENG-27)', () => {
     });
 
     it('uses actual usage even without retrieval history and ignores later exposures', () => {
-      const memory = createMemory({
-        usedCount: 5,
-        retrievalCount: 0,
-        lastUsedAt: new Date(Date.now() - DAY_MS),
-      });
-      const signal = service.usageSignal(memory);
-      expect(signal).toBeGreaterThan(0);
-      expect(
-        service.usageSignal({
-          ...memory,
-          retrievalCount: 1000,
-          lastRetrievedAt: new Date(),
-        }),
-      ).toBe(signal);
+      // Freeze the clock: usageSignal decays with time since last use, so two
+      // calls a few ms apart differ at ~1e-10 and break the exact comparison.
+      jest.useFakeTimers({ now: new Date('2026-10-14T00:00:00Z') });
+      try {
+        const memory = createMemory({
+          usedCount: 5,
+          retrievalCount: 0,
+          lastUsedAt: new Date(Date.now() - DAY_MS),
+        });
+        const signal = service.usageSignal(memory);
+        expect(signal).toBeGreaterThan(0);
+        expect(
+          service.usageSignal({
+            ...memory,
+            retrievalCount: 1000,
+            lastRetrievedAt: new Date(),
+          }),
+        ).toBe(signal);
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should decay with time since last use', () => {

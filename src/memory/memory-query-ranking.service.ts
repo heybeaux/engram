@@ -7,6 +7,7 @@ import { RecallWeightService } from './recall-weight.service';
 import { RerankService } from '../embedding/rerank.service';
 import { GraphRecallService } from './graph-recall.service';
 import { SentimentService } from './sentiment.service';
+import { recallRankComparator } from './memory-ranking.util';
 
 export interface InsightSurfacingOptions {
   allow?: boolean;
@@ -97,7 +98,7 @@ export class MemoryQueryRankingService {
         scoredMemories.push(gm);
       }
     }
-    scoredMemories.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    scoredMemories.sort(recallRankComparator());
 
     return scoredMemories;
   }
@@ -196,7 +197,7 @@ export class MemoryQueryRankingService {
       // Slicing to `limit` before reranking drops gold memories that the
       // cross-encoder would correctly promote.
       const merged = [...existingResults, ...relevantInsights].sort(
-        (a, b) => (b.score ?? 0) - (a.score ?? 0),
+        recallRankComparator(),
       );
 
       this.logger.log(
@@ -240,7 +241,7 @@ export class MemoryQueryRankingService {
             sp;
           return { ...m, score: finalScore };
         })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .sort(recallRankComparator())
         .slice(0, limit);
 
     if (!this.rerankService || memories.length === 0) {
@@ -288,7 +289,7 @@ export class MemoryQueryRankingService {
             const finalScore = (r.score * 0.85 + importanceScore * 0.15) * sp;
             return { ...mem, score: finalScore };
           })
-          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+          .sort(recallRankComparator())
           .slice(0, limit);
 
         this.logger.debug(

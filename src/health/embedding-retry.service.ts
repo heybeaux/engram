@@ -46,7 +46,13 @@ export class EmbeddingRetryService implements OnModuleInit, OnModuleDestroy {
   async retryPendingEmbeddings(): Promise<void> {
     // Only attempt if embed is available
     const available = await this.embedHealth.isAvailable();
-    if (!available) return;
+    if (!available) {
+      this.logger.warn({
+        event: 'embedding_retry.skipped',
+        reason: 'provider_unavailable',
+      });
+      return;
+    }
 
     // Find memories without embeddings
     const pending = await this.prisma.memory.findMany({
@@ -72,8 +78,10 @@ export class EmbeddingRetryService implements OnModuleInit, OnModuleDestroy {
     let failed = 0;
 
     for (const memory of pending) {
+      let stage = 'generate';
       try {
         const embedding = await this.embeddingService.generate(memory.raw);
+        stage = 'store';
         const embeddingId = await this.embeddingService.store(
           memory.id,
           embedding,
@@ -84,6 +92,7 @@ export class EmbeddingRetryService implements OnModuleInit, OnModuleDestroy {
           },
         );
 
+        stage = 'mark_complete';
         await this.prisma.memory.update({
           where: { id: memory.id },
           data: { embeddingId },
@@ -92,6 +101,13 @@ export class EmbeddingRetryService implements OnModuleInit, OnModuleDestroy {
         success++;
       } catch (err) {
         failed++;
+        // Do not log content or upstream error messages (may contain payloads).
+        this.logger.warn({
+          event: 'embedding_retry.memory_failed',
+          memoryId: memory.id,
+          stage,
+          errorType: err instanceof Error ? err.name : typeof err,
+        });
         if (failed >= 3) {
           this.logger.warn(
             `Embedding retry: ${failed} failures, stopping batch`,
@@ -101,10 +117,12 @@ export class EmbeddingRetryService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    if (success > 0) {
-      this.logger.log(
-        `Embedding retry complete: ${success} succeeded, ${failed} failed`,
-      );
-    }
+    this.logger.log({
+      event: 'embedding_retry.batch_complete',
+      selected: pending.length,
+      succeeded: success,
+      failed,
+      unattempted: pending.length - success - failed,
+    });
   }
 }

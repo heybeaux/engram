@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- PROPOSED (ENG-16), not installed. Hourly size-based rotation of the
+     com.engram.api launchd logs: rotate above 256 MiB, keep 7 gzipped copies
+     per log (worst case ~7 x 256 MiB compressed, typically ~10x smaller).
+     Copy-truncate, so com.engram.api needs no restart or plist change. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.engram.logrotate</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/beauxwalton/.engram-ops/bin/rotate-api-log.sh</string>
+        <string>/Users/beauxwalton/projects/engram/logs/engram-api.stdout.log</string>
+        <string>/Users/beauxwalton/projects/engram/logs/engram-api.stderr.log</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>ROTATE_MAX_BYTES</key>
+        <string>268435456</string>
+        <key>ROTATE_KEEP</key>
+        <string>7</string>
+    </dict>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>Nice</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/beauxwalton/Library/Logs/engram-logrotate.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/beauxwalton/Library/Logs/engram-logrotate.log</string>
+</dict>
+</plist>

@@ -20,9 +20,11 @@ export class HypeService {
   async generateHypotheticals(content: string): Promise<string[]> {
     if (!this.enabled || !this.llmService) return [];
 
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('HyPE timeout')), 5000),
+      const timeoutPromise = new Promise<never>(
+        (_, reject) =>
+          (timeout = setTimeout(() => reject(new Error('HyPE timeout')), 5000)),
       );
 
       const chatPromise = this.llmService.chat([
@@ -38,6 +40,8 @@ export class HypeService {
       return questions.filter((q: unknown) => typeof q === 'string');
     } catch {
       return [];
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

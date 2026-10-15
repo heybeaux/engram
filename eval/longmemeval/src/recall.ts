@@ -12,8 +12,29 @@
  * function handles parsing with a plain-text fallback.
  */
 
-import { fetchWithRetry, type IngestResult } from './ingest';
+import { fetchWithRetry, lmeDateToIso, referenceDateEnabled, type IngestResult } from './ingest';
+import { callClaude } from './llm';
 import type { LmeCategory, RunConfig } from './types';
+
+/** One memory as returned by the structured /v1/memories/query response. */
+export interface RecalledMemory {
+  id: string;
+  fact: string;
+  confidence: number | null;
+  timestamp?: string;
+  memory_type?: string | null;
+}
+
+/** What the reader saw and what recall returned, for --trace output. */
+export interface RecallTrace {
+  recallRequest: Record<string, unknown>;
+  recallLatencyMs?: number;
+  memories: RecalledMemory[];
+  readerSystemPrompt: string | null;
+  readerUserMessage: string | null;
+  readModel: string;
+  llmTransport: string;
+}
 
 export interface RecallResult {
   questionId: string;
@@ -22,6 +43,7 @@ export interface RecallResult {
   rawResponse: string;
   recallId?: string;
   memoriesFound: number;
+  trace: RecallTrace;
 }
 
 /** Structured JSON envelope expected from the reading model. */
@@ -45,7 +67,7 @@ export async function recallQuestion(
   questionId: string,
   question: string,
   ingestResult: IngestResult,
-  config: Pick<RunConfig, 'apiBase' | 'apiKey' | 'anthropicApiKey' | 'readModel'>,
+  config: Pick<RunConfig, 'apiBase' | 'apiKey' | 'anthropicApiKey' | 'readModel' | 'llmTransport'>,
   category?: LmeCategory,
   question_date?: string,
 ): Promise<RecallResult> {
@@ -65,6 +87,9 @@ export async function recallQuestion(
     chainOfNote: true,
     note: question,  // HEY-576: question field for CoN prompt interpolation
     limit: recallLimit,
+    ...(referenceDateEnabled() && lmeDateToIso(question_date)
+      ? { referenceDate: lmeDateToIso(question_date) }
+      : {}),
   };
 
   const recallRes = await fetchWithRetry(recallUrl, {
@@ -85,11 +110,21 @@ export async function recallQuestion(
 
   const recallData = await recallRes.json() as {
     recallId?: string;
-    memories: Array<{ id: string; fact: string; confidence: number | null; timestamp?: string }>;
+    latencyMs?: number;
+    memories: RecalledMemory[];
     chainOfNotePrompt?: string;
   };
 
   const memoriesFound = recallData.memories?.length ?? 0;
+  const trace: RecallTrace = {
+    recallRequest: recallBody,
+    recallLatencyMs: recallData.latencyMs,
+    memories: recallData.memories ?? [],
+    readerSystemPrompt: null,
+    readerUserMessage: null,
+    readModel: config.readModel,
+    llmTransport: config.llmTransport ?? 'api',
+  };
 
   // Step 2: no memories / no CoN prompt — abstain explicitly. "I don't know"
   // (rather than '') lets the judge credit abstention questions whose gold
@@ -102,19 +137,25 @@ export async function recallQuestion(
       rawResponse: '',
       recallId: recallData.recallId,
       memoriesFound,
+      trace,
     };
   }
 
   // Step 3: call reading model with CoN prompt
-  const readingResponse = await callReadingModel(
-    recallData.chainOfNotePrompt,
+  const userMessage = buildReaderUserMessage(
     question,
-    config.anthropicApiKey,
-    config.readModel,
-    category,
-    recallData.memories,
-    question_date,
+    buildCategoryHint(category, recallData.memories, question_date),
   );
+  trace.readerSystemPrompt = recallData.chainOfNotePrompt;
+  trace.readerUserMessage = userMessage;
+  const readingResponse = await callClaude({
+    system: recallData.chainOfNotePrompt,
+    user: userMessage,
+    model: config.readModel,
+    maxTokens: 4096,
+    apiKey: config.anthropicApiKey,
+    transport: config.llmTransport,
+  });
 
   // Step 4: extract answer from structured JSON envelope
   const answer = extractConAnswer(readingResponse);
@@ -126,6 +167,7 @@ export async function recallQuestion(
     rawResponse: readingResponse,
     recallId: recallData.recallId,
     memoriesFound,
+    trace,
   };
 }
 
@@ -227,46 +269,11 @@ export function buildCategoryHint(
 }
 
 /**
- * Call the reading model (Anthropic) with the CoN system prompt.
- * Returns the raw text response.
+ * The reader's user turn: the question, the category hint, and the JSON envelope
+ * instructions. Exported so --trace can persist the exact prompt.
  */
-async function callReadingModel(
-  conSystemPrompt: string,
-  question: string,
-  anthropicApiKey: string,
-  model: string,
-  category?: LmeCategory,
-  memories: Array<{ id: string; fact: string; timestamp?: string }> = [],
-  question_date?: string,
-): Promise<string> {
-  const categoryHint = buildCategoryHint(category, memories, question_date);
-  const response = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': anthropicApiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      system: conSystemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `Answer the following question based on the memories above.\n\nQuestion: ${question}${categoryHint}\n\nRespond with a JSON object. Put "answer" FIRST. Only include "notes" for memories that are relevant or partially relevant — skip irrelevant ones entirely. Keep each note brief (one sentence max).\n\n{\n  "answer": "your final answer here",\n  "notes": [{ "memory_id": "...", "note": "why relevant" }]\n}\n\nIf the memories do not contain enough information, set "answer" to "I don't know".\n\nJSON only, no markdown.`,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Reading model call failed: HTTP ${response.status} — ${text}`);
-  }
-
-  const data = await response.json() as { content: Array<{ type: string; text: string }> };
-  return data.content?.[0]?.text ?? '';
+export function buildReaderUserMessage(question: string, categoryHint: string): string {
+  return `Answer the following question based on the memories above.\n\nQuestion: ${question}${categoryHint}\n\nRespond with a JSON object. Put "answer" FIRST. Only include "notes" for memories that are relevant or partially relevant — skip irrelevant ones entirely. Keep each note brief (one sentence max).\n\n{\n  "answer": "your final answer here",\n  "notes": [{ "memory_id": "...", "note": "why relevant" }]\n}\n\nIf the memories do not contain enough information, set "answer" to "I don't know".\n\nJSON only, no markdown.`;
 }
 
 /**

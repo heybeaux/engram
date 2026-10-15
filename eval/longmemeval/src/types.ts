@@ -25,6 +25,18 @@ export interface RoundEntry {
    * verbatim into the transcript with no role label.
    */
   marker?: boolean;
+  /** Dataset flag: this turn holds gold evidence for the question */
+  has_answer?: boolean;
+}
+
+/** A gold evidence turn (dataset `has_answer: true`) with its session context. */
+export interface EvidenceTurn {
+  sessionId: string;
+  sessionIndex: number;
+  sessionDate?: string;
+  turnIndex: number;
+  role: string;
+  content: string;
 }
 
 export interface LongMemEvalQuestion {
@@ -42,6 +54,12 @@ export interface LongMemEvalQuestion {
    * Critical for temporal-reasoning questions that ask "how many X ago…".
    */
   question_date?: string;
+  /** Gold evidence session IDs (dataset `answer_session_ids`) */
+  answer_session_ids?: string[];
+  /** Haystack session IDs, in ingest order (dataset `haystack_session_ids`) */
+  haystack_session_ids?: string[];
+  /** Gold evidence turns (dataset `has_answer: true`) */
+  evidence_turns?: EvidenceTurn[];
 }
 
 export interface LmeDataset {
@@ -113,4 +131,10 @@ export interface RunConfig {
   batchIngest?: boolean;
   /** Concurrent ingest requests during the batch-ingest phase (default 4) */
   ingestConcurrency?: number;
+  /** Restrict the run to these question IDs (dataset order is kept) */
+  questionIds?: string[];
+  /** Append one trace row per question (recall, reader prompt, evidence) to this JSONL */
+  tracePath?: string;
+  /** How reader and judge reach Anthropic models (default api) */
+  llmTransport?: 'api' | 'claude-cli';
 }

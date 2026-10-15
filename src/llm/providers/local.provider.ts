@@ -1,3 +1,4 @@
+import { withLocalEmbeddingSlot } from '../../embedding/local-embedding-limiter';
 import {
   LLMProvider,
   LLMConfig,
@@ -47,8 +48,13 @@ export class LocalProvider implements LLMProvider {
   }
 
   async embed(text: string): Promise<EmbeddingResponse> {
+    return withLocalEmbeddingSlot(() => this.embedAdmitted(text));
+  }
+
+  private async embedAdmitted(text: string): Promise<EmbeddingResponse> {
     const response = await fetch(`${this.baseUrl}/v1/embeddings`, {
       method: 'POST',
+      signal: AbortSignal.timeout(30_000),
       headers: {
         'Content-Type': 'application/json',
       },
@@ -83,8 +89,15 @@ export class LocalProvider implements LLMProvider {
    * Batch embed multiple texts in a single request
    */
   async embedBatch(texts: string[]): Promise<EmbeddingResponse[]> {
+    return withLocalEmbeddingSlot(() => this.embedBatchAdmitted(texts));
+  }
+
+  private async embedBatchAdmitted(
+    texts: string[],
+  ): Promise<EmbeddingResponse[]> {
     const response = await fetch(`${this.baseUrl}/v1/embeddings`, {
       method: 'POST',
+      signal: AbortSignal.timeout(30_000),
       headers: {
         'Content-Type': 'application/json',
       },

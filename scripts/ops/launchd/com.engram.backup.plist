@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- ENG-8: installed 2026-10-14 (approved by Beaux). Daily verified local backup at 02:15
+     local time (before the 03:00 UTC-scheduled dream cycle on this host
+     runs at 20:00 PDT, so no overlap). Keeps 7 verified dumps (~14 GB).
+     If the Mac is asleep at 02:15, launchd runs it on wake. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.engram.backup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/beauxwalton/.engram-ops/bin/engram-backup.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>ENGRAM_ENV_FILE</key>
+        <string>/Users/beauxwalton/projects/engram/.env</string>
+        <key>ENGRAM_BACKUP_DIR</key>
+        <string>/Users/beauxwalton/engram-backups/local</string>
+        <key>ENGRAM_BACKUP_KEEP</key>
+        <string>7</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>2</integer>
+        <key>Minute</key>
+        <integer>15</integer>
+    </dict>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>Nice</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/beauxwalton/Library/Logs/engram-backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/beauxwalton/Library/Logs/engram-backup.log</string>
+</dict>
+</plist>
