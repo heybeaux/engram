@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsISO8601, IsNotEmpty, IsString, Matches } from 'class-validator';
 
 export class WorkspaceFileImportDto {
   @ApiProperty({ description: 'Relative OpenClaw workspace Markdown path' })
@@ -15,6 +15,10 @@ export class WorkspaceFileImportDto {
   @ApiProperty({ description: 'File date in UTC (YYYY-MM-DD)' })
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   fileDate: string;
+
+  @ApiProperty({ description: 'Source file modification time in ISO 8601 UTC' })
+  @IsISO8601()
+  modifiedAt: string;
 
   @ApiProperty({ description: 'Inclusive as-of date in UTC (YYYY-MM-DD)' })
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
