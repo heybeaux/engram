@@ -15,6 +15,7 @@ import { MemoryExportService } from './memory-export.service';
 import { MemoryQueryRankingService } from './memory-query-ranking.service';
 import { MemoryQueryContextService } from './memory-query-context.service';
 import { MemoryWriteService } from './memory-write.service';
+import { WorkspaceFileImportService } from './workspace-file-import.service';
 import { MemoryLifecycleService } from './memory-lifecycle.service';
 import { ExtractionService } from './extraction.service';
 import { EmbeddingService } from './embedding.service';
@@ -100,6 +101,7 @@ const bullExports = hasRedis ? [EmbeddingQueueProducer] : [];
     MemoryQueryRankingService,
     MemoryQueryContextService,
     MemoryWriteService,
+    WorkspaceFileImportService,
     MemoryLifecycleService,
     MemoryPipelineService,
     MemoryGraphService,

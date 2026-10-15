@@ -2,6 +2,7 @@ import { MemoryBulkController } from './memory-bulk.controller';
 import { MemoryService } from './memory.service';
 import { MemoryJobQueueService } from './memory-job-queue.service';
 import { MemoryPipelineService } from './memory-pipeline.service';
+import { WorkspaceFileImportService } from './workspace-file-import.service';
 import { ApiKeyOrJwtGuard } from '../common/guards/api-key-or-jwt.guard';
 import { RateLimitGuard } from '../rate-limit/rate-limit.guard';
 
@@ -64,6 +65,7 @@ describe('MemoryBulkController', () => {
       mockMemoryService as unknown as MemoryService,
       mockMemoryJobQueue as unknown as MemoryJobQueueService,
       mockMemoryPipeline as unknown as MemoryPipelineService,
+      { importFile: jest.fn() } as unknown as WorkspaceFileImportService,
     );
   });
 

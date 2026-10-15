@@ -13,6 +13,8 @@ import {
 import type { Response } from 'express';
 import * as crypto from 'crypto';
 import { MemoryService } from './memory.service';
+import { WorkspaceFileImportService } from './workspace-file-import.service';
+import { WorkspaceFileImportDto } from './dto/workspace-file-import.dto';
 import {
   ExportQueryDto,
   ImportMemoriesDto,
@@ -45,7 +47,17 @@ export class MemoryBulkController {
     private readonly memoryService: MemoryService,
     private readonly memoryJobQueue: MemoryJobQueueService,
     private readonly memoryPipeline: MemoryPipelineService,
+    private readonly workspaceFileImport: WorkspaceFileImportService,
   ) {}
+
+  @Post('memories/bulk/workspace-file')
+  @ApiOperation({ summary: 'Import dated OpenClaw workspace Markdown (disabled by default)' })
+  async importWorkspaceFile(
+    @UserId() userId: string,
+    @Body() dto: WorkspaceFileImportDto,
+  ) {
+    return this.workspaceFileImport.importFile(userId, dto);
+  }
 
   // =========================================================================
   // BULK IMPORT (fast createMany + async embedding)
