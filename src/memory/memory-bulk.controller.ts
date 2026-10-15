@@ -32,7 +32,10 @@ import { UserId } from '../common/decorators/user-id.decorator';
 import { RateLimitGuard } from '../rate-limit/rate-limit.guard';
 import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { MemoryJobQueueService } from './memory-job-queue.service';
-import { MemoryPipelineService } from './memory-pipeline.service';
+import {
+  MemoryPipelineService,
+  EmbeddingRetryResult,
+} from './memory-pipeline.service';
 
 @ApiTags('memories')
 @Controller('v1')
@@ -60,7 +63,8 @@ export class MemoryBulkController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Memories created. `warnings` present when any item triggered a non-fatal ingest warning.',
+    description:
+      'Memories created. `warnings` present when any item triggered a non-fatal ingest warning.',
     type: BulkCreateResponseDto,
   })
   async bulkCreate(
@@ -368,12 +372,7 @@ export class MemoryBulkController {
     description:
       'Retry generating embeddings for memories that previously failed.',
   })
-  async retryFailedEmbeddings(): Promise<{
-    retried: number;
-    succeeded: number;
-    failed: number;
-    discovered: number;
-  }> {
+  async retryFailedEmbeddings(): Promise<EmbeddingRetryResult> {
     return this.memoryPipeline.retryFailedEmbeddings();
   }
 }
