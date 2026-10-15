@@ -40,7 +40,7 @@ async function run() {
   console.log('Connected to local DB');
 
   // Fetch first page to get userId/agentId
-  const firstPage = await apiGet(`/v1/memories?limit=1`);
+  const firstPage = await apiGet(`/v1/memories?limit=1&includeHidden=true`);
   const total = firstPage.total || 0;
   const sample = firstPage.memories?.[0];
   const cloudUserId = sample?.userId;
@@ -83,7 +83,7 @@ async function run() {
 
   while (true) {
     const offset = page * PAGE_SIZE;
-    const res = await apiGet(`/v1/memories?limit=${PAGE_SIZE}&offset=${offset}`);
+    const res = await apiGet(`/v1/memories?limit=${PAGE_SIZE}&offset=${offset}&includeHidden=true`);
     const memories = res.memories || [];
     if (memories.length === 0) break;
 
