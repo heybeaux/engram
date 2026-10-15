@@ -26,6 +26,25 @@ interface EmbeddingRetryEntry {
   lastAttempt: Date;
 }
 
+export interface EmbeddingRetryResult {
+  retried: number;
+  succeeded: number;
+  failed: number;
+  discovered: number;
+  exhaustedRetries: number;
+  /** true when a previous retry run was still in flight (ENG-61) */
+  skipped?: boolean;
+}
+
+/** ENG-61: per-run caps for retryFailedEmbeddings (override via env). */
+const DEFAULT_EMBEDDING_RETRY_BATCH_SIZE = 100;
+const DEFAULT_EMBEDDING_RETRY_TIME_BUDGET_MS = 4 * 60 * 1000;
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
 @Injectable()
 export class MemoryPipelineService {
   private readonly logger = new Logger(MemoryPipelineService.name);
@@ -33,6 +52,10 @@ export class MemoryPipelineService {
   /** In-memory retry queue for failed embeddings (HEY-345) */
   private readonly embeddingRetryQueue = new Map<string, EmbeddingRetryEntry>();
   private static readonly MAX_RETRY_ATTEMPTS = 5;
+  /** ENG-61: single-flight guard for retryFailedEmbeddings */
+  private retryInFlight = false;
+  /** ENG-61: keyset cursor so bounded discovery walks the backlog across runs */
+  private retryDiscoveryCursor: { createdAt: Date; id: string } | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -61,6 +84,25 @@ export class MemoryPipelineService {
       userId,
       userName: context?.userName,
     });
+
+    // ENG-62: a replayed job (e.g. a FAILED memory requeued on
+    // memory-embedding) finds the extraction from its first run. Only the
+    // vector is missing, so embed and stop: re-extracting would hit the
+    // memory_id unique constraint, re-spend the LLM call, and repeat the
+    // non-idempotent side effects (GraphEntity mentionCount increments,
+    // IDENTITY entity memories, graph and hierarchy processing).
+    const existingExtraction = await this.prisma.memoryExtraction.findUnique({
+      where: { memoryId },
+      select: { id: true },
+    });
+    if (existingExtraction) {
+      this.logger.log(
+        '[Memory] extractAndEmbed replay — extraction exists, embedding only:',
+        memoryId,
+      );
+      await this.generateAndStoreEmbedding(memoryId, raw, userId);
+      return;
+    }
 
     // HEY-350: Run extraction and embedding generation in parallel.
     // These are the two slowest operations and have no data dependency on each other.
@@ -363,39 +405,97 @@ export class MemoryPipelineService {
   }
 
   /**
-   * Retry all failed embeddings in the queue (HEY-345).
-   * Also discovers memories in DB that have no embedding.
-   * Can be called manually or via cron.
+   * Retry failed embeddings (HEY-345), bounded per call (ENG-61).
+   *
+   * Single-flight: a call made while a previous retry run is still going is a
+   * no-op (`skipped: true`). Before ENG-61 every 5-minute cron tick started a
+   * new unbounded loop over every PENDING/FAILED row; the loops piled up in
+   * each process and starved the BullMQ `memory-embedding` jobs of local
+   * embed slots ("Local embedding admission timed out").
+   *
+   * Bounded: each run discovers at most `EMBEDDING_RETRY_BATCH_SIZE` rows
+   * (keyset cursor across runs, newest first) and stops attempting new
+   * embeddings once `EMBEDDING_RETRY_TIME_BUDGET_MS` has elapsed.
    */
-  async retryFailedEmbeddings(): Promise<{
-    retried: number;
-    succeeded: number;
-    failed: number;
-    discovered: number;
-    exhaustedRetries: number;
-  }> {
-    // 1. Discover memories without embeddings from DB.
-    // Loop in pages until no new records are found so bulk ingest failures
-    // don't get capped at the first 100 rows (ingest C2 fix).
+  async retryFailedEmbeddings(): Promise<EmbeddingRetryResult> {
+    if (this.retryInFlight) {
+      this.logger.debug(
+        '[Retry] Previous embedding retry still running — skipping',
+      );
+      return {
+        retried: 0,
+        succeeded: 0,
+        failed: 0,
+        discovered: 0,
+        exhaustedRetries: 0,
+        skipped: true,
+      };
+    }
+    this.retryInFlight = true;
+    try {
+      return await this.runEmbeddingRetry();
+    } finally {
+      this.retryInFlight = false;
+    }
+  }
+
+  private async runEmbeddingRetry(): Promise<EmbeddingRetryResult> {
+    const batchSize = readPositiveIntEnv(
+      'EMBEDDING_RETRY_BATCH_SIZE',
+      DEFAULT_EMBEDDING_RETRY_BATCH_SIZE,
+    );
+    const budgetMs = readPositiveIntEnv(
+      'EMBEDDING_RETRY_TIME_BUDGET_MS',
+      DEFAULT_EMBEDDING_RETRY_TIME_BUDGET_MS,
+    );
+    const deadline = Date.now() + budgetMs;
+
+    const isRetryable = (e: EmbeddingRetryEntry) =>
+      e.attempts < MemoryPipelineService.MAX_RETRY_ATTEMPTS;
+
+    // 1. Discover unembedded memories from DB: one bounded page per run, only
+    //    enough to keep at most `batchSize` retryable entries queued.
+    let retryable = 0;
+    for (const entry of this.embeddingRetryQueue.values()) {
+      if (isRetryable(entry)) retryable++;
+    }
     let discovered = 0;
-    let page = 0;
-    const PAGE_SIZE = 100;
-    while (true) {
+    const room = batchSize - retryable;
+    if (room > 0) {
+      const cursor = this.retryDiscoveryCursor;
       const unembedded = await this.prisma.memory.findMany({
         where: {
-          OR: [
-            { embeddingId: null },
-            { embeddingStatus: 'FAILED' },
-            { embeddingStatus: 'PENDING' },
+          AND: [
+            {
+              OR: [
+                { embeddingId: null },
+                { embeddingStatus: 'FAILED' },
+                { embeddingStatus: 'PENDING' },
+              ],
+            },
+            ...(cursor
+              ? [
+                  {
+                    OR: [
+                      { createdAt: { lt: cursor.createdAt } },
+                      { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+                    ],
+                  },
+                ]
+              : []),
           ],
           deletedAt: null,
         },
-        select: { id: true, userId: true, raw: true },
-        take: PAGE_SIZE,
-        skip: page * PAGE_SIZE,
-        orderBy: { createdAt: 'desc' },
+        select: { id: true, userId: true, raw: true, createdAt: true },
+        take: room,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       });
-      let newInPage = 0;
+      // Wrap to the newest rows once the walk reaches the oldest.
+      const last = unembedded[unembedded.length - 1];
+      this.retryDiscoveryCursor =
+        unembedded.length < room || !last
+          ? null
+          : { createdAt: last.createdAt, id: last.id };
       for (const mem of unembedded) {
         if (!this.embeddingRetryQueue.has(mem.id)) {
           this.embeddingRetryQueue.set(mem.id, {
@@ -406,25 +506,45 @@ export class MemoryPipelineService {
             lastAttempt: new Date(0),
           });
           discovered++;
-          newInPage++;
         }
       }
-      if (unembedded.length < PAGE_SIZE || newInPage === 0) break;
-      page++;
     }
 
+    // 2. Drop entries another path (e.g. the BullMQ embedding job) has already
+    //    embedded, so the retry never re-embeds finished work.
+    const candidates = Array.from(this.embeddingRetryQueue.values())
+      .filter(isRetryable)
+      .slice(0, batchSize);
+    if (candidates.length > 0) {
+      const stillUnembedded = await this.prisma.memory.findMany({
+        where: {
+          id: { in: candidates.map((c) => c.memoryId) },
+          deletedAt: null,
+          OR: [
+            { embeddingId: null },
+            { embeddingStatus: 'FAILED' },
+            { embeddingStatus: 'PENDING' },
+          ],
+        },
+        select: { id: true },
+      });
+      const open = new Set(stillUnembedded.map((m) => m.id));
+      for (const c of candidates) {
+        if (!open.has(c.memoryId)) this.embeddingRetryQueue.delete(c.memoryId);
+      }
+    }
+
+    // 3. Retry sequentially within the time budget.
     let retried = 0;
     let succeeded = 0;
     let failed = 0;
-
-    const entries = Array.from(this.embeddingRetryQueue.values());
-    let exhaustedRetries = 0;
-    for (const entry of entries) {
-      if (entry.attempts >= MemoryPipelineService.MAX_RETRY_ATTEMPTS) {
-        exhaustedRetries++;
-        continue;
+    let budgetExhausted = false;
+    for (const entry of candidates) {
+      if (!this.embeddingRetryQueue.has(entry.memoryId)) continue;
+      if (Date.now() >= deadline) {
+        budgetExhausted = true;
+        break;
       }
-
       retried++;
       const ok = await this.generateAndStoreEmbedding(
         entry.memoryId,
@@ -438,6 +558,11 @@ export class MemoryPipelineService {
       }
     }
 
+    let exhaustedRetries = 0;
+    for (const entry of this.embeddingRetryQueue.values()) {
+      if (!isRetryable(entry)) exhaustedRetries++;
+    }
+
     if (exhaustedRetries > 0) {
       this.logger.error({
         event: 'embedding_retry.dead_letter',
@@ -448,7 +573,7 @@ export class MemoryPipelineService {
     }
 
     this.logger.log(
-      `[Retry] Embedding retry complete: ${succeeded}/${retried} succeeded, ${discovered} discovered from DB, ${exhaustedRetries} exhausted`,
+      `[Retry] Embedding retry complete: ${succeeded}/${retried} succeeded, ${discovered} discovered from DB, ${exhaustedRetries} exhausted${budgetExhausted ? ', time budget reached' : ''}`,
     );
     return { retried, succeeded, failed, discovered, exhaustedRetries };
   }

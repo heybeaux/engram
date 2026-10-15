@@ -189,6 +189,20 @@ EMBEDDING_PROVIDER="openai"
 OPENAI_API_KEY="sk-..."
 ```
 
+### Embedding retry cron
+
+Every 5 minutes, each Engram process re-embeds memories whose embedding is
+PENDING or FAILED. A run is single-flight: a tick that fires while the previous
+run is still going does nothing. Each run is also bounded by the settings below.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `EMBEDDING_RETRY_CRON_ENABLED` | `true` | Set to `false` to turn the cron off in this process, e.g. on extra BullMQ workers when the API process owns retries. Leave it on in at least one process, or FAILED embeddings are never retried. |
+| `EMBEDDING_RETRY_BATCH_SIZE` | `100` | Maximum memories discovered and attempted per run. |
+| `EMBEDDING_RETRY_TIME_BUDGET_MS` | `240000` | A run stops starting new embeddings after this many ms (keep it below the 5-minute interval). |
+
+`POST /v1/memories/embedding-retry` uses the same guard and returns `skipped: true` when a run is already in flight.
+
 ---
 
 ## Provider API Keys

@@ -12,7 +12,10 @@ import {
 } from './dto/trace-timeline.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
-import { TemporalParserService } from './temporal/temporal-parser.service';
+import {
+  TemporalParserService,
+  type TemporalFilter,
+} from './temporal/temporal-parser.service';
 import { QueryMemoryDto, LoadContextDto } from './dto/query-memory.dto';
 import { MultiQueryService } from '../multi-query/multi-query.service';
 import { MemoryPoolService } from '../memory-pool/memory-pool.service';
@@ -56,6 +59,8 @@ import {
   gatedLexicalRescue,
   isGatedLexicalRescueEnabled,
 } from './lexical-rescue.util';
+
+const SOFT_WINDOW_BOOST = 1.1;
 
 @Injectable()
 export class MemoryQueryService {
@@ -130,6 +135,13 @@ export class MemoryQueryService {
     const now = this.resolveReferenceDate(dto);
     const parsed = this.temporalParser.parse(dto.query, now);
     const hasTemporalIntent = parsed.temporalFilter !== null;
+    // TEMPORAL_SOFT_WINDOWS: vague phrases ("recently", "earlier", "last month")
+    // rank instead of filter, so sparse or stale windows cannot empty the pool.
+    let softTemporal =
+      hasTemporalIntent &&
+      parsed.temporalFilter!.soft === true &&
+      process.env.TEMPORAL_SOFT_WINDOWS === 'true';
+    const useTemporalPath = hasTemporalIntent && !softTemporal;
     // Date filters constrain eligibility; the full phrase still carries meaning
     // for semantic ranking, especially when no cross-encoder is available.
     const searchQuery = hasTemporalIntent ? dto.query : parsed.semanticQuery;
@@ -165,9 +177,10 @@ export class MemoryQueryService {
     // ENG-48: Build temporal range filter from explicit after/before params
     const temporalRangeFilter = this.buildTemporalRangeFilter(dto);
 
-    let scoredMemories: MemoryWithScore[];
+    let scoredMemories: MemoryWithScore[] = [];
+    let emptyWindowFallback = false;
 
-    if (hasTemporalIntent) {
+    if (useTemporalPath) {
       // TEMPORAL PATH — HEY-575: Adaptive window expansion
       // ENG-48 after/before merging is applied on the first expansion pass below
       const adaptiveEnabled = process.env.TEMPORAL_QUERY_ADAPTIVE !== 'false';
@@ -328,49 +341,69 @@ export class MemoryQueryService {
         elapsedMs: Date.now() - expandStart,
       });
 
-      const vectorResults = await this.embedding.search(
-        userId ?? 'default',
-        queryEmbedding,
-        200,
-        dto.layers as any,
-        undefined,
-        poolIds,
-        searchQuery,
-        filterTags,
-        filterMetadata,
-      );
-      const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
+      // TEMPORAL_SOFT_WINDOWS: a hard window with no memories (e.g. "today" when
+      // sessions carry real observedAt dates) must not empty the result; fall
+      // back to the standard path and rank the window with a boost instead.
+      if (
+        temporalMemories.length === 0 &&
+        process.env.TEMPORAL_SOFT_WINDOWS === 'true'
+      ) {
+        emptyWindowFallback = true;
+        softTemporal = true;
+        this.logger.log({
+          event: 'recall.temporal_window.empty_fallback',
+          expression: parsed.temporalFilter!.expression,
+        });
+      }
 
-      // Pass 120 candidates to the reranker (not just `limit`=20).
-      // The reranker needs a wide pool to surface the best temporal match.
-      const TEMPORAL_RERANK_POOL = 120;
-      scoredMemories = temporalMemories
-        .map((memory) => {
-          const semanticScore = scoreMap.get(memory.id) ?? 0.1;
-          // Temporal C1: score against effective event time, not ingest time
-          const temporalScore = this.temporalParser.calculateTemporalRelevance(
-            memory.observedAt ?? memory.createdAt,
-            parsed.temporalFilter,
-          );
-          const importanceScore =
-            memory.effectiveScore ?? memory.importanceScore;
+      if (!emptyWindowFallback) {
+        const vectorResults = await this.embedding.search(
+          userId ?? 'default',
+          queryEmbedding,
+          200,
+          dto.layers as any,
+          undefined,
+          poolIds,
+          searchQuery,
+          filterTags,
+          filterMetadata,
+        );
+        const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
 
-          const blendedScore = this.temporalParser.blendScores(
-            semanticScore,
-            temporalScore,
-            importanceScore,
-            true,
-          );
+        // Pass 120 candidates to the reranker (not just `limit`=20).
+        // The reranker needs a wide pool to surface the best temporal match.
+        const TEMPORAL_RERANK_POOL = 120;
+        scoredMemories = temporalMemories
+          .map((memory) => {
+            const semanticScore = scoreMap.get(memory.id) ?? 0.1;
+            // Temporal C1: score against effective event time, not ingest time
+            const temporalScore =
+              this.temporalParser.calculateTemporalRelevance(
+                memory.observedAt ?? memory.createdAt,
+                parsed.temporalFilter,
+              );
+            const importanceScore =
+              memory.effectiveScore ?? memory.importanceScore;
 
-          const adjustedScore =
-            blendedScore *
-            this.recallWeightService.recallWeight(memory) *
-            this.rankingService.getImportanceMultiplier(memory);
-          return { ...memory, score: adjustedScore } as MemoryWithScore;
-        })
-        .sort(recallRankComparator())
-        .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
-    } else {
+            const blendedScore = this.temporalParser.blendScores(
+              semanticScore,
+              temporalScore,
+              importanceScore,
+              true,
+            );
+
+            const adjustedScore =
+              blendedScore *
+              this.recallWeightService.recallWeight(memory) *
+              this.rankingService.getImportanceMultiplier(memory);
+            return { ...memory, score: adjustedScore } as MemoryWithScore;
+          })
+          .sort(recallRankComparator())
+          .slice(0, TEMPORAL_RERANK_POOL); // wide pool — reranker will final-sort to `limit`
+      }
+    }
+
+    if (!useTemporalPath || emptyWindowFallback) {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
       const candidateLimit = Math.max(200, limit * 20);
       const vectorResults = await this.embedding.search(
@@ -645,9 +678,17 @@ export class MemoryQueryService {
       const sorted = memories
         .map((memory) => {
           const semanticScore = scoreMap.get(memory.id) ?? 0;
+          const windowBoost =
+            softTemporal &&
+            this.inTemporalWindow(
+              memory.observedAt ?? memory.createdAt,
+              parsed.temporalFilter!,
+            )
+              ? SOFT_WINDOW_BOOST
+              : 1;
           return {
             ...memory,
-            score: semanticScore,
+            score: semanticScore * windowBoost,
             // Raw cosine, kept through rerank as the first tie-break key.
             ...(deterministic ? { vectorScore: cosineMap.get(memory.id) } : {}),
             __keywordRescued: keywordRescueIds.has(memory.id),
@@ -863,6 +904,11 @@ export class MemoryQueryService {
     if (dto.multiQuery?.enabled === false) return false;
     if (dto.multiQuery?.enabled === true) return true;
     return this.multiQueryService.isEnabled();
+  }
+
+  private inTemporalWindow(at: Date, filter: TemporalFilter): boolean {
+    const t = new Date(at).getTime();
+    return t >= filter.start.getTime() && t <= filter.end.getTime();
   }
 
   /** Query-side "now": caller-supplied referenceDate, else the server clock. */

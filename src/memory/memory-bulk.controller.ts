@@ -13,6 +13,8 @@ import {
 import type { Response } from 'express';
 import * as crypto from 'crypto';
 import { MemoryService } from './memory.service';
+import { WorkspaceFileImportService } from './workspace-file-import.service';
+import { WorkspaceFileImportDto } from './dto/workspace-file-import.dto';
 import {
   ExportQueryDto,
   ImportMemoriesDto,
@@ -32,7 +34,10 @@ import { UserId } from '../common/decorators/user-id.decorator';
 import { RateLimitGuard } from '../rate-limit/rate-limit.guard';
 import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { MemoryJobQueueService } from './memory-job-queue.service';
-import { MemoryPipelineService } from './memory-pipeline.service';
+import {
+  MemoryPipelineService,
+  EmbeddingRetryResult,
+} from './memory-pipeline.service';
 
 @ApiTags('memories')
 @Controller('v1')
@@ -42,7 +47,19 @@ export class MemoryBulkController {
     private readonly memoryService: MemoryService,
     private readonly memoryJobQueue: MemoryJobQueueService,
     private readonly memoryPipeline: MemoryPipelineService,
+    private readonly workspaceFileImport: WorkspaceFileImportService,
   ) {}
+
+  @Post('memories/bulk/workspace-file')
+  @ApiOperation({
+    summary: 'Import dated OpenClaw workspace Markdown (disabled by default)',
+  })
+  async importWorkspaceFile(
+    @UserId() userId: string,
+    @Body() dto: WorkspaceFileImportDto,
+  ) {
+    return this.workspaceFileImport.importFile(userId, dto);
+  }
 
   // =========================================================================
   // BULK IMPORT (fast createMany + async embedding)
@@ -60,7 +77,8 @@ export class MemoryBulkController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Memories created. `warnings` present when any item triggered a non-fatal ingest warning.',
+    description:
+      'Memories created. `warnings` present when any item triggered a non-fatal ingest warning.',
     type: BulkCreateResponseDto,
   })
   async bulkCreate(
@@ -368,12 +386,7 @@ export class MemoryBulkController {
     description:
       'Retry generating embeddings for memories that previously failed.',
   })
-  async retryFailedEmbeddings(): Promise<{
-    retried: number;
-    succeeded: number;
-    failed: number;
-    discovered: number;
-  }> {
+  async retryFailedEmbeddings(): Promise<EmbeddingRetryResult> {
     return this.memoryPipeline.retryFailedEmbeddings();
   }
 }

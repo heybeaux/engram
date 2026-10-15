@@ -6,6 +6,7 @@ import {
   ImportanceSignal,
   ExtractedMemory,
 } from './dto/observe.dto';
+import { buildFormationPromptAddendum, guardFact } from './formation-guard';
 
 /**
  * Build extraction prompt with optional user context
@@ -54,6 +55,7 @@ interface ExtractionResponse {
 export interface ExtractorContext {
   userName?: string;
   timestamp?: Date;
+  agentName?: string;
 }
 
 /**
@@ -79,10 +81,9 @@ export class AutoExtractorService {
       // Format conversation for LLM
       const conversation = this.formatConversation(turns);
       const signalHints = this.formatSignalHints(signals);
-      const prompt = buildExtractionPrompt(
-        context?.userName,
-        context?.timestamp,
-      );
+      const prompt =
+        buildExtractionPrompt(context?.userName, context?.timestamp) +
+        buildFormationPromptAddendum(context?.userName, context?.agentName);
 
       const result = await this.llm.json<ExtractionResponse>(
         [
@@ -97,8 +98,19 @@ export class AutoExtractorService {
       );
 
       // Convert to ExtractedMemory format
+      const guarded = (result.facts || []).filter((f) => {
+        const verdict = guardFact(
+          { content: f.content, turnIndices: [f.turnIndex] },
+          turns,
+          context?.userName,
+        );
+        if (!verdict.keep) {
+          this.logger.debug(`[observe] dropped fact (${verdict.reason})`);
+        }
+        return verdict.keep;
+      });
       return this.processExtractions(
-        result.facts || [],
+        guarded,
         turns,
         signals,
         context?.userName,

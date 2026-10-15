@@ -159,6 +159,164 @@ describe('MemoryQueryService', () => {
       );
     });
 
+    describe('TEMPORAL_SOFT_WINDOWS', () => {
+      const softFilter = (soft: boolean | undefined) =>
+        ({
+          semanticQuery: 'meeting',
+          temporalFilter: {
+            expression: 'recently',
+            start: new Date('2026-02-12'),
+            end: new Date('2026-02-15'),
+            soft,
+          },
+        }) as any;
+      const mems = [
+        {
+          id: 'old',
+          raw: 'old meeting',
+          effectiveScore: 0.8,
+          createdAt: new Date('2025-01-01T10:00:00Z'),
+          extraction: {},
+        },
+        {
+          id: 'new',
+          raw: 'new meeting',
+          effectiveScore: 0.8,
+          createdAt: new Date('2026-02-14T10:00:00Z'),
+          extraction: {},
+        },
+      ];
+      afterEach(() => {
+        delete process.env.TEMPORAL_SOFT_WINDOWS;
+      });
+
+      it('routes a soft window to the standard path when the flag is on', async () => {
+        process.env.TEMPORAL_SOFT_WINDOWS = 'true';
+        temporalParser.parse.mockReturnValue(softFilter(true));
+        prisma.memory.findMany = jest.fn().mockResolvedValue(mems);
+        embedding.search.mockResolvedValue([
+          { id: 'old', score: 0.9 },
+          { id: 'new', score: 0.5 },
+        ] as any);
+
+        const result = await service.recall(userId, {
+          query: 'recently meeting',
+        } as any);
+
+        expect(temporalParser.blendScores).not.toHaveBeenCalled();
+        expect(result.memories.map((m: any) => m.id)).toEqual(
+          expect.arrayContaining(['old', 'new']),
+        );
+        const whereClauses = (
+          prisma.memory.findMany as jest.Mock
+        ).mock.calls.map((c) => c[0].where);
+        expect(whereClauses.some((w: any) => w.OR?.[0]?.observedAt)).toBe(
+          false,
+        );
+      });
+
+      it('ranks an in-window memory above a slightly closer out-of-window one, keeping both', async () => {
+        process.env.TEMPORAL_SOFT_WINDOWS = 'true';
+        temporalParser.parse.mockReturnValue(softFilter(true));
+        prisma.memory.findMany = jest.fn().mockResolvedValue(mems);
+        embedding.search.mockResolvedValue([
+          { id: 'old', score: 0.52 },
+          { id: 'new', score: 0.5 },
+        ] as any);
+
+        const result = await service.recall(userId, {
+          query: 'recently meeting',
+        } as any);
+
+        expect(result.memories.map((m: any) => m.id)).toEqual(['new', 'old']);
+      });
+
+      it('keeps a soft window on the temporal path when the flag is off', async () => {
+        temporalParser.parse.mockReturnValue(softFilter(true));
+        prisma.memory.findMany = jest.fn().mockResolvedValue([mems[1]]);
+        embedding.search.mockResolvedValue([{ id: 'new', score: 0.9 }] as any);
+
+        await service.recall(userId, { query: 'recently meeting' } as any);
+
+        expect(temporalParser.blendScores).toHaveBeenCalled();
+      });
+
+      describe('empty hard window', () => {
+        const todayFilter = () =>
+          ({
+            semanticQuery: 'meeting',
+            temporalFilter: {
+              expression: 'today',
+              start: new Date('2026-02-14T00:00:00Z'),
+              end: new Date('2026-02-14T23:59:59Z'),
+            },
+          }) as any;
+        // Window query (OR on observedAt/createdAt) finds nothing; the standard
+        // path's id lookup returns the memories.
+        const emptyWindowThenMems = () =>
+          jest
+            .fn()
+            .mockImplementation(async (args: any) =>
+              args.where?.id ? mems : [],
+            );
+
+        it('falls back to the standard path and keeps results when the flag is on', async () => {
+          process.env.TEMPORAL_SOFT_WINDOWS = 'true';
+          temporalParser.parse.mockReturnValue(todayFilter());
+          prisma.memory.findMany = emptyWindowThenMems();
+          embedding.search.mockResolvedValue([
+            { id: 'old', score: 0.52 },
+            { id: 'new', score: 0.5 },
+          ] as any);
+
+          const result = await service.recall(userId, {
+            query: 'today meeting',
+          } as any);
+
+          expect(temporalParser.blendScores).not.toHaveBeenCalled();
+          expect(result.memories.map((m: any) => m.id)).toEqual(['new', 'old']);
+        });
+
+        it('returns the empty window result when the flag is off', async () => {
+          temporalParser.parse.mockReturnValue(todayFilter());
+          prisma.memory.findMany = emptyWindowThenMems();
+          embedding.search.mockResolvedValue([
+            { id: 'old', score: 0.9 },
+          ] as any);
+
+          const result = await service.recall(userId, {
+            query: 'today meeting',
+          } as any);
+
+          expect(result.memories).toHaveLength(0);
+        });
+
+        it('keeps a non-empty hard window on the temporal path when the flag is on', async () => {
+          process.env.TEMPORAL_SOFT_WINDOWS = 'true';
+          temporalParser.parse.mockReturnValue(todayFilter());
+          prisma.memory.findMany = jest.fn().mockResolvedValue([mems[1]]);
+          embedding.search.mockResolvedValue([
+            { id: 'new', score: 0.9 },
+          ] as any);
+
+          await service.recall(userId, { query: 'today meeting' } as any);
+
+          expect(temporalParser.blendScores).toHaveBeenCalled();
+        });
+      });
+
+      it('keeps a hard window on the temporal path when the flag is on', async () => {
+        process.env.TEMPORAL_SOFT_WINDOWS = 'true';
+        temporalParser.parse.mockReturnValue(softFilter(undefined));
+        prisma.memory.findMany = jest.fn().mockResolvedValue([mems[1]]);
+        embedding.search.mockResolvedValue([{ id: 'new', score: 0.9 }] as any);
+
+        await service.recall(userId, { query: '5 days ago meeting' } as any);
+
+        expect(temporalParser.blendScores).toHaveBeenCalled();
+      });
+    });
+
     it('should resolve pool IDs from agentSessionKey', async () => {
       embedding.search.mockResolvedValue([]);
       const result = await service.recall(userId, {
@@ -1119,7 +1277,9 @@ describe('MemoryQueryService', () => {
 
     it('falls back to the server clock without referenceDate', async () => {
       const before = Date.now();
-      await service.recall(userId, { query: 'what did I buy 10 days ago' } as any);
+      await service.recall(userId, {
+        query: 'what did I buy 10 days ago',
+      } as any);
       const now = temporalParser.parse.mock.calls[0][1] as Date;
       expect(now.getTime()).toBeGreaterThanOrEqual(before);
     });
