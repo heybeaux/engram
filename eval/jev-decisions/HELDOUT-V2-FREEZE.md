@@ -1,5 +1,7 @@
 # Replacement classifier holdout freeze (2026-10-15)
 
+**Superseded unmeasured:** After Temporal pinned the classifier, it requested the preregistered 20-cluster / 60-negative denominator. The deterministic first 20 clusters of this pre-pin authored set became v3. This 24-cluster v2 was never used for a classifier call and remains archived under its original hash.
+
 This is metadata for the Eval-owned sealed fixture. Pair text remains outside the shared worktree until Engram Temporal records the next classifier, prompt, threshold, and falsifier pin on [ENG-122](/ENG/issues/ENG-122). Neither arm has run on this set.
 
 | Field                       | Frozen value                                                                                                                                                                                   |

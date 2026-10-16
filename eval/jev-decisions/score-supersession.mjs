@@ -1,12 +1,24 @@
 // Recompute all classifier metrics from raw JSONL rows; no model or database calls.
 import fs from 'node:fs';
 const dir = new URL('./results/', import.meta.url);
-const verifiedDev = process.argv[2] === '--dev-verified';
+const mode = process.argv[2] ?? 'default';
+if (
+  !['default', '--dev-verified', '--dev-property', '--heldout-v3'].includes(
+    mode,
+  )
+)
+  throw new Error(
+    'Usage: node score-supersession.mjs [--dev-verified|--dev-property|--heldout-v3]',
+  );
+const verifiedDev = mode === '--dev-verified';
+const propertyDev = mode === '--dev-property';
 const read = (set, arm) => {
   const name =
     verifiedDev && set === 'dev' && arm === 'on'
       ? 'dev-on-verified'
-      : `${set}-${arm}`;
+      : propertyDev && set === 'dev' && arm === 'on'
+        ? 'dev-on-property'
+        : `${set}-${arm}`;
   const attempts = fs
     .readFileSync(new URL(`${name}.jsonl`, dir), 'utf8')
     .trim()
@@ -17,7 +29,11 @@ const read = (set, arm) => {
     rows: [...new Map(attempts.map((r) => [r.id, r])).values()],
   };
 };
-const expected = { dev: [420, 70, 70], heldout: [80, 20, 20] };
+const expected = {
+  dev: [420, 70, 70],
+  heldout: [80, 20, 20],
+  'heldout-v3': [80, 20, 20],
+};
 const f1 = (rows) => {
   const tp = rows.filter((r) => r.gold && r.predicted).length;
   const fp = rows.filter((r) => !r.gold && r.predicted).length;
@@ -47,7 +63,11 @@ const wilson = (k, n) => {
 };
 let seed = 7;
 const random = () => (seed = (1664525 * seed + 1013904223) >>> 0) / 2 ** 32;
-for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
+for (const set of mode === '--heldout-v3'
+  ? ['heldout-v3']
+  : verifiedDev || propertyDev
+    ? ['dev']
+    : ['dev', 'heldout']) {
   const offRaw = read(set, 'off'),
     onRaw = read(set, 'on');
   const off = offRaw.rows,
@@ -82,7 +102,7 @@ for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
       new Map(clusters.map((c) => [c, rows.filter((r) => r.cluster === c)])),
     );
   }
-  const samples = { off: [], on: [], delta: [] };
+  const samples = { off: [], on: [], delta: [], offFp: [], onFp: [] };
   for (let b = 0; b < 2000; b++) {
     const sampled = Array.from(
       { length: clusters.length },
@@ -91,12 +111,14 @@ for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
     const scores = Object.fromEntries(
       ['off', 'on'].map((arm) => [
         arm,
-        f1(sampled.flatMap((c) => byArm.get(arm).get(c))).f1,
+        f1(sampled.flatMap((c) => byArm.get(arm).get(c))),
       ]),
     );
-    samples.off.push(scores.off);
-    samples.on.push(scores.on);
-    samples.delta.push(scores.on - scores.off);
+    samples.off.push(scores.off.f1);
+    samples.on.push(scores.on.f1);
+    samples.delta.push(scores.on.f1 - scores.off.f1);
+    samples.offFp.push(scores.off.fp);
+    samples.onFp.push(scores.on.fp);
   }
   console.log(`\n${set}: ${on.length} pairs, ${clusters.length} clusters`);
   for (const [arm, rows] of [
@@ -124,6 +146,10 @@ for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
         arm,
         ...s,
         f1_ci: [quantile(samples[arm], 0.025), quantile(samples[arm], 0.975)],
+        false_supersession_count_ci: [
+          quantile(samples[`${arm}Fp`], 0.025),
+          quantile(samples[`${arm}Fp`], 0.975),
+        ],
         false_supersession_rate: s.fp / (s.fp + s.tn),
         false_supersession_ci_wilson: fpInterval,
         latency_p50_ms: quantile(
@@ -136,6 +162,8 @@ for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
         ),
         mean_prompt_tokens: sum('prompt_tokens') / valid.length,
         mean_completion_tokens: sum('completion_tokens') / valid.length,
+        total_prompt_tokens: sum('prompt_tokens'),
+        total_completion_tokens: sum('completion_tokens'),
         estimated_usd_per_classification: dollars / valid.length,
         estimated_total_attempt_cost_usd: totalCost,
         raw_attempts: attempts.length,
