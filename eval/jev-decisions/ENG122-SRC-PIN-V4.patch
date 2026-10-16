@@ -1,0 +1,1108 @@
+diff --git a/eval/jev-decisions/score-supersession.mjs b/eval/jev-decisions/score-supersession.mjs
+index e9afe90..ea9ca70 100644
+--- a/eval/jev-decisions/score-supersession.mjs
++++ b/eval/jev-decisions/score-supersession.mjs
+@@ -1,12 +1,24 @@
+ // Recompute all classifier metrics from raw JSONL rows; no model or database calls.
+ import fs from 'node:fs';
+ const dir = new URL('./results/', import.meta.url);
+-const verifiedDev = process.argv[2] === '--dev-verified';
++const mode = process.argv[2] ?? 'default';
++if (
++  !['default', '--dev-verified', '--dev-property', '--heldout-v3'].includes(
++    mode,
++  )
++)
++  throw new Error(
++    'Usage: node score-supersession.mjs [--dev-verified|--dev-property|--heldout-v3]',
++  );
++const verifiedDev = mode === '--dev-verified';
++const propertyDev = mode === '--dev-property';
+ const read = (set, arm) => {
+   const name =
+     verifiedDev && set === 'dev' && arm === 'on'
+       ? 'dev-on-verified'
+-      : `${set}-${arm}`;
++      : propertyDev && set === 'dev' && arm === 'on'
++        ? 'dev-on-property'
++        : `${set}-${arm}`;
+   const attempts = fs
+     .readFileSync(new URL(`${name}.jsonl`, dir), 'utf8')
+     .trim()
+@@ -17,7 +29,11 @@ const read = (set, arm) => {
+     rows: [...new Map(attempts.map((r) => [r.id, r])).values()],
+   };
+ };
+-const expected = { dev: [420, 70, 70], heldout: [80, 20, 20] };
++const expected = {
++  dev: [420, 70, 70],
++  heldout: [80, 20, 20],
++  'heldout-v3': [80, 20, 20],
++};
+ const f1 = (rows) => {
+   const tp = rows.filter((r) => r.gold && r.predicted).length;
+   const fp = rows.filter((r) => !r.gold && r.predicted).length;
+@@ -47,7 +63,11 @@ const wilson = (k, n) => {
+ };
+ let seed = 7;
+ const random = () => (seed = (1664525 * seed + 1013904223) >>> 0) / 2 ** 32;
+-for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
++for (const set of mode === '--heldout-v3'
++  ? ['heldout-v3']
++  : verifiedDev || propertyDev
++    ? ['dev']
++    : ['dev', 'heldout']) {
+   const offRaw = read(set, 'off'),
+     onRaw = read(set, 'on');
+   const off = offRaw.rows,
+@@ -82,7 +102,7 @@ for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
+       new Map(clusters.map((c) => [c, rows.filter((r) => r.cluster === c)])),
+     );
+   }
+-  const samples = { off: [], on: [], delta: [] };
++  const samples = { off: [], on: [], delta: [], offFp: [], onFp: [] };
+   for (let b = 0; b < 2000; b++) {
+     const sampled = Array.from(
+       { length: clusters.length },
+@@ -91,12 +111,14 @@ for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
+     const scores = Object.fromEntries(
+       ['off', 'on'].map((arm) => [
+         arm,
+-        f1(sampled.flatMap((c) => byArm.get(arm).get(c))).f1,
++        f1(sampled.flatMap((c) => byArm.get(arm).get(c))),
+       ]),
+     );
+-    samples.off.push(scores.off);
+-    samples.on.push(scores.on);
+-    samples.delta.push(scores.on - scores.off);
++    samples.off.push(scores.off.f1);
++    samples.on.push(scores.on.f1);
++    samples.delta.push(scores.on.f1 - scores.off.f1);
++    samples.offFp.push(scores.off.fp);
++    samples.onFp.push(scores.on.fp);
+   }
+   console.log(`\n${set}: ${on.length} pairs, ${clusters.length} clusters`);
+   for (const [arm, rows] of [
+@@ -124,6 +146,10 @@ for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
+         arm,
+         ...s,
+         f1_ci: [quantile(samples[arm], 0.025), quantile(samples[arm], 0.975)],
++        false_supersession_count_ci: [
++          quantile(samples[`${arm}Fp`], 0.025),
++          quantile(samples[`${arm}Fp`], 0.975),
++        ],
+         false_supersession_rate: s.fp / (s.fp + s.tn),
+         false_supersession_ci_wilson: fpInterval,
+         latency_p50_ms: quantile(
+@@ -136,6 +162,8 @@ for (const set of verifiedDev ? ['dev'] : ['dev', 'heldout']) {
+         ),
+         mean_prompt_tokens: sum('prompt_tokens') / valid.length,
+         mean_completion_tokens: sum('completion_tokens') / valid.length,
++        total_prompt_tokens: sum('prompt_tokens'),
++        total_completion_tokens: sum('completion_tokens'),
+         estimated_usd_per_classification: dollars / valid.length,
+         estimated_total_attempt_cost_usd: totalCost,
+         raw_attempts: attempts.length,
+diff --git a/src/deduplication/automated/dedup-candidate.model.ts b/src/deduplication/automated/dedup-candidate.model.ts
+index 70a98cb..cf7d8ad 100644
+--- a/src/deduplication/automated/dedup-candidate.model.ts
++++ b/src/deduplication/automated/dedup-candidate.model.ts
+@@ -9,8 +9,13 @@ export type DedupClassification =
+   | 'SUPPORTING'
+   | 'OVERLAPPING'
+   | 'CONFLICTING'
++  | 'SUPERSEDES'
+   | 'RELATED';
+ 
++/** Explicit opt-in; an unset or any other value preserves the old pipeline. */
++export const supersessionEnabled = (): boolean =>
++  process.env.DEDUP_SUPERSESSION_ENABLED === 'true';
++
+ export type AutoCandidateStatus =
+   | 'PENDING'
+   | 'CLASSIFIED'
+diff --git a/src/deduplication/automated/dedup-classification.service.spec.ts b/src/deduplication/automated/dedup-classification.service.spec.ts
+index f251c2f..4548e71 100644
+--- a/src/deduplication/automated/dedup-classification.service.spec.ts
++++ b/src/deduplication/automated/dedup-classification.service.spec.ts
+@@ -23,14 +23,14 @@ const mockCandidate = {
+     raw: 'User prefers dark mode in all applications',
+     importanceScore: 0.7,
+     source: 'EXPLICIT_STATEMENT',
+-    createdAt: new Date(),
++    createdAt: new Date('2025-01-01'),
+   },
+   memory2: {
+     id: 'mem-2',
+     raw: 'User likes dark theme in apps',
+     importanceScore: 0.6,
+     source: 'INFERRED',
+-    createdAt: new Date(),
++    createdAt: new Date('2025-02-01'),
+   },
+ };
+ 
+@@ -60,6 +60,10 @@ const mockLlm = {
+ describe('DedupClassificationService', () => {
+   let service: DedupClassificationService;
+ 
++  afterEach(() => {
++    delete process.env.DEDUP_SUPERSESSION_ENABLED;
++  });
++
+   beforeEach(async () => {
+     const module: TestingModule = await Test.createTestingModule({
+       providers: [
+@@ -73,6 +77,7 @@ describe('DedupClassificationService', () => {
+       DedupClassificationService,
+     );
+     jest.clearAllMocks();
++    mockLlm.chat.mockReset();
+   });
+ 
+   describe('processPendingCandidates', () => {
+@@ -226,4 +231,160 @@ describe('DedupClassificationService', () => {
+       expect(callArgs).toContain('Weighted score');
+     });
+   });
++
++  it('accepts SUPERSEDES only with the flag and includes temporal guidance', async () => {
++    mockPrisma.dedupCandidate.findMany.mockResolvedValue([mockCandidate]);
++    mockLlm.chat.mockResolvedValueOnce({
++      content: JSON.stringify({
++        classification: 'SUPERSEDES',
++        confidence: 0.91,
++      }),
++    });
++    expect(await service.processPendingCandidates()).toEqual({
++      processed: 0,
++      errors: 1,
++    });
++    expect(mockPrisma.dedupCandidate.update).not.toHaveBeenCalled();
++
++    process.env.DEDUP_SUPERSESSION_ENABLED = 'true';
++    mockLlm.chat
++      .mockResolvedValueOnce({
++        content: JSON.stringify({
++          classification: 'SUPERSEDES',
++          confidence: 0.91,
++        }),
++      })
++      .mockResolvedValueOnce({
++        content: JSON.stringify({
++          same_subject: true,
++          same_property: true,
++          replacement: true,
++          can_coexist_as_current: false,
++          older_quote: 'dark mode',
++          newer_quote: 'dark theme',
++        }),
++      });
++    expect(await service.processPendingCandidates()).toEqual({
++      processed: 1,
++      errors: 0,
++    });
++    expect(mockLlm.chat.mock.calls.at(-2)?.[0][0].content).toContain(
++      'Knowledge-update rule',
++    );
++    expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
++      expect.objectContaining({
++        data: expect.objectContaining({ classification: 'SUPERSEDES' }),
++      }),
++    );
++  });
++
++  it('normalizes the observed supersession spelling variant only with the flag', async () => {
++    mockPrisma.dedupCandidate.findMany.mockResolvedValue([mockCandidate]);
++    mockLlm.chat.mockResolvedValueOnce({
++      content: JSON.stringify({
++        classification: 'SUPERSCEDES',
++        confidence: 0.9,
++      }),
++    });
++    expect(await service.processPendingCandidates()).toEqual({
++      processed: 0,
++      errors: 1,
++    });
++    process.env.DEDUP_SUPERSESSION_ENABLED = 'true';
++    mockLlm.chat
++      .mockResolvedValueOnce({
++        content: JSON.stringify({
++          classification: 'SUPERSCEDES',
++          confidence: 0.9,
++        }),
++      })
++      .mockResolvedValueOnce({
++        content: JSON.stringify({
++          same_subject: true,
++          same_property: true,
++          replacement: true,
++          can_coexist_as_current: false,
++          older_quote: 'dark mode',
++          newer_quote: 'dark theme',
++        }),
++      });
++    expect(await service.processPendingCandidates()).toEqual({
++      processed: 1,
++      errors: 0,
++    });
++    expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
++      expect.objectContaining({
++        data: expect.objectContaining({ classification: 'SUPERSEDES' }),
++      }),
++    );
++  });
++
++  it('downgrades a proposed update when the second check finds a still-true fact', async () => {
++    process.env.DEDUP_SUPERSESSION_ENABLED = 'true';
++    mockPrisma.dedupCandidate.findMany.mockResolvedValue([mockCandidate]);
++    mockLlm.chat
++      .mockResolvedValueOnce({
++        content: JSON.stringify({
++          classification: 'SUPERSEDES',
++          confidence: 0.95,
++        }),
++      })
++      .mockResolvedValueOnce({
++        content: JSON.stringify({
++          same_subject: true,
++          same_property: false,
++          replacement: false,
++          can_coexist_as_current: true,
++          older_quote: 'dark mode',
++          newer_quote: 'dark theme',
++        }),
++      });
++    expect(await service.processPendingCandidates()).toEqual({
++      processed: 1,
++      errors: 0,
++    });
++    expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
++      expect.objectContaining({
++        data: expect.objectContaining({
++          classification: 'OVERLAPPING',
++          confidence: 0.5,
++        }),
++      }),
++    );
++  });
++
++  it('queues a proposed update when both claims can remain current', async () => {
++    process.env.DEDUP_SUPERSESSION_ENABLED = 'true';
++    mockPrisma.dedupCandidate.findMany.mockResolvedValue([mockCandidate]);
++    mockLlm.chat
++      .mockResolvedValueOnce({
++        content: JSON.stringify({
++          classification: 'SUPERSEDES',
++          confidence: 0.95,
++        }),
++      })
++      .mockResolvedValueOnce({
++        content: JSON.stringify({
++          same_subject: true,
++          same_property: true,
++          replacement: true,
++          can_coexist_as_current: true,
++          older_quote: 'dark mode',
++          newer_quote: 'dark theme',
++        }),
++      });
++
++    expect(await service.processPendingCandidates()).toEqual({
++      processed: 1,
++      errors: 0,
++    });
++    expect(mockPrisma.dedupCandidate.update).toHaveBeenCalledWith(
++      expect.objectContaining({
++        data: expect.objectContaining({
++          classification: 'OVERLAPPING',
++          confidence: 0.5,
++        }),
++      }),
++    );
++  });
+ });
+diff --git a/src/deduplication/automated/dedup-classification.service.ts b/src/deduplication/automated/dedup-classification.service.ts
+index 6c4691f..76d6680 100644
+--- a/src/deduplication/automated/dedup-classification.service.ts
++++ b/src/deduplication/automated/dedup-classification.service.ts
+@@ -1,7 +1,10 @@
+ import { Injectable, Logger } from '@nestjs/common';
+ import { ServicePrismaService } from '../../prisma/service-prisma.service';
+ import { LLMService } from '../../llm/llm.service';
+-import { DedupClassification } from './dedup-candidate.model';
++import {
++  DedupClassification,
++  supersessionEnabled,
++} from './dedup-candidate.model';
+ 
+ interface ClassificationResult {
+   classification: DedupClassification;
+@@ -85,6 +88,8 @@ export class DedupClassificationService {
+           candidate.similarityScore,
+           candidate.memory1.source,
+           candidate.memory2.source,
++          candidate.memory1.createdAt,
++          candidate.memory2.createdAt,
+         );
+ 
+         await this.prisma.dedupCandidate.update({
+@@ -124,6 +129,8 @@ export class DedupClassificationService {
+     semanticSimilarity: number,
+     source1: string,
+     source2: string,
++    createdAt1?: Date,
++    createdAt2?: Date,
+   ): Promise<ClassificationResult> {
+     // --- Signal computation ---
+ 
+@@ -145,7 +152,8 @@ export class DedupClassificationService {
+       semanticSimilarity * 0.7 + entityOverlap * 0.2 + authorityScore * 0.1;
+ 
+     // --- LLM prompt ---
+-    const prompt = `You are a memory deduplication expert. Classify the relationship between these two memory entries.
++    const updateEnabled = supersessionEnabled();
++    const prompt = `You are a memory deduplication expert. Classify the relationship between these two memory entries.${updateEnabled ? " Decide whether a later memory updates the same subject's same current fact. If so, use SUPERSEDES even when the older statement remains historically true." : ''}
+ 
+ Memory 1:
+ "${content1}"
+@@ -163,15 +171,24 @@ Classify as exactly one of:
+ - SUPPORTING   — one expands or supports the other
+ - OVERLAPPING  — partially overlapping, each has unique content
+ - CONFLICTING  — contradictory information
+-- RELATED      — related topic but clearly distinct
++- RELATED      — related topic but clearly distinct${updateEnabled ? "\n- SUPERSEDES   — a later memory explicitly replaces the same subject's same current fact; this is a knowledge update" : ''}
+ 
+ Respond with ONLY valid JSON (no markdown fences):
+ {
+-  "classification": "<one of the five labels above>",
++  "classification": "<one of the ${updateEnabled ? 'six' : 'five'} labels above>",
+   "confidence": <0.0-1.0>,
+   "merged_content": "<best combined version for DUPLICATE/SUPPORTING/OVERLAPPING, else null>",
+   "reasoning": "<one sentence>"
+-}`;
++}${
++      updateEnabled
++        ? `
++
++Knowledge-update rule: SUPERSEDES means the newer memory explicitly replaces the same subject's same current fact in the older memory. A past fact, another person's fact, or a different property remains true and must not be superseded. Use SUPERSEDES only when the replacement is explicit; otherwise use one of the other labels above. Do not infer replacement from similarity alone.
++Memory 1 created: ${createdAt1?.toISOString() ?? 'unknown'}
++Memory 2 created: ${createdAt2?.toISOString() ?? 'unknown'}
++The JSON classification may also be SUPERSEDES. Set merged_content to null for SUPERSEDES.`
++        : ''
++    }`;
+ 
+     if (!this.llm.getProvider('openai')) {
+       throw new Error('OpenAI provider is required for dedup classification');
+@@ -184,7 +201,98 @@ Respond with ONLY valid JSON (no markdown fences):
+       temperature: 0.2,
+     });
+ 
+-    return this.parseClassification(response.content);
++    const result = this.parseClassification(response.content);
++    if (
++      !updateEnabled ||
++      result.classification !== 'SUPERSEDES' ||
++      result.confidence < 0.8
++    ) {
++      return result;
++    }
++    return this.verifySupersession(
++      result,
++      content1,
++      content2,
++      createdAt1,
++      createdAt2,
++    );
++  }
++
++  /** A separate evidence check prevents related but still-true facts from being retired. */
++  private async verifySupersession(
++    result: ClassificationResult,
++    content1: string,
++    content2: string,
++    createdAt1?: Date,
++    createdAt2?: Date,
++  ): Promise<ClassificationResult> {
++    const reject = (): ClassificationResult => ({
++      classification: 'OVERLAPPING',
++      confidence: 0.5,
++      reasoning:
++        'Proposed supersession lacks verified same-property replacement evidence',
++    });
++    if (
++      !createdAt1 ||
++      !createdAt2 ||
++      createdAt1.getTime() === createdAt2.getTime()
++    ) {
++      return reject();
++    }
++    const [older, newer] =
++      createdAt1 < createdAt2 ? [content1, content2] : [content2, content1];
++    const prompt = `Check whether the NEWER memory updates the latest known value of the same subject's same property in the OLDER memory. Be conservative: two related facts can both remain true. Plans for separate events, facts about other people, and different attributes are not replacements.
++
++Versioned properties include a current count, duration, personal best, regular schedule, role, or progress total. For these, a newer different value replaces the older latest-known value even though the older statement remains historically true at its original date. Do not require the words "replaced" or "no longer" for a versioned property. A separate trip, project, event, prospective purchase, or another person's fact does not update the older property's value.
++
++Before deciding, turn each memory into one precise question answered by its claim. The questions must ask for the same subject and property, not merely share a topic. Ask whether both claims can still be true as current facts about their respective properties. If they can, reject supersession. A contemplated purchase does not cease to be a contemplated purchase because the person later reports owning or using a different item. Historical events may both remain true, but only the latest value of a versioned current property should be kept current.
++
++OLDER memory:
++"${older}"
++
++NEWER memory:
++"${newer}"
++
++Return ONLY JSON:
++{
++  "same_subject": <boolean>,
++  "same_property": <boolean>,
++  "replacement": <boolean: the newer value is the latest known value for this same property>,
++  "can_coexist_as_current": <boolean: both claims can remain true now about their respective properties>,
++  "older_quote": "<exact short substring from OLDER showing the value>",
++  "newer_quote": "<exact short substring from NEWER showing the replacement value>"
++}
++Set replacement false when either claim is only a plan, refers to a different event, or both values can independently remain the latest known value for their respective properties. Set can_coexist_as_current true in those cases. Do not guess a missing value or quote.`;
++    const response = await this.llm.chat([{ role: 'user', content: prompt }], {
++      provider: 'openai',
++      model: this.CLASSIFICATION_MODEL,
++      maxTokens: 384,
++      temperature: 0,
++    });
++    try {
++      const json = response.content.match(/\{[\s\S]*\}/)?.[0];
++      if (!json) return reject();
++      const check = JSON.parse(json) as Record<string, unknown>;
++      const oldQuote = check.older_quote;
++      const newQuote = check.newer_quote;
++      if (
++        check.same_subject !== true ||
++        check.same_property !== true ||
++        check.replacement !== true ||
++        check.can_coexist_as_current !== false ||
++        typeof oldQuote !== 'string' ||
++        typeof newQuote !== 'string' ||
++        oldQuote.length < 3 ||
++        newQuote.length < 3 ||
++        !older.toLowerCase().includes(oldQuote.toLowerCase()) ||
++        !newer.toLowerCase().includes(newQuote.toLowerCase())
++      ) {
++        return reject();
++      }
++      return result;
++    } catch {
++      return reject();
++    }
+   }
+ 
+   /** Parse the raw LLM response into a typed ClassificationResult */
+@@ -215,8 +323,16 @@ Respond with ONLY valid JSON (no markdown fences):
+       'CONFLICTING',
+       'RELATED',
+     ];
+-
+-    const classification = parsed.classification as DedupClassification;
++    if (supersessionEnabled()) validLabels.push('SUPERSEDES');
++
++    // gpt-4o-mini occasionally transposes this uncommon label. Normalize only
++    // a known spelling variant, and only while the opt-in path is enabled.
++    const label =
++      supersessionEnabled() &&
++      ['SUPERSCEDES', 'SUPERCEDES'].includes(parsed.classification)
++        ? 'SUPERSEDES'
++        : parsed.classification;
++    const classification = label as DedupClassification;
+     if (!validLabels.includes(classification)) {
+       throw new Error(`Invalid classification label: ${parsed.classification}`);
+     }
+diff --git a/src/deduplication/automated/dedup-pipeline.service.spec.ts b/src/deduplication/automated/dedup-pipeline.service.spec.ts
+index 3036081..d72c291 100644
+--- a/src/deduplication/automated/dedup-pipeline.service.spec.ts
++++ b/src/deduplication/automated/dedup-pipeline.service.spec.ts
+@@ -184,6 +184,7 @@ describe('DedupPipelineService', () => {
+           processed: 0,
+           autoMerged: 0,
+           autoConsolidated: 0,
++          autoSuperseded: 0,
+           queued: 0,
+           skipped: 0,
+           errors: 0,
+@@ -240,6 +241,7 @@ describe('DedupPipelineService', () => {
+           processed: 0,
+           autoMerged: 0,
+           autoConsolidated: 0,
++          autoSuperseded: 0,
+           queued: 0,
+           skipped: 0,
+           errors: 0,
+diff --git a/src/deduplication/automated/dedup-pipeline.service.ts b/src/deduplication/automated/dedup-pipeline.service.ts
+index 26d3170..eef99b6 100644
+--- a/src/deduplication/automated/dedup-pipeline.service.ts
++++ b/src/deduplication/automated/dedup-pipeline.service.ts
+@@ -103,6 +103,7 @@ export class DedupPipelineService implements OnModuleInit {
+           processed: 0,
+           autoMerged: 0,
+           autoConsolidated: 0,
++          autoSuperseded: 0,
+           queued: 0,
+           skipped: 0,
+           errors: 0,
+@@ -125,6 +126,7 @@ export class DedupPipelineService implements OnModuleInit {
+       processed: 0,
+       autoMerged: 0,
+       autoConsolidated: 0,
++      autoSuperseded: 0,
+       queued: 0,
+       skipped: 0,
+       errors: 0,
+@@ -167,6 +169,7 @@ export class DedupPipelineService implements OnModuleInit {
+           resolution.processed += batch.processed;
+           resolution.autoMerged += batch.autoMerged;
+           resolution.autoConsolidated += batch.autoConsolidated;
++          resolution.autoSuperseded += batch.autoSuperseded;
+           resolution.queued += batch.queued;
+           resolution.skipped += batch.skipped;
+           resolution.errors += batch.errors;
+diff --git a/src/deduplication/automated/dedup-resolution.service.spec.ts b/src/deduplication/automated/dedup-resolution.service.spec.ts
+index 7c686ce..3086996 100644
+--- a/src/deduplication/automated/dedup-resolution.service.spec.ts
++++ b/src/deduplication/automated/dedup-resolution.service.spec.ts
+@@ -43,6 +43,8 @@ const mockPrisma = {
+   },
+   memory: {
+     update: jest.fn(),
++    updateMany: jest.fn(),
++    findUnique: jest.fn(),
+   },
+   memoryMergeEvent: {
+     create: jest.fn(),
+@@ -54,6 +56,7 @@ describe('DedupResolutionService', () => {
+   let service: DedupResolutionService;
+ 
+   beforeEach(async () => {
++    delete process.env.DEDUP_SUPERSESSION_ENABLED;
+     const module: TestingModule = await Test.createTestingModule({
+       providers: [
+         DedupResolutionService,
+@@ -251,5 +254,57 @@ describe('DedupResolutionService', () => {
+       expect(stats.errors).toBe(1);
+       expect(stats.processed).toBe(0);
+     });
++
++    it('queues SUPERSEDES without the flag and leaves memory rows untouched', async () => {
++      mockPrisma.dedupCandidate.findMany.mockResolvedValue([
++        makeCandidate({ classification: 'SUPERSEDES', confidence: 0.99 }),
++      ]);
++      const stats = await service.processClassifiedCandidates();
++      expect(stats.queued).toBe(1);
++      expect(mockPrisma.memory.updateMany).not.toHaveBeenCalled();
++      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
++    });
++
++    it('supersedes the older active row without deleting either row', async () => {
++      process.env.DEDUP_SUPERSESSION_ENABLED = 'true';
++      const old = makeMemory({ id: 'old', createdAt: new Date('2025-01-01') });
++      const newer = makeMemory({
++        id: 'new',
++        createdAt: new Date('2025-02-01'),
++      });
++      mockPrisma.dedupCandidate.findMany.mockResolvedValue([
++        makeCandidate({
++          classification: 'SUPERSEDES',
++          confidence: 0.9,
++          memory1: newer,
++          memory2: old,
++        }),
++      ]);
++      mockPrisma.memory.findUnique.mockResolvedValue({
++        userId: 'user-1',
++        deletedAt: null,
++        supersededById: null,
++      });
++      mockPrisma.memory.updateMany.mockResolvedValue({ count: 1 });
++      mockPrisma.$transaction.mockImplementation((fn) => fn(mockPrisma));
++      const stats = await service.processClassifiedCandidates();
++      expect(stats.autoSuperseded).toBe(1);
++      expect(mockPrisma.memory.updateMany).toHaveBeenCalledWith({
++        where: expect.objectContaining({
++          id: 'old',
++          supersededById: null,
++          deletedAt: null,
++        }),
++        data: { supersededById: 'new', supersededAt: expect.any(Date) },
++      });
++      expect(mockPrisma.memoryMergeEvent.create).toHaveBeenCalledWith({
++        data: expect.objectContaining({
++          strategy: 'SUPERSEDE',
++          canRollback: true,
++          contentChanged: false,
++        }),
++      });
++      expect(mockPrisma.memory.update).not.toHaveBeenCalled();
++    });
+   });
+ });
+diff --git a/src/deduplication/automated/dedup-resolution.service.ts b/src/deduplication/automated/dedup-resolution.service.ts
+index 3070adc..918d9fc 100644
+--- a/src/deduplication/automated/dedup-resolution.service.ts
++++ b/src/deduplication/automated/dedup-resolution.service.ts
+@@ -5,12 +5,14 @@ import {
+   AUTO_MERGE_CONFIDENCE,
+   AUTO_CONSOLIDATE_CONFIDENCE_HIGH,
+   AUTO_CONSOLIDATE_CONFIDENCE_LOW,
++  supersessionEnabled,
+ } from './dedup-candidate.model';
+ 
+ export interface ResolutionStats {
+   processed: number;
+   autoMerged: number;
+   autoConsolidated: number;
++  autoSuperseded: number;
+   queued: number;
+   skipped: number;
+   errors: number;
+@@ -24,6 +26,8 @@ type MemorySlim = {
+   createdAt: Date;
+   safetyCritical: boolean;
+   memoryType: string | null;
++  deletedAt?: Date | null;
++  supersededById?: string | null;
+ };
+ 
+ /**
+@@ -80,6 +84,8 @@ export class DedupResolutionService {
+             createdAt: true,
+             safetyCritical: true,
+             memoryType: true,
++            deletedAt: true,
++            supersededById: true,
+           },
+         },
+         memory2: {
+@@ -91,6 +97,8 @@ export class DedupResolutionService {
+             createdAt: true,
+             safetyCritical: true,
+             memoryType: true,
++            deletedAt: true,
++            supersededById: true,
+           },
+         },
+       },
+@@ -106,6 +114,7 @@ export class DedupResolutionService {
+       processed: 0,
+       autoMerged: 0,
+       autoConsolidated: 0,
++      autoSuperseded: 0,
+       queued: 0,
+       skipped: 0,
+       errors: 0,
+@@ -173,6 +182,24 @@ export class DedupResolutionService {
+             stats.queued++;
+             break;
+ 
++          case 'SUPERSEDES':
++            if (supersessionEnabled() && confidence >= 0.8) {
++              await this.autoSupersede(
++                candidate.id,
++                memory1,
++                memory2,
++                candidate.similarityScore,
++              );
++              stats.autoSuperseded++;
++            } else {
++              await this.markQueued(
++                candidate.id,
++                'supersession-disabled-or-low-confidence',
++              );
++              stats.queued++;
++            }
++            break;
++
+           case 'RELATED':
+             // No action needed — mark resolved
+             await this.markResolved(candidate.id, 'related-no-action');
+@@ -206,6 +233,87 @@ export class DedupResolutionService {
+   // Private resolution helpers
+   // ---------------------------------------------------------------------------
+ 
++  /** Preserve both rows and record a rollback-capable event. Never rewrite either fact. */
++  private async autoSupersede(
++    candidateId: string,
++    memory1: MemorySlim,
++    memory2: MemorySlim,
++    similarityScore: number,
++  ): Promise<void> {
++    if (
++      memory1.userId !== memory2.userId ||
++      memory1.createdAt.getTime() === memory2.createdAt.getTime()
++    ) {
++      throw new Error(
++        'Supersession requires one user and distinct creation times',
++      );
++    }
++    const [older, newer] =
++      memory1.createdAt < memory2.createdAt
++        ? [memory1, memory2]
++        : [memory2, memory1];
++    if (
++      older.deletedAt ||
++      newer.deletedAt ||
++      older.supersededById ||
++      newer.supersededById
++    ) {
++      throw new Error('Supersession requires active memories');
++    }
++    await this.prisma.$transaction(async (tx) => {
++      const freshNewer = await tx.memory.findUnique({
++        where: { id: newer.id },
++        select: { userId: true, deletedAt: true, supersededById: true },
++      });
++      if (
++        freshNewer?.userId !== older.userId ||
++        freshNewer.deletedAt ||
++        freshNewer.supersededById
++      ) {
++        throw new Error('Newer memory is no longer active');
++      }
++      const changed = await tx.memory.updateMany({
++        where: {
++          id: older.id,
++          userId: older.userId,
++          deletedAt: null,
++          supersededById: null,
++        },
++        data: { supersededById: newer.id, supersededAt: new Date() },
++      });
++      if (changed.count !== 1)
++        throw new Error('Older memory is no longer active');
++      await tx.memoryMergeEvent.create({
++        data: {
++          userId: older.userId,
++          survivorMemoryId: newer.id,
++          absorbedMemoryIds: [older.id],
++          strategy: 'SUPERSEDE',
++          similarity: similarityScore,
++          triggeredBy: 'auto',
++          originalContents: JSON.stringify([
++            {
++              memoryId: older.id,
++              content: older.raw,
++              createdAt: older.createdAt,
++            },
++          ]),
++          mergedContent: newer.raw,
++          contentChanged: false,
++          canRollback: true,
++        },
++      });
++      await tx.dedupCandidate.update({
++        where: { id: candidateId },
++        data: {
++          status: 'RESOLVED',
++          resolvedAt: new Date(),
++          reasoning: `Auto-superseded ${older.id} with ${newer.id}`,
++        },
++      });
++    });
++  }
++
+   /**
+    * Auto-merge: keep higher-importance memory, append unique content from loser,
+    * soft-delete the loser, create MemoryMergeEvent with canRollback: true.
+diff --git a/src/deduplication/lineage.service.spec.ts b/src/deduplication/lineage.service.spec.ts
+index 4fe732a..a9cc184 100644
+--- a/src/deduplication/lineage.service.spec.ts
++++ b/src/deduplication/lineage.service.spec.ts
+@@ -22,8 +22,10 @@ describe('LineageService', () => {
+       findMany: jest.fn(),
+       findFirst: jest.fn(),
+       update: jest.fn(),
++      updateMany: jest.fn(),
+       count: jest.fn(),
+     },
++    $transaction: jest.fn(),
+   };
+ 
+   const mockEmbedding = {
+@@ -179,6 +181,30 @@ describe('LineageService', () => {
+   });
+ 
+   describe('rollbackMerge', () => {
++    it('reverses only its own supersession link without changing content or vectors', async () => {
++      mockPrisma.memoryMergeEvent.findUnique.mockResolvedValue({
++        id: 'event_1',
++        userId: 'user_123',
++        survivorMemoryId: 'new',
++        absorbedMemoryIds: ['old'],
++        strategy: 'SUPERSEDE',
++        canRollback: true,
++        rolledBackAt: null,
++      });
++      mockPrisma.memoryMergeEvent.updateMany.mockResolvedValue({ count: 1 });
++      mockPrisma.memory.updateMany.mockResolvedValue({ count: 1 });
++      mockPrisma.$transaction.mockImplementation((fn) => fn(mockPrisma));
++      const result = await service.rollbackMerge('event_1');
++      expect(result.restoredMemoryIds).toEqual(['old']);
++      expect(mockPrisma.memory.updateMany).toHaveBeenCalledWith({
++        where: expect.objectContaining({
++          id: { in: ['old'] },
++          supersededById: 'new',
++        }),
++        data: { supersededById: null, supersededAt: null },
++      });
++      expect(mockEmbedding.store).not.toHaveBeenCalled();
++    });
+     it('should restore absorbed memories', async () => {
+       mockPrisma.memoryMergeEvent.findUnique.mockResolvedValue({
+         id: 'event_1',
+diff --git a/src/deduplication/lineage.service.ts b/src/deduplication/lineage.service.ts
+index 7b746a1..4cc87c5 100644
+--- a/src/deduplication/lineage.service.ts
++++ b/src/deduplication/lineage.service.ts
+@@ -161,6 +161,36 @@ export class LineageService {
+       throw new Error('This merge has already been rolled back');
+     }
+ 
++    if (event.strategy === 'SUPERSEDE') {
++      // Supersession leaves the old row and its vector intact. Undo only the
++      // link created by this event; a later replacement must not be cleared.
++      await this.prisma.$transaction(async (tx) => {
++        const claimed = await tx.memoryMergeEvent.updateMany({
++          where: { id: mergeEventId, rolledBackAt: null, canRollback: true },
++          data: { rolledBackAt: new Date(), canRollback: false },
++        });
++        if (claimed.count !== 1)
++          throw new Error('Supersession already rolled back');
++        const restored = await tx.memory.updateMany({
++          where: {
++            id: { in: event.absorbedMemoryIds },
++            userId: event.userId,
++            deletedAt: null,
++            supersededById: event.survivorMemoryId,
++          },
++          data: { supersededById: null, supersededAt: null },
++        });
++        if (restored.count !== event.absorbedMemoryIds.length) {
++          throw new Error('Supersession has changed since this event');
++        }
++      });
++      return {
++        success: true,
++        restoredMemoryIds: event.absorbedMemoryIds,
++        survivorId: event.survivorMemoryId,
++      };
++    }
++
+     // Parse original contents
+     const originalContents = JSON.parse(
+       event.originalContents,
+diff --git a/eval/jev-decisions/run-supersession.cjs b/eval/jev-decisions/run-supersession.cjs
+new file mode 100644
+index 0000000..cc19a44
+--- /dev/null
++++ b/eval/jev-decisions/run-supersession.cjs
+@@ -0,0 +1,206 @@
++// Classifier-only flag comparison for ENG-122. No database access.
++// Usage: node run-supersession.cjs dev|heldout|heldout-v3 off|on output.jsonl
++const fs = require('node:fs');
++const crypto = require('node:crypto');
++require('ts-node/register/transpile-only');
++require('dotenv').config({
++  path: '../engram/.env',
++  override: true,
++  quiet: true,
++});
++const { LLMService } = require('../../src/llm/llm.service');
++const {
++  DedupClassificationService,
++} = require('../../src/deduplication/automated/dedup-classification.service');
++const {
++  OpenAIEmbedProvider,
++} = require('../../src/embedding/openai-embed.provider');
++
++const [set, arm, out] = process.argv.slice(2);
++if (
++  !['dev', 'heldout', 'heldout-v3'].includes(set) ||
++  !['off', 'on'].includes(arm) ||
++  !out
++)
++  throw new Error(
++    'Usage: node run-supersession.cjs dev|heldout|heldout-v3 off|on output.jsonl',
++  );
++const inputs = {
++  dev: [
++    'data/pairs.json',
++    '8656dd5980e817f262e9f8dd37972ad03a5318c1a9f2def87b5b5b1eacf3612c',
++  ],
++  heldout: [
++    'fixtures/heldout-v1.json',
++    'f8865f457e3c03bb3ca2e03caae835ebc1e7c94d6582cba282e32fd3ebca2e6d',
++  ],
++  'heldout-v3': [
++    'fixtures/heldout-v3.json',
++    '3a2d03a1cd98125a5772e74b0e87e3165e313dcd7ef8bd3d81c7031f60277072',
++  ],
++};
++const raw = fs.readFileSync(
++  require('node:path').join(__dirname, inputs[set][0]),
++);
++if (crypto.createHash('sha256').update(raw).digest('hex') !== inputs[set][1])
++  throw new Error('Input hash mismatch');
++const data = JSON.parse(raw);
++const pairs =
++  set === 'dev'
++    ? data.pairs.map((p) => ({
++        id: p.id,
++        cluster: p.question_id,
++        gold: p.gold_conflict,
++        candidate: p.candidate.text,
++        incoming: p.incoming.text,
++        candidateDate: p.candidate.date,
++        incomingDate: p.incoming.date,
++        candidateFirst: p.candidate_first,
++      }))
++    : data.items.flatMap((item, i) =>
++        [item.old, ...item.stillTrue].map((candidate, j) => ({
++          id: `${item.id}:${j}`,
++          cluster: item.id,
++          gold: j === 0,
++          candidate,
++          incoming: item.incoming,
++          candidateDate: data.candidateDate,
++          incomingDate: data.incomingDate,
++          candidateFirst: (i + j) % 2 === 0,
++        })),
++      );
++const credential =
++  /(api[_ -]?key|password|passwd|secret|token|credential|sk-[A-Za-z0-9]{10,}|bearer\s+[A-Za-z0-9._-]{10,})/i;
++if (pairs.some((p) => credential.test(p.candidate + p.incoming)))
++  throw new Error('Credential item detected');
++if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY required');
++process.env.DEDUP_SUPERSESSION_ENABLED = arm === 'on' ? 'true' : 'false';
++const config = {
++  get: (key, fallback) =>
++    ({
++      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
++      LLM_PROVIDER: 'openai',
++      LLM_MODEL: 'gpt-4o-mini',
++      OPENAI_EMBED_MODEL: 'text-embedding-3-small',
++    })[key] ?? fallback,
++};
++const llm = new LLMService(config);
++const embedder = new OpenAIEmbedProvider(config);
++const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
++const retry = async (fn) => {
++  let last;
++  for (let i = 0; i < 4; i++) {
++    try {
++      return await fn();
++    } catch (error) {
++      last = error;
++      if (!/429|500|502|503|504/.test(String(error))) break;
++      await sleep(1000 * 2 ** i);
++    }
++  }
++  throw last;
++};
++const cosine = (a, b) => {
++  let dot = 0,
++    aa = 0,
++    bb = 0;
++  for (let i = 0; i < a.length; i++) {
++    dot += a[i] * b[i];
++    aa += a[i] ** 2;
++    bb += b[i] ** 2;
++  }
++  return dot / Math.sqrt(aa * bb);
++};
++const parseDate = (s) => new Date(s.replace(/ \([A-Za-z]{3}\)/, ''));
++
++(async () => {
++  const texts = [...new Set(pairs.flatMap((p) => [p.candidate, p.incoming]))];
++  const vectors = new Map();
++  for (let i = 0; i < texts.length; i += 32) {
++    const batch = texts.slice(i, i + 32);
++    const embedded = await retry(() => embedder.embed(batch));
++    batch.forEach((t, j) => vectors.set(t, embedded[j]));
++  }
++  const previous = fs.existsSync(out)
++    ? fs
++        .readFileSync(out, 'utf8')
++        .trim()
++        .split('\n')
++        .filter(Boolean)
++        .map(JSON.parse)
++    : [];
++  const completed = new Set(previous.filter((r) => !r.error).map((r) => r.id));
++  const todo = pairs.filter((p) => !completed.has(p.id));
++  let next = 0;
++  await Promise.all(
++    Array.from({ length: 5 }, async () => {
++      while (next < todo.length) {
++        const p = todo[next++];
++        const [a, b] = p.candidateFirst
++          ? [p.candidate, p.incoming]
++          : [p.incoming, p.candidate];
++        const [dateA, dateB] = p.candidateFirst
++          ? [p.candidateDate, p.incomingDate]
++          : [p.incomingDate, p.candidateDate];
++        const row = {
++          id: p.id,
++          cluster: p.cluster,
++          gold: p.gold,
++          arm,
++          set,
++          similarity: cosine(vectors.get(a), vectors.get(b)),
++        };
++        const usage = { promptTokens: 0, completionTokens: 0, calls: 0 };
++        const meteredLlm = {
++          getProvider: (provider) => llm.getProvider(provider),
++          chat: async (...args) => {
++            const response = await llm.chat(...args);
++            usage.promptTokens += response.usage?.promptTokens ?? 0;
++            usage.completionTokens += response.usage?.completionTokens ?? 0;
++            usage.calls++;
++            return response;
++          },
++        };
++        const classifier = new DedupClassificationService({}, meteredLlm);
++        const start = performance.now();
++        try {
++          const result = await retry(() =>
++            classifier.classifyPair(
++              a,
++              b,
++              row.similarity,
++              'INFERRED',
++              'INFERRED',
++              parseDate(dateA),
++              parseDate(dateB),
++            ),
++          );
++          row.label = result.classification;
++          row.confidence = result.confidence;
++          row.predicted =
++            arm === 'on' && row.label === 'SUPERSEDES' && row.confidence >= 0.8;
++        } catch (error) {
++          row.error =
++            /429|500|502|503|504/.exec(String(error))?.[0] ||
++            error?.constructor?.name ||
++            'Error';
++          row.error_detail = String(error).slice(0, 160);
++        }
++        row.latency_ms = performance.now() - start;
++        row.prompt_tokens = usage.calls ? usage.promptTokens : null;
++        row.completion_tokens = usage.calls ? usage.completionTokens : null;
++        row.api_calls = usage.calls;
++        fs.appendFileSync(out, JSON.stringify(row) + '\n');
++        if (next % 50 === 0) console.log(set, arm, next, '/', todo.length);
++      }
++    }),
++  );
++  console.log('complete', set, arm, todo.length, 'new attempts');
++})().catch((error) => {
++  console.error(
++    'Run failed:',
++    error?.constructor?.name || 'Error',
++    /401|403|429|500|502|503|504/.exec(String(error))?.[0] || '',
++  );
++  process.exitCode = 1;
++});

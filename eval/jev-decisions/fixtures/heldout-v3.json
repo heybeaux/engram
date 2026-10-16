@@ -1,0 +1,208 @@
+{
+  "version": 3,
+  "description": "Fictional classifier holdout: deterministic first 20 clusters from the pre-pin 24-cluster sealed authoring set. One newer replacement and three related still-true candidates per cluster.",
+  "candidateDate": "2026-09-01",
+  "incomingDate": "2026-10-10",
+  "items": [
+    {
+      "id": "museum-wing",
+      "old": "The Vesper Museum currently displays the bronze model in the east wing.",
+      "incoming": "As of October 10, the Vesper Museum now displays the bronze model in the north wing.",
+      "stillTrue": [
+        "The east wing still displays the marble relief.",
+        "The museum catalog still lists the bronze model as a 1928 work.",
+        "The north wing still closes on Mondays."
+      ]
+    },
+    {
+      "id": "ferry-terminal",
+      "old": "The Solace ferry currently departs from Pier 4.",
+      "incoming": "As of October 10, the Solace ferry now departs from Pier 7.",
+      "stillTrue": [
+        "The Solace ferry still arrives at Harbor Isle.",
+        "Pier 4 still serves the Alder ferry.",
+        "The Solace ferry still carries bicycles."
+      ]
+    },
+    {
+      "id": "orchard-harvest",
+      "old": "Luma Orchard currently harvests its plums in August.",
+      "incoming": "As of October 10, Luma Orchard now schedules its plum harvest for September.",
+      "stillTrue": [
+        "Luma Orchard still harvests pears in August.",
+        "The orchard still sells its plums at the South Market.",
+        "The orchard still uses the same packing shed."
+      ]
+    },
+    {
+      "id": "archive-curator",
+      "old": "The Brindle Archive currently has Inez Vale as its manuscript curator.",
+      "incoming": "As of October 10, the Brindle Archive now has Oren Faye as its manuscript curator.",
+      "stillTrue": [
+        "Inez Vale still curates the archive’s map collection.",
+        "The manuscript collection still includes the Keel letters.",
+        "Oren Faye still teaches a Saturday cataloging class."
+      ]
+    },
+    {
+      "id": "train-platform",
+      "old": "The Meridian Express currently boards at platform 6 at Alder Station.",
+      "incoming": "As of October 10, the Meridian Express now boards at platform 9 at Alder Station.",
+      "stillTrue": [
+        "The Meridian Express still stops at Willow Junction.",
+        "Platform 6 still serves the Birch Local.",
+        "The train still has a quiet carriage."
+      ]
+    },
+    {
+      "id": "bakery-flour",
+      "old": "The Hearthline bakery currently uses rye flour for its morning loaf.",
+      "incoming": "As of October 10, the Hearthline bakery now uses spelt flour for its morning loaf.",
+      "stillTrue": [
+        "The bakery still uses rye flour for its evening rolls.",
+        "The morning loaf still contains sunflower seeds.",
+        "The bakery still opens at seven o’clock."
+      ]
+    },
+    {
+      "id": "garden-entry",
+      "old": "The Halden Garden currently admits visitors through the south gate.",
+      "incoming": "As of October 10, Halden Garden now admits visitors through the west gate.",
+      "stillTrue": [
+        "The south gate still serves maintenance vehicles.",
+        "The garden still has a rose path near the pond.",
+        "The west gate still faces Cedar Lane."
+      ]
+    },
+    {
+      "id": "weather-sensor",
+      "old": "The Bayfield station currently uses sensor A12 for its rainfall total.",
+      "incoming": "As of October 10, the Bayfield station now uses sensor B08 for its rainfall total.",
+      "stillTrue": [
+        "Sensor A12 still measures wind direction.",
+        "The rainfall total still publishes each morning.",
+        "Sensor B08 still sits on the upper mast."
+      ]
+    },
+    {
+      "id": "clinic-hours",
+      "old": "The fictional Rill Community Clinic currently closes on Tuesdays at 5 p.m.",
+      "incoming": "As of October 10, the fictional Rill Community Clinic now closes on Tuesdays at 7 p.m.",
+      "stillTrue": [
+        "The clinic still closes on Thursdays at 5 p.m.",
+        "The clinic still opens on Tuesdays at 9 a.m.",
+        "The clinic still offers a Saturday walk-in session."
+      ]
+    },
+    {
+      "id": "festival-stage",
+      "old": "The Elara Folk Festival currently hosts the evening trio on the River Stage.",
+      "incoming": "As of October 10, the Elara Folk Festival now hosts the evening trio on the Orchard Stage.",
+      "stillTrue": [
+        "The River Stage still hosts the noon choir.",
+        "The evening trio still performs on Friday.",
+        "The Orchard Stage still has covered seating."
+      ]
+    },
+    {
+      "id": "library-shelf",
+      "old": "The Pavo Library currently shelves its local atlases on floor 2.",
+      "incoming": "As of October 10, the Pavo Library now shelves its local atlases on floor 3.",
+      "stillTrue": [
+        "The library still shelves travel guides on floor 2.",
+        "The atlases still circulate for two weeks.",
+        "The library still has a reading room on floor 3."
+      ]
+    },
+    {
+      "id": "warehouse-bay",
+      "old": "The fictional Quill Supply depot currently unloads ceramic tiles at bay C.",
+      "incoming": "As of October 10, the fictional Quill Supply depot now unloads ceramic tiles at bay F.",
+      "stillTrue": [
+        "Bay C still handles timber deliveries.",
+        "Ceramic tiles still arrive on Thursdays.",
+        "Bay F still has a covered loading ramp."
+      ]
+    },
+    {
+      "id": "observatory-dome",
+      "old": "The Cedar Observatory currently houses the small refractor in dome A.",
+      "incoming": "As of October 10, the Cedar Observatory now houses the small refractor in dome C.",
+      "stillTrue": [
+        "Dome A still houses the solar telescope.",
+        "The small refractor still has a 90 mm lens.",
+        "Dome C still opens to school groups on Wednesdays."
+      ]
+    },
+    {
+      "id": "radio-program",
+      "old": "The fictional Lark FM currently airs the Harbor Notes program at 8 p.m.",
+      "incoming": "As of October 10, Lark FM now airs Harbor Notes at 6 p.m.",
+      "stillTrue": [
+        "Lark FM still airs City Voices at 8 p.m.",
+        "Harbor Notes still airs on Sundays.",
+        "The program still has the same host, Pia North."
+      ]
+    },
+    {
+      "id": "recycling-route",
+      "old": "The fictional Tavon district currently collects glass on route Green.",
+      "incoming": "As of October 10, Tavon district now collects glass on route Blue.",
+      "stillTrue": [
+        "Route Green still collects paper.",
+        "Glass collection still happens on Wednesdays.",
+        "Route Blue still begins at Pine Square."
+      ]
+    },
+    {
+      "id": "sports-practice",
+      "old": "The fictional Kestrel Rowing Club currently holds novice practice at Dawn Lake.",
+      "incoming": "As of October 10, the Kestrel Rowing Club now holds novice practice at Mirror Lake.",
+      "stillTrue": [
+        "Senior practice still takes place at Dawn Lake.",
+        "Novice practice still begins at 6 a.m.",
+        "Mirror Lake still has a marked 1 km course."
+      ]
+    },
+    {
+      "id": "gallery-price",
+      "old": "The fictional Noma Gallery currently charges 12 dollars for standard admission.",
+      "incoming": "As of October 10, Noma Gallery now charges 15 dollars for standard admission.",
+      "stillTrue": [
+        "Student admission still costs 8 dollars.",
+        "Standard admission still includes the sculpture hall.",
+        "The gallery still offers free entry on the first Sunday."
+      ]
+    },
+    {
+      "id": "school-bus-stop",
+      "old": "The fictional Ashmere School bus currently picks up Route 3 riders at Birch Court.",
+      "incoming": "As of October 10, the Ashmere School bus now picks up Route 3 riders at Maple Court.",
+      "stillTrue": [
+        "The Route 4 bus still picks up riders at Birch Court.",
+        "Route 3 still arrives at school before 8 a.m.",
+        "Maple Court still has a sheltered stop."
+      ]
+    },
+    {
+      "id": "paper-mill-shift",
+      "old": "The fictional Greylin paper mill currently starts its evening shift at 4 p.m.",
+      "incoming": "As of October 10, Greylin paper mill now starts its evening shift at 5 p.m.",
+      "stillTrue": [
+        "The morning shift still starts at 7 a.m.",
+        "The evening shift still ends at midnight.",
+        "The mill still runs its pulp line on weekdays."
+      ]
+    },
+    {
+      "id": "book-club-pick",
+      "old": "The fictional Lantern Book Club currently plans to read The Copper Orchard in November.",
+      "incoming": "As of October 10, the Lantern Book Club now plans to read The Silent Estuary in November.",
+      "stillTrue": [
+        "The club still plans to read The Copper Orchard in December.",
+        "The November meeting still takes place at the town hall.",
+        "The club still meets on the second Saturday."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+--- pinned-runner
++++ v4-runner
+@@ -1,5 +1,5 @@
+-// Classifier-only flag comparison for ENG-122. No database access.
+-// Usage: node run-supersession.cjs dev|heldout|heldout-v3 off|on output.jsonl
++// ENG-127 v4 classifier-only flag comparison. No database access.
++// Usage: node run-eng127.cjs heldout-v4 off|on output.jsonl
+ const fs = require('node:fs');
+ const crypto = require('node:crypto');
+ require('ts-node/register/transpile-only');
+@@ -17,14 +17,8 @@
+ } = require('../../src/embedding/openai-embed.provider');
+ 
+ const [set, arm, out] = process.argv.slice(2);
+-if (
+-  !['dev', 'heldout', 'heldout-v3'].includes(set) ||
+-  !['off', 'on'].includes(arm) ||
+-  !out
+-)
+-  throw new Error(
+-    'Usage: node run-supersession.cjs dev|heldout|heldout-v3 off|on output.jsonl',
+-  );
++if (set !== 'heldout-v4' || !['off', 'on'].includes(arm) || !out)
++  throw new Error('Usage: node run-eng127.cjs heldout-v4 off|on output.jsonl');
+ const inputs = {
+   dev: [
+     'data/pairs.json',
+@@ -34,14 +28,15 @@
+     'fixtures/heldout-v1.json',
+     'f8865f457e3c03bb3ca2e03caae835ebc1e7c94d6582cba282e32fd3ebca2e6d',
+   ],
+-  'heldout-v3': [
+-    'fixtures/heldout-v3.json',
+-    '3a2d03a1cd98125a5772e74b0e87e3165e313dcd7ef8bd3d81c7031f60277072',
++  'heldout-v4': [
++    require('node:path').join(
++      require('node:os').homedir(),
++      '.engram-team/scorecard/holdouts/eng127-v4.json',
++    ),
++    'f47958036d493bb49c85778b325fa466838e1a8e38fad17c39de7e63102cc447',
+   ],
+ };
+-const raw = fs.readFileSync(
+-  require('node:path').join(__dirname, inputs[set][0]),
+-);
++const raw = fs.readFileSync(inputs[set][0]);
+ if (crypto.createHash('sha256').update(raw).digest('hex') !== inputs[set][1])
+   throw new Error('Input hash mismatch');
+ const data = JSON.parse(raw);
