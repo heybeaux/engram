@@ -10,6 +10,8 @@ import { MemoryPoolService } from '../memory-pool/memory-pool.service';
 import { MemoryAccessLogService } from '../memory-access-log/memory-access-log.service';
 import { RecallWeightService } from './recall-weight.service';
 import { RerankService } from '../embedding/rerank.service';
+import { TransientEmbeddingError } from '../embedding/embedding-validation.util';
+import { QueryVariantEmbeddingError } from '../multi-query/multi-query.service';
 
 describe('MemoryQueryService', () => {
   let service: MemoryQueryService;
@@ -120,6 +122,166 @@ describe('MemoryQueryService', () => {
   });
 
   describe('recall', () => {
+    describe('lexical degradation on query embedding failure', () => {
+      const previousFlag = process.env.RECALL_LEXICAL_ON_EMBED_FAILURE;
+
+      beforeEach(() => {
+        process.env.RECALL_LEXICAL_ON_EMBED_FAILURE = 'true';
+        (prisma as any).$queryRawUnsafe = jest
+          .fn()
+          .mockResolvedValue([{ id: 'lexical-1' }]);
+        (prisma.memory.findMany as jest.Mock).mockResolvedValue([
+          {
+            id: 'lexical-1',
+            raw: 'coffee preference',
+            effectiveScore: 0.8,
+            importanceScore: 0.8,
+            createdAt: new Date('2026-01-01'),
+            extraction: {},
+          },
+        ]);
+        jest
+          .spyOn(rankingService, 'applyReranking')
+          .mockImplementation((memories) => Promise.resolve(memories));
+      });
+
+      afterEach(() => {
+        if (previousFlag === undefined)
+          delete process.env.RECALL_LEXICAL_ON_EMBED_FAILURE;
+        else process.env.RECALL_LEXICAL_ON_EMBED_FAILURE = previousFlag;
+      });
+
+      it.each([
+        [
+          'admission timeout',
+          new TransientEmbeddingError('Local embedding admission timed out'),
+        ],
+        [
+          'invalid vector from provider',
+          new Error('Invalid embedding: NaN at index 0'),
+        ],
+      ])('returns lexical results for %s', async (_label, failure) => {
+        embedding.generateForRecall.mockRejectedValue(failure);
+
+        const result = await service.recall(userId, {
+          query: 'coffee preference',
+        } as any);
+
+        expect(result.degraded).toBe(true);
+        expect(result.memories.map((memory) => memory.id)).toEqual([
+          'lexical-1',
+        ]);
+        expect(embedding.search).not.toHaveBeenCalled();
+        expect(
+          (prisma as any).$queryRawUnsafe.mock.calls.some(([sql]: [string]) =>
+            sql.includes('LOWER(raw) LIKE'),
+          ),
+        ).toBe(true);
+      });
+
+      it('rejects NaN vectors without passing them to vector search', async () => {
+        embedding.generateForRecall.mockResolvedValue([NaN, 0]);
+
+        const result = await service.recall(userId, {
+          query: 'coffee preference',
+        } as any);
+
+        expect(result.degraded).toBe(true);
+        expect(embedding.search).not.toHaveBeenCalled();
+      });
+
+      it('retains the requested pool boundary when hydrating lexical candidates', async () => {
+        embedding.generateForRecall.mockRejectedValue(
+          new TransientEmbeddingError('admission timed out'),
+        );
+
+        const result = await service.recall(userId, {
+          query: 'coffee preference',
+          poolIds: ['accessible-pool'],
+        } as any);
+
+        expect(result.degraded).toBe(true);
+        expect(prisma.memory.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              poolMemberships: {
+                some: { poolId: { in: ['accessible-pool'] } },
+              },
+            }),
+          }),
+        );
+      });
+
+      it('retains the hard temporal window when hydrating lexical candidates', async () => {
+        embedding.generateForRecall.mockRejectedValue(
+          new TransientEmbeddingError('admission timed out'),
+        );
+        const start = new Date('2026-01-01');
+        const end = new Date('2026-01-02');
+        temporalParser.parse.mockReturnValue({
+          semanticQuery: 'coffee preference',
+          temporalFilter: { expression: 'yesterday', start, end },
+        } as any);
+
+        const result = await service.recall(userId, {
+          query: 'coffee preference yesterday',
+        } as any);
+
+        expect(result.degraded).toBe(true);
+        expect(prisma.memory.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              OR: [
+                { observedAt: { gte: start, lte: end } },
+                { observedAt: null, createdAt: { gte: start, lte: end } },
+              ],
+            }),
+          }),
+        );
+        expect(embedding.search).not.toHaveBeenCalled();
+      });
+
+      it('preserves vector retrieval and response on success', async () => {
+        embedding.search.mockResolvedValue([{ id: 'lexical-1', score: 0.9 }]);
+
+        const result = await service.recall(userId, {
+          query: 'coffee preference',
+        } as any);
+
+        expect(result.degraded).toBeUndefined();
+        expect(embedding.search).toHaveBeenNthCalledWith(
+          1,
+          userId,
+          mockEmbedding,
+          expect.any(Number),
+          undefined,
+          undefined,
+          undefined,
+          'test query',
+          undefined,
+          undefined,
+        );
+      });
+
+      it('degrades multi-query embedding failure through the standard lexical path', async () => {
+        multiQueryService.search.mockRejectedValue(
+          new QueryVariantEmbeddingError(),
+        );
+        embedding.generateForRecall.mockRejectedValue(
+          new TransientEmbeddingError('admission timed out'),
+        );
+
+        const result = await service.recall(userId, {
+          query: 'coffee preference',
+          multiQuery: { enabled: true },
+        } as any);
+
+        expect(result.degraded).toBe(true);
+        expect(multiQueryService.search).toHaveBeenCalledTimes(1);
+        expect(embedding.search).not.toHaveBeenCalled();
+      });
+    });
+
     it('excludes hidden vector hits before ranking', async () => {
       embedding.search.mockResolvedValue([
         { id: 'hidden', score: 0.95 },

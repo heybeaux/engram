@@ -59,6 +59,8 @@ import {
   gatedLexicalRescue,
   isGatedLexicalRescueEnabled,
 } from './lexical-rescue.util';
+import { assertValidEmbedding } from '../embedding/embedding-validation.util';
+import { QueryVariantEmbeddingError } from '../multi-query/multi-query.service';
 
 const SOFT_WINDOW_BOOST = 1.1;
 
@@ -128,7 +130,17 @@ export class MemoryQueryService {
     const useMultiQuery = this.shouldUseMultiQuery(dto);
 
     if (useMultiQuery) {
-      return this.recallWithMultiQuery(userId, dto, startTime, poolIds);
+      try {
+        return await this.recallWithMultiQuery(userId, dto, startTime, poolIds);
+      } catch (error) {
+        if (
+          process.env.RECALL_LEXICAL_ON_EMBED_FAILURE !== 'true' ||
+          !(error instanceof QueryVariantEmbeddingError)
+        ) {
+          throw error;
+        }
+        return this.recall(userId, { ...dto, multiQuery: { enabled: false } });
+      }
     }
 
     // 1. Parse temporal intent from query
@@ -156,7 +168,20 @@ export class MemoryQueryService {
     }
 
     // 2. Generate query embedding (priority path — skips batch queue)
-    const queryEmbedding = await this.embedding.generateForRecall(searchQuery);
+    let queryEmbedding: number[] | null;
+    try {
+      queryEmbedding = await this.embedding.generateForRecall(searchQuery);
+      if (process.env.RECALL_LEXICAL_ON_EMBED_FAILURE === 'true') {
+        assertValidEmbedding(queryEmbedding, { context: 'recall query' });
+      }
+    } catch (error) {
+      if (process.env.RECALL_LEXICAL_ON_EMBED_FAILURE !== 'true') throw error;
+      this.logger.warn(
+        `[Recall] Query embedding unavailable; using lexical-only candidates: ${(error as Error).message}`,
+      );
+      queryEmbedding = null;
+    }
+    const degraded = queryEmbedding === null;
 
     const subjectTypeFilter = this.buildSubjectTypeFilter(dto);
     const visibilityFilter = this.buildVisibilityFilter(dto);
@@ -180,7 +205,7 @@ export class MemoryQueryService {
     let scoredMemories: MemoryWithScore[] = [];
     let emptyWindowFallback = false;
 
-    if (useTemporalPath) {
+    if (useTemporalPath && queryEmbedding) {
       // TEMPORAL PATH — HEY-575: Adaptive window expansion
       // ENG-48 after/before merging is applied on the first expansion pass below
       const adaptiveEnabled = process.env.TEMPORAL_QUERY_ADAPTIVE !== 'false';
@@ -404,20 +429,22 @@ export class MemoryQueryService {
       }
     }
 
-    if (!useTemporalPath || emptyWindowFallback) {
+    if (!useTemporalPath || emptyWindowFallback || degraded) {
       // STANDARD PATH (ENG-26: pass query text for hybrid search fusion)
       const candidateLimit = Math.max(200, limit * 20);
-      const vectorResults = await this.embedding.search(
-        userId ?? 'default',
-        queryEmbedding,
-        candidateLimit,
-        dto.layers as any,
-        undefined,
-        poolIds,
-        searchQuery,
-        filterTags,
-        filterMetadata,
-      );
+      const vectorResults = queryEmbedding
+        ? await this.embedding.search(
+            userId ?? 'default',
+            queryEmbedding,
+            candidateLimit,
+            dto.layers as any,
+            undefined,
+            poolIds,
+            searchQuery,
+            filterTags,
+            filterMetadata,
+          )
+        : [];
 
       const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
       const cosineMap = new Map(vectorResults.map((r) => [r.id, r.score]));
@@ -679,6 +706,28 @@ export class MemoryQueryService {
           ...metadataFilter,
           ...temporalRangeFilter,
           ...sessionIdFilter,
+          ...(degraded && poolIds?.length
+            ? { poolMemberships: { some: { poolId: { in: poolIds } } } }
+            : {}),
+          ...(degraded && useTemporalPath
+            ? {
+                OR: [
+                  {
+                    observedAt: {
+                      gte: parsed.temporalFilter!.start,
+                      lte: parsed.temporalFilter!.end,
+                    },
+                  },
+                  {
+                    observedAt: null,
+                    createdAt: {
+                      gte: parsed.temporalFilter!.start,
+                      lte: parsed.temporalFilter!.end,
+                    },
+                  },
+                ],
+              }
+            : {}),
         },
         include: { extraction: true },
       });
@@ -750,12 +799,13 @@ export class MemoryQueryService {
 
     // ── ENG-32: Graph Recall Merge ─────────────────────────────────────
     try {
-      scoredMemories = await this.rankingService.mergeGraphResults(
-        scoredMemories,
-        dto.query,
-        singleUserId ?? 'default',
-        limit,
-      );
+      if (!degraded)
+        scoredMemories = await this.rankingService.mergeGraphResults(
+          scoredMemories,
+          dto.query,
+          singleUserId ?? 'default',
+          limit,
+        );
     } catch (error) {
       this.logger.warn(
         `[Recall] Graph recall merge failed: ${(error as Error)?.message}`,
@@ -763,27 +813,28 @@ export class MemoryQueryService {
     }
 
     // ── Active Insight Surfacing ──────────────────────────────────────
-    scoredMemories = await this.rankingService.surfaceInsights(
-      scoredMemories,
-      Array.isArray(userId) ? userId : userId ? [userId] : [],
-      searchQuery,
-      limit,
-      queryEmbedding,
-      {
-        allow: allowInsightSurfacing,
-        where: allowInsightSurfacing
-          ? this.buildInsightSurfacingWhere(
-              userIdFilter,
-              dto,
-              subjectTypeFilter,
-              visibilityFilter,
-              metadataFilter,
-              sessionIdFilter,
-              temporalRangeFilter,
-            )
-          : undefined,
-      },
-    );
+    if (queryEmbedding)
+      scoredMemories = await this.rankingService.surfaceInsights(
+        scoredMemories,
+        Array.isArray(userId) ? userId : userId ? [userId] : [],
+        searchQuery,
+        limit,
+        queryEmbedding,
+        {
+          allow: allowInsightSurfacing,
+          where: allowInsightSurfacing
+            ? this.buildInsightSurfacingWhere(
+                userIdFilter,
+                dto,
+                subjectTypeFilter,
+                visibilityFilter,
+                metadataFilter,
+                sessionIdFilter,
+                temporalRangeFilter,
+              )
+            : undefined,
+        },
+      );
 
     // ── ENG-29: Cross-Encoder Reranking ──────────────────────────
     const rerankQuery = hasTemporalIntent ? dto.query : searchQuery;
@@ -856,7 +907,7 @@ export class MemoryQueryService {
     let anticipatoryMeta:
       | import('../anticipatory/dto/anticipatory.dto').AnticipatoryMeta
       | undefined;
-    if (dto.anticipatory?.enabled && this.anticipatoryService) {
+    if (!degraded && dto.anticipatory?.enabled && this.anticipatoryService) {
       try {
         const excludeIds = new Set(result.map((m) => m.id));
         const areResult = await this.anticipatoryService.run(
@@ -881,10 +932,10 @@ export class MemoryQueryService {
     const latencyMs = Date.now() - startTime;
 
     // Fire-and-forget query log for re-ranker training
-    if (this.queryLogService) {
+    if (this.queryLogService && queryEmbedding) {
       this.queryLogService.logQuery({
         queryText: dto.query,
-        queryEmbedding: queryEmbedding,
+        queryEmbedding,
         agentId: dto.agentId,
         sessionKey: dto.agentSessionKey,
         results: result.map((m, i) => ({
@@ -901,6 +952,7 @@ export class MemoryQueryService {
       memories: result,
       queryTokens: dto.query.split(/\s+/).length,
       latencyMs,
+      ...(degraded ? { degraded: true } : {}),
       ...(anticipatoryMeta ? { anticipatoryMeta } : {}),
     };
   }

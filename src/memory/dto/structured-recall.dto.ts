@@ -86,6 +86,12 @@ export class StructuredQueryResult {
 
   @ApiPropertyOptional({
     description:
+      'True when embedding failed and recall used lexical candidates only.',
+  })
+  degraded?: boolean;
+
+  @ApiPropertyOptional({
+    description:
       'Response format version identifier. Always "json_v2" for structured responses; ' +
       'absent on legacy responses.',
     example: 'json_v2',
@@ -166,10 +172,10 @@ export function toStructuredItem(
     source_session: memory.sessionId ?? null,
     confidence: typeof memory.score === 'number' ? memory.score : null,
     timestamp: (() => {
-      const effective = (memory as any).observedAt ?? memory.createdAt;
+      const effective = memory.observedAt ?? memory.createdAt;
       return effective instanceof Date
         ? effective.toISOString()
-        : new Date(effective as any).toISOString();
+        : new Date(effective).toISOString();
     })(),
     memory_type: memory.memoryType ?? null,
   };
@@ -186,6 +192,7 @@ export function toStructuredQueryResult(
     memories: result.memories.map(toStructuredItem),
     queryTokens: result.queryTokens,
     latencyMs: result.latencyMs,
+    degraded: result.degraded,
     format: 'json_v2',
     multiQuery: result.multiQuery,
     explanations: result.explanations,

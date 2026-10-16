@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { MemoryLayer } from '@prisma/client';
-import { MultiQueryService } from './multi-query.service';
+import {
+  MultiQueryService,
+  QueryVariantEmbeddingError,
+} from './multi-query.service';
 import {
   QueryExpansionService,
   QueryExpansionResult,
@@ -142,6 +145,38 @@ describe('MultiQueryService', () => {
 
       const newService = module.then((m) => m.get(MultiQueryService));
       // Note: This tests the config loading behavior
+    });
+  });
+
+  describe('query variant embedding failures', () => {
+    const previousFlag = process.env.RECALL_LEXICAL_ON_EMBED_FAILURE;
+
+    beforeEach(() => {
+      process.env.RECALL_LEXICAL_ON_EMBED_FAILURE = 'true';
+    });
+
+    afterEach(() => {
+      if (previousFlag === undefined)
+        delete process.env.RECALL_LEXICAL_ON_EMBED_FAILURE;
+      else process.env.RECALL_LEXICAL_ON_EMBED_FAILURE = previousFlag;
+    });
+
+    it('marks a failed variant for lexical fallback', async () => {
+      embeddingService.generateForRecall.mockRejectedValue(
+        new Error('embed unavailable'),
+      );
+      await expect(
+        service.search('test query', 'user_123'),
+      ).rejects.toBeInstanceOf(QueryVariantEmbeddingError);
+      expect(embeddingService.search).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid vector instead of silently dropping its variant', async () => {
+      embeddingService.generateForRecall.mockResolvedValue([NaN]);
+      await expect(
+        service.search('test query', 'user_123'),
+      ).rejects.toBeInstanceOf(QueryVariantEmbeddingError);
+      expect(embeddingService.search).not.toHaveBeenCalled();
     });
   });
 

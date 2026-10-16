@@ -226,6 +226,11 @@ POST /v1/memories/query
 }
 ```
 
+With `RECALL_LEXICAL_ON_EMBED_FAILURE=true`, an unavailable or invalid query embedding
+uses keyword/FTS recall instead of failing the request. Such responses include
+`"degraded": true` (also in the structured response). The field is absent on
+successful semantic recall. Leave the flag unset to retain the previous behavior.
+
 ---
 
 ### Get Memory

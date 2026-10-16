@@ -86,6 +86,7 @@ export interface QueryResult {
   memories: MemoryWithScore[];
   queryTokens: number;
   latencyMs: number;
+  degraded?: boolean;
   multiQuery?: MultiQueryMetadataDto;
   explanations?: Record<string, ResultExplanationDto>;
   /** Anticipatory Recall Engine metadata. Present when anticipatory.enabled=true. */

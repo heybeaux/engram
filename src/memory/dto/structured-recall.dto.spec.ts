@@ -113,6 +113,7 @@ describe('structured-recall (ENG-134)', () => {
         ],
         queryTokens: 7,
         latencyMs: 42,
+        degraded: true,
         multiQuery: { strategy: 'foo' } as any,
         explanations: { 'm-1': { reason: 'r' } as any },
       };
@@ -122,6 +123,7 @@ describe('structured-recall (ENG-134)', () => {
       expect(out.recallId).toBe('r-1');
       expect(out.queryTokens).toBe(7);
       expect(out.latencyMs).toBe(42);
+      expect(out.degraded).toBe(true);
       expect(out.multiQuery).toEqual({ strategy: 'foo' });
       expect(out.explanations).toEqual({ 'm-1': { reason: 'r' } });
       expect(out.memories).toHaveLength(1);
