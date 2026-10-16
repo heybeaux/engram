@@ -33,6 +33,7 @@ jest.mock('./stages/dream-cycle-archival.stage', () => ({
 }));
 jest.mock('@nestjs/bullmq', () => ({
   Processor: () => (target: any) => target,
+  OnWorkerEvent: () => (_target: any, _propertyKey: string) => undefined,
   WorkerHost: class WorkerHost {
     process(_job: any): Promise<any> {
       throw new Error('Not implemented');
@@ -73,6 +74,11 @@ describe('DreamCycleQueueProcessor', () => {
 
     prisma = {
       memory: { count: jest.fn().mockResolvedValue(500) },
+      dreamCycleReport: {
+        findUnique: jest.fn().mockResolvedValue({ startedAt: new Date(0) }),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
 
     tracker = {
@@ -239,6 +245,26 @@ describe('DreamCycleQueueProcessor', () => {
         expect.objectContaining({ status: 'COMPLETED', runId: 'run-1' }),
       );
       expect(tracker.completeStage).toHaveBeenCalled();
+      expect(prisma.dreamCycleReport.update).toHaveBeenCalledWith({
+        where: { id: 'run-1' },
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      });
+    });
+  });
+
+  it('marks a queued run failed only after the final worker attempt', async () => {
+    const job = {
+      ...makeJob(DREAM_CYCLE_JOBS.IDENTITY),
+      attemptsMade: 2,
+      opts: { attempts: 3 },
+    } as Job;
+    await processor.onFailed(job, new Error('LLM unavailable'));
+    expect(prisma.dreamCycleReport.updateMany).not.toHaveBeenCalled();
+    job.attemptsMade = 3;
+    await processor.onFailed(job, new Error('LLM unavailable'));
+    expect(prisma.dreamCycleReport.updateMany).toHaveBeenCalledWith({
+      where: { id: 'run-1', status: 'RUNNING' },
+      data: expect.objectContaining({ status: 'FAILED' }),
     });
   });
 

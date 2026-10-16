@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger, Optional } from '@nestjs/common';
 import {
@@ -73,6 +73,22 @@ export class DreamCycleQueueProcessor extends WorkerHost {
         stageStart,
       );
 
+      if (job.name === DREAM_CYCLE_JOBS.REPORT) {
+        const now = new Date();
+        const report = await this.prisma.dreamCycleReport.findUnique({
+          where: { id: runId },
+          select: { startedAt: true },
+        });
+        await this.prisma.dreamCycleReport.update({
+          where: { id: runId },
+          data: {
+            status: dryRun ? 'DRY_RUN' : 'COMPLETED',
+            completedAt: now,
+            durationMs: report ? now.getTime() - report.startedAt.getTime() : 0,
+          },
+        });
+      }
+
       // Return cursor + stage result so parent jobs can access it
       return { ...result, cursor: updatedCursor };
     } catch (err) {
@@ -90,6 +106,19 @@ export class DreamCycleQueueProcessor extends WorkerHost {
       }
       throw err;
     }
+  }
+
+  @OnWorkerEvent('failed')
+  async onFailed(job: Job<DreamCycleJobData> | undefined, error: Error) {
+    if (!job || job.attemptsMade < (job.opts.attempts ?? 1)) return;
+    await this.prisma.dreamCycleReport.updateMany({
+      where: { id: job.data.runId, status: 'RUNNING' },
+      data: {
+        status: 'FAILED',
+        completedAt: new Date(),
+        errors: { push: `${job.name}: ${error.message}` },
+      },
+    });
   }
 
   private async dispatch(
