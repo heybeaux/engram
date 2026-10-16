@@ -167,10 +167,11 @@ export class DreamCycleService {
   async runAsync(
     options: DreamCycleOptions = {},
   ): Promise<{ runId: string; mode: 'queued' | 'sequential' }> {
-    const userId =
-      options.userId || this.config.get<string>('DEFAULT_USER_ID') || 'default';
+    const userId = options.userId || this.config.get<string>('DEFAULT_USER_ID');
 
-    if (this.queueProducer) {
+    // The sequential path discovers users per account when no user is configured.
+    // A queued flow needs a concrete userId so every stage targets real data.
+    if (this.queueProducer && userId) {
       try {
         const runId = await this.queueProducer.enqueue(userId, {
           dryRun: options.dryRun,

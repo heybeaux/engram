@@ -18,9 +18,12 @@ import {
   DreamCycleArchivalStage,
 } from './stages';
 import { DreamCycleRunTrackerService } from './dream-cycle-run-tracker.service';
+import { DreamCycleQueueProducer } from './dream-cycle-queue.producer';
 
 const mockPrisma = {
   $queryRawUnsafe: jest.fn(),
+  account: { findMany: jest.fn() },
+  user: { findMany: jest.fn() },
   memory: {
     findMany: jest.fn(),
     findUnique: jest.fn(),
@@ -54,8 +57,10 @@ const mockLlm = {
   json: jest.fn(),
 };
 
+const mockQueueProducer = { enqueue: jest.fn() };
+
 const mockConfig = {
-  get: jest.fn((key: string, defaultValue?: any) => {
+  get: jest.fn((key: string, defaultValue?: any): string | undefined => {
     const config: Record<string, string> = {
       DREAM_DEDUP_THRESHOLD: '0.85',
       DREAM_STALENESS_SCORE: '0.35',
@@ -69,6 +74,7 @@ const mockConfig = {
     return config[key] ?? defaultValue;
   }),
 };
+const defaultConfigGet = mockConfig.get.getMockImplementation()!;
 
 const mockPendingStage = {
   run: jest.fn().mockResolvedValue({
@@ -168,6 +174,7 @@ describe('DreamCycleService', () => {
         { provide: EmbeddingService, useValue: mockEmbedding },
         { provide: LLMService, useValue: mockLlm },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: DreamCycleQueueProducer, useValue: mockQueueProducer },
         { provide: DreamCyclePendingStage, useValue: mockPendingStage },
         { provide: DreamCyclePatternsStage, useValue: mockPatternsStage },
         { provide: DreamCycleDriftStage, useValue: mockDriftStage },
@@ -222,6 +229,103 @@ describe('DreamCycleService', () => {
     }).compile();
 
     service = module.get<DreamCycleService>(DreamCycleService);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mockConfig.get.mockImplementation(defaultConfigGet);
+  });
+
+  describe('runAsync', () => {
+    it('does not enqueue a default-user flow without a configured user', async () => {
+      mockConfig.get.mockImplementation((key: string, defaultValue?: any) =>
+        key === 'DEFAULT_USER_ID'
+          ? undefined
+          : defaultConfigGet(key, defaultValue),
+      );
+      jest.spyOn(service, 'run').mockResolvedValue({ id: 'run-1' } as any);
+
+      await expect(service.runAsync()).resolves.toEqual({
+        runId: 'run-1',
+        mode: 'sequential',
+      });
+      expect(mockQueueProducer.enqueue).not.toHaveBeenCalled();
+      expect(service.run).toHaveBeenCalledWith({});
+    });
+
+    it('discovers users per account through the sequential path', async () => {
+      mockConfig.get.mockImplementation((key: string, defaultValue?: any) =>
+        key === 'DEFAULT_USER_ID'
+          ? undefined
+          : defaultConfigGet(key, defaultValue),
+      );
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([
+        { pg_try_advisory_lock: true },
+      ]);
+      mockPrisma.account.findMany.mockResolvedValue([
+        { id: 'account-a' },
+        { id: 'account-b' },
+      ]);
+      mockPrisma.user.findMany.mockImplementation(({ where }) =>
+        Promise.resolve([
+          { id: where.accountId === 'account-a' ? 'user-a' : 'user-b' },
+        ]),
+      );
+      mockPrisma.dreamCycleReport.create.mockResolvedValue({ id: 'report-1' });
+      mockPrisma.consolidationJob.create.mockResolvedValue({ id: 'job-1' });
+
+      await expect(service.runAsync({ stages: [] })).resolves.toEqual({
+        runId: 'report-1',
+        mode: 'sequential',
+      });
+      expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
+        where: { accountId: 'account-a', deletedAt: null },
+        select: { id: true },
+      });
+      expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
+        where: { accountId: 'account-b', deletedAt: null },
+        select: { id: true },
+      });
+      expect(
+        mockPrisma.dreamCycleReport.create.mock.calls.map(
+          ([arg]) => arg.data.userId,
+        ),
+      ).toEqual(['user-a', 'user-b']);
+      expect(mockQueueProducer.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('queues an explicit user even without DEFAULT_USER_ID', async () => {
+      mockConfig.get.mockImplementation((key: string, defaultValue?: any) =>
+        key === 'DEFAULT_USER_ID'
+          ? undefined
+          : defaultConfigGet(key, defaultValue),
+      );
+      mockQueueProducer.enqueue.mockResolvedValue('queue-run-1');
+
+      await expect(
+        service.runAsync({ userId: 'explicit-user' }),
+      ).resolves.toEqual({
+        runId: 'queue-run-1',
+        mode: 'queued',
+      });
+      expect(mockQueueProducer.enqueue).toHaveBeenCalledWith(
+        'explicit-user',
+        expect.any(Object),
+      );
+    });
+
+    it('queues DEFAULT_USER_ID when configured', async () => {
+      mockQueueProducer.enqueue.mockResolvedValue('queue-run-2');
+
+      await expect(service.runAsync()).resolves.toEqual({
+        runId: 'queue-run-2',
+        mode: 'queued',
+      });
+      expect(mockQueueProducer.enqueue).toHaveBeenCalledWith(
+        'test-user',
+        expect.any(Object),
+      );
+    });
   });
 
   // --- Lock acquisition ---

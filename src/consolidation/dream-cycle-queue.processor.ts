@@ -79,7 +79,7 @@ export class DreamCycleQueueProcessor extends WorkerHost {
           where: { id: runId },
           select: { startedAt: true },
         });
-        await this.prisma.dreamCycleReport.update({
+        await this.prisma.dreamCycleReport.updateMany({
           where: { id: runId },
           data: {
             status: dryRun ? 'DRY_RUN' : 'COMPLETED',

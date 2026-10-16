@@ -245,9 +245,22 @@ describe('DreamCycleQueueProcessor', () => {
         expect.objectContaining({ status: 'COMPLETED', runId: 'run-1' }),
       );
       expect(tracker.completeStage).toHaveBeenCalled();
-      expect(prisma.dreamCycleReport.update).toHaveBeenCalledWith({
+      expect(prisma.dreamCycleReport.updateMany).toHaveBeenCalledWith({
         where: { id: 'run-1' },
         data: expect.objectContaining({ status: 'COMPLETED' }),
+      });
+    });
+
+    it('completes a legacy flow without a report row', async () => {
+      prisma.dreamCycleReport.findUnique.mockResolvedValue(null);
+      prisma.dreamCycleReport.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        processor.process(makeJob(DREAM_CYCLE_JOBS.REPORT)),
+      ).resolves.toEqual(expect.objectContaining({ status: 'COMPLETED' }));
+      expect(prisma.dreamCycleReport.updateMany).toHaveBeenCalledWith({
+        where: { id: 'run-1' },
+        data: expect.objectContaining({ durationMs: 0 }),
       });
     });
   });
