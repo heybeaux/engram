@@ -87,6 +87,7 @@ export class EntityRadiationStrategy implements AnticipatoryStrategy {
             where: {
               userId: signals.userId,
               deletedAt: null,
+              userHidden: false,
               supersededById: null,
               id: { notIn: [...signals.excludeMemoryIds] },
               graphMentions: {

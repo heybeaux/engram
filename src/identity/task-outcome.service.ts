@@ -79,6 +79,7 @@ export class TaskOutcomeService {
         agentId,
         memoryType: 'TASK_OUTCOME',
         deletedAt: null,
+        userHidden: false,
       },
       orderBy: { createdAt: 'desc' },
       take: limit,

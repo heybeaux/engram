@@ -104,6 +104,7 @@ export class TrustMemoryService {
       userId,
       layer: MemoryLayer.IDENTITY,
       deletedAt: null,
+      userHidden: false,
     };
 
     // Filter by trustScore metadata

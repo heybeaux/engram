@@ -44,6 +44,16 @@ describe('ProjectStateService', () => {
   });
 
   describe('synthesize', () => {
+    it('excludes hidden project and related memories', async () => {
+      mockPrisma.memory.findMany.mockImplementation(async ({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return [];
+      });
+      mockEmbedding.search.mockResolvedValue([{ id: 'hidden', score: 0.9 }]);
+      const result = await service.synthesize(userId, { projectName: 'Alpha' });
+      expect(result.totalMemories).toBe(0);
+    });
+
     it('should return empty summary with zero confidence for empty project', async () => {
       const result = await service.synthesize(userId, {
         projectName: 'nonexistent',

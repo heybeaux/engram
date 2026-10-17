@@ -183,6 +183,7 @@ export class PgVectorEnsembleProvider {
         AND me.embedding IS NOT NULL
         AND m.user_id = $4
         AND m.deleted_at IS NULL
+        AND m.user_hidden = false
       ORDER BY me.embedding <=> $1::vector
       LIMIT $5
       `,

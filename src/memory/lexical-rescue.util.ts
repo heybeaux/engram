@@ -27,6 +27,7 @@ export const LEXICAL_RESCUE_LIMIT = 20;
 const SURVIVOR_SQL = `deleted_at IS NULL
        AND superseded_by_id IS NULL
        AND searchable IS NOT FALSE
+       AND user_hidden = false
        AND embedding_status != 'DUPLICATE'
        AND is_duplicate_of IS NULL`;
 

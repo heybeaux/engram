@@ -75,6 +75,7 @@ export class DelegationRecallService {
     const taskMemories = await this.prisma.memory.findMany({
       where: {
         deletedAt: null,
+        userHidden: false,
         source: { in: [MemorySource.SYSTEM, MemorySource.AGENT_OBSERVATION] },
         ...(userId ? { userId } : {}),
         raw: {

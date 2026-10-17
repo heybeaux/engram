@@ -431,7 +431,11 @@ export class TimelineService {
 
     const memories = timeline.memoryIds?.length
       ? await this.prisma.memory.findMany({
-          where: { id: { in: timeline.memoryIds } },
+          where: {
+            id: { in: timeline.memoryIds },
+            userHidden: false,
+            deletedAt: null,
+          },
         })
       : [];
 

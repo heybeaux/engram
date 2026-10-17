@@ -41,6 +41,7 @@ export class ProjectStateService {
         deletedAt: null,
         supersededById: null,
         searchable: { not: false },
+        userHidden: false,
         createdAt: { gte: cutoffDate },
         OR: [
           { raw: { contains: projectName, mode: 'insensitive' } },
@@ -78,6 +79,7 @@ export class ProjectStateService {
               deletedAt: null,
               supersededById: null,
               searchable: { not: false },
+              userHidden: false,
               createdAt: { gte: cutoffDate },
             },
             include: { extraction: true },

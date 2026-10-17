@@ -139,6 +139,7 @@ export class ContextualRecallService {
           deletedAt: null,
           supersededById: null,
           searchable: { not: false },
+          userHidden: false,
           ...(temporalCreatedAt ? { createdAt: temporalCreatedAt } : {}),
         },
         include: { extraction: true },

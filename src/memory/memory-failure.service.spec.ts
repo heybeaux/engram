@@ -39,6 +39,22 @@ describe('MemoryFailureService', () => {
   // ===================== findFailures =====================
 
   describe('findFailures', () => {
+    it.each([
+      ['user-1', {}],
+      ['user-1', { agentId: 'agent-1' }],
+      [null, {}],
+    ])('excludes hidden failure rows for scope %s', async (scope, extra) => {
+      mockPrisma.$queryRawUnsafe.mockImplementation(async (sql: string) => {
+        expect(sql).toContain('m.user_hidden = false');
+        return [];
+      });
+      const result = await service.findFailures(scope, {
+        goal: 'deploy',
+        ...extra,
+      });
+      expect(result.failures).toEqual([]);
+    });
+
     const baseDto = { goal: 'deploy the API' };
     const mockRow = {
       id: 'mem-1',
@@ -184,11 +200,7 @@ describe('MemoryFailureService', () => {
     });
 
     it('should reject invalid query embeddings before raw SQL', async () => {
-      mockEmbedding.generateForRecall.mockResolvedValue([
-        0.1,
-        Number.NaN,
-        0.3,
-      ]);
+      mockEmbedding.generateForRecall.mockResolvedValue([0.1, Number.NaN, 0.3]);
 
       await expect(service.findFailures('user-1', baseDto)).rejects.toThrow(
         'Invalid embedding for MemoryFailureService.findFailures',
@@ -331,6 +343,8 @@ describe('MemoryFailureService', () => {
             { sourceId: { in: ['mem-a', 'mem-b', 'mem-c'] } },
             { targetId: { in: ['mem-a', 'mem-b', 'mem-c'] } },
           ],
+          source: { userHidden: false, deletedAt: null },
+          target: { userHidden: false, deletedAt: null },
         },
         include: { source: true, target: true },
       });

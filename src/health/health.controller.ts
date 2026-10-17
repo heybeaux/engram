@@ -14,6 +14,25 @@ import { SkipRateLimit } from '../rate-limit/rate-limit.decorator';
 import { DREAM_CYCLE_STALE_MS } from '../consolidation/dream-cycle-run-tracker.service';
 import { resolveBuildInfo } from './build-info';
 
+/**
+ * Upper bound for each DB probe. Past this the endpoint answers with
+ * database.status=degraded instead of waiting on a slow or saturated DB.
+ */
+export const DB_PROBE_TIMEOUT_MS = 2000;
+
+class ProbeTimeoutError extends Error {}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new ProbeTimeoutError(`timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 @ApiTags('health')
 @Controller()
 @SkipRateLimit()
@@ -49,20 +68,50 @@ export class HealthController {
   async check(): Promise<any> {
     const start = Date.now();
 
-    // 1. Database health
-    let dbStatus: 'up' | 'down' = 'down';
-    let dbLatencyMs: number | null = null;
-    let memoryCount: number | null = null;
+    // Dream Cycle probe runs concurrently with the DB probe so the worst case
+    // is one DB_PROBE_TIMEOUT_MS, not two. Resolves null if the table doesn't
+    // exist yet or the probe timed out.
+    const dreamProbe = withTimeout(
+      Promise.all([
+        this.prisma.dreamCycleReport.findFirst({
+          orderBy: { startedAt: 'desc' },
+          select: { startedAt: true, status: true },
+        }),
+        this.prisma.dreamCycleReport.findFirst({
+          where: { status: 'COMPLETED' },
+          orderBy: { startedAt: 'desc' },
+          select: { completedAt: true },
+        }),
+      ]),
+      DB_PROBE_TIMEOUT_MS,
+    ).catch(() => null);
 
+    // 1. Database health. An exact COUNT(*) on memories is a full scan that
+    // took 45s+ under backup IO load, so report the planner's row estimate
+    // (pg_class.reltuples: includes soft-deleted rows, refreshed by
+    // VACUUM/ANALYZE; -1 if never analyzed).
+    let dbStatus: 'up' | 'degraded' | 'down' = 'down';
+    let dbLatencyMs: number | null = null;
+    let memoryCountEstimate: number | null = null;
+
+    const dbStart = Date.now();
     try {
-      const dbStart = Date.now();
-      memoryCount = await this.prisma.memory.count({
-        where: { deletedAt: null },
-      });
+      const rows = await withTimeout(
+        this.prisma.$queryRaw<{ estimate: bigint }[]>`
+          SELECT reltuples::bigint AS estimate
+          FROM pg_class WHERE oid = 'memories'::regclass`,
+        DB_PROBE_TIMEOUT_MS,
+      );
       dbLatencyMs = Date.now() - dbStart;
+      const estimate = rows[0] ? Number(rows[0].estimate) : -1;
+      memoryCountEstimate = estimate >= 0 ? estimate : null;
       dbStatus = 'up';
-    } catch {
-      // dbStatus remains 'down' from initialization
+    } catch (err) {
+      if (err instanceof ProbeTimeoutError) {
+        dbLatencyMs = Date.now() - dbStart;
+        dbStatus = 'degraded';
+      }
+      // otherwise dbStatus remains 'down' from initialization
     }
 
     // 2. engram-embed health (cached)
@@ -76,38 +125,24 @@ export class HealthController {
       runningSince: string | null;
       stale: boolean;
     } | null = null;
-    try {
-      const [latest, lastCompleted] = await Promise.all([
-        this.prisma.dreamCycleReport.findFirst({
-          orderBy: { startedAt: 'desc' },
-          select: { startedAt: true, status: true },
-        }),
-        this.prisma.dreamCycleReport.findFirst({
-          where: { status: 'COMPLETED' },
-          orderBy: { startedAt: 'desc' },
-          select: { completedAt: true },
-        }),
-      ]);
-      if (latest) {
-        const running = latest.status === 'RUNNING';
-        dreamCycle = {
-          lastRun: lastCompleted?.completedAt?.toISOString() ?? null,
-          status: latest.status,
-          runningSince: running ? latest.startedAt.toISOString() : null,
-          stale:
-            running &&
-            Date.now() - latest.startedAt.getTime() > DREAM_CYCLE_STALE_MS,
-        };
-      }
-    } catch {
-      // table might not exist yet
+    const [latest, lastCompleted] = (await dreamProbe) ?? [null, null];
+    if (latest) {
+      const running = latest.status === 'RUNNING';
+      dreamCycle = {
+        lastRun: lastCompleted?.completedAt?.toISOString() ?? null,
+        status: latest.status,
+        runningSince: running ? latest.startedAt.toISOString() : null,
+        stale:
+          running &&
+          Date.now() - latest.startedAt.getTime() > DREAM_CYCLE_STALE_MS,
+      };
     }
 
     // Determine overall status
     const overallStatus =
       dbStatus === 'down'
         ? 'unhealthy'
-        : embedStatus.status === 'down'
+        : dbStatus === 'degraded' || embedStatus.status === 'down'
           ? 'degraded'
           : 'healthy';
 
@@ -140,7 +175,9 @@ export class HealthController {
         database: {
           status: dbStatus,
           latencyMs: dbLatencyMs,
-          memoryCount,
+          memoryCountEstimate,
+          // Deprecated alias kept for existing consumers; now the estimate.
+          memoryCount: memoryCountEstimate,
         },
         engramEmbed: {
           status: embedStatus.status,

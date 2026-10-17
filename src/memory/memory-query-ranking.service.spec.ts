@@ -73,6 +73,26 @@ describe('MemoryQueryRankingService', () => {
   });
 
   describe('mergeGraphResults', () => {
+    it('excludes hidden graph-only memories', async () => {
+      const graphRecall = {
+        recallViaGraph: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'hidden', raw: 'hidden', score: 0.9, userHidden: true },
+          ]),
+      } as unknown as GraphRecallService;
+      const ranking = new MemoryQueryRankingService(
+        prisma,
+        embedding,
+        recallWeightService,
+        undefined,
+        graphRecall,
+      );
+      expect(
+        await ranking.mergeGraphResults([], 'query', 'user-1', 10),
+      ).toEqual([]);
+    });
+
     it('should return unchanged results when no graphRecallService', async () => {
       const memories: MemoryWithScore[] = [
         { id: 'm1', raw: 'test', score: 0.9 } as any,
@@ -146,6 +166,32 @@ describe('MemoryQueryRankingService', () => {
   });
 
   describe('surfaceInsights', () => {
+    it('excludes a hidden insight even if a stale mock returns it', async () => {
+      (prisma.memory.findMany as jest.Mock).mockImplementation(
+        ({ where }: any) => {
+          expect(where.userHidden).toBe(false);
+          return Promise.resolve([
+            {
+              id: 'hidden',
+              raw: 'hidden insight',
+              userHidden: true,
+              importanceScore: 0.9,
+              createdAt: new Date(),
+            },
+          ]);
+        },
+      );
+      embedding.search.mockResolvedValue([{ id: 'hidden', score: 0.9 }] as any);
+      const result = await service.surfaceInsights(
+        [],
+        ['user-1'],
+        'query',
+        10,
+        [0.1],
+      );
+      expect(result).toEqual([]);
+    });
+
     it('should return unchanged results when no insights found', async () => {
       prisma.memory.findMany = jest.fn().mockResolvedValue([]);
 
@@ -325,12 +371,31 @@ describe('MemoryQueryRankingService', () => {
       );
 
       const memories: MemoryWithScore[] = [
-        { id: 'semantic', raw: 'I feel happy when I see my cat', score: 0.8, importanceScore: 0.6 } as any,
-        { id: 'high_importance', raw: 'CRITICAL: Never deploy on Fridays', score: 0.3, importanceScore: 0.95 } as any,
-        { id: 'filler', raw: 'Had coffee this morning', score: 0.5, importanceScore: 0.3 } as any,
+        {
+          id: 'semantic',
+          raw: 'I feel happy when I see my cat',
+          score: 0.8,
+          importanceScore: 0.6,
+        } as any,
+        {
+          id: 'high_importance',
+          raw: 'CRITICAL: Never deploy on Fridays',
+          score: 0.3,
+          importanceScore: 0.95,
+        } as any,
+        {
+          id: 'filler',
+          raw: 'Had coffee this morning',
+          score: 0.5,
+          importanceScore: 0.3,
+        } as any,
       ];
 
-      const result = await svc.applyReranking(memories, 'what makes me happy?', 5);
+      const result = await svc.applyReranking(
+        memories,
+        'what makes me happy?',
+        5,
+      );
 
       // After normalization, semantic_memory (rank 1) should beat high_importance (rank 3)
       const semanticIdx = result.findIndex((m) => m.id === 'semantic');

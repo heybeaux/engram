@@ -59,7 +59,10 @@ export class PgVectorProvider implements VectorProvider {
     // a wrong-sized vector under model_id=searchModel, making every write
     // invisible to the search JOIN (or triggering a pgvector type error).
     const expectedDims = resolveExpectedDimensions();
-    if (expectedDims !== undefined && record.embedding.length !== expectedDims) {
+    if (
+      expectedDims !== undefined &&
+      record.embedding.length !== expectedDims
+    ) {
       throw new Error(
         `[PgVector] Dimension mismatch for model '${this.searchModel}': ` +
           `expected ${expectedDims} dims but got ${record.embedding.length}. ` +
@@ -160,7 +163,7 @@ export class PgVectorProvider implements VectorProvider {
 
     // Audit H5: exclude superseded and non-searchable memories at the SQL
     // level so they never enter the candidate scoreMap.
-    memoryWhereClause += ` AND m.superseded_by_id IS NULL AND m.searchable IS NOT FALSE`;
+    memoryWhereClause += ` AND m.superseded_by_id IS NULL AND m.searchable IS NOT FALSE AND m.user_hidden = false`;
 
     if (options.filter?.layers && options.filter.layers.length > 0) {
       const layerPlaceholders = options.filter.layers
@@ -179,8 +182,7 @@ export class PgVectorProvider implements VectorProvider {
 
     // Exclude non-survivor memories at the SQL level so stale duplicates do
     // not pollute vector candidates or bury freshly-written memories.
-    memoryWhereClause +=
-      ` AND m.superseded_by_id IS NULL AND m.searchable IS NOT FALSE AND m.embedding_status != 'DUPLICATE'`;
+    memoryWhereClause += ` AND m.superseded_by_id IS NULL AND m.searchable IS NOT FALSE AND m.embedding_status != 'DUPLICATE'`;
 
     // Pool filtering: JOIN on memory_pool_memberships to restrict results
     let poolJoinClause = '';
@@ -285,10 +287,33 @@ export class PgVectorProvider implements VectorProvider {
         );
 
         if (textResults.length > 0) {
+          const poolIds = options.filter?.poolIds;
+          const eligible = await this.prisma.$queryRawUnsafe<
+            Array<{ id: string }>
+          >(
+            `SELECT m.id FROM memories m
+             WHERE m.id = ANY($1::text[])
+               AND m.deleted_at IS NULL
+               AND m.user_hidden = false
+               AND m.superseded_by_id IS NULL
+               AND m.searchable IS NOT FALSE
+               AND m.embedding_status != 'DUPLICATE'
+               AND ${
+                 poolIds?.length
+                   ? `EXISTS (SELECT 1 FROM memory_pool_memberships mpm WHERE mpm.memory_id = m.id AND mpm.pool_id = ANY($2::text[]))`
+                   : `m.user_id = ANY($2::text[])`
+               }`,
+            textResults.map((result) => result.id),
+            poolIds?.length ? poolIds : userIds,
+          );
+          const eligibleIds = new Set(eligible.map((row) => row.id));
+          const visibleTextResults = textResults.filter((result) =>
+            eligibleIds.has(result.id),
+          );
           const weights = this.hybridSearch.classifyQuery(options._queryText);
           const fused = this.hybridSearch.fuseResults(
             vectorResults,
-            textResults,
+            visibleTextResults,
             limit,
           );
 

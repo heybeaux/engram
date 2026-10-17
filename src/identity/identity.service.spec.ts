@@ -86,6 +86,16 @@ describe('IdentityService', () => {
   });
 
   describe('getIdentityProfile', () => {
+    it('excludes hidden memories from preference, trust, and behavior summaries', async () => {
+      prisma.memory.findMany.mockImplementation(({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return Promise.resolve([]);
+      });
+      const profile = await service.getIdentityProfile('agent-1', 'user-1');
+      expect(profile.preferences).toEqual([]);
+      expect(profile.trustSignals?.totalMemories).toBe(0);
+    });
+
     it('should return stub profile for test compatibility', async () => {
       const profile = await service.getIdentityProfile('agent-1', 'user-1');
 

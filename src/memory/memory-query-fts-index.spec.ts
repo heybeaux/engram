@@ -55,5 +55,6 @@ describe('Recall FTS uses the indexed search_vector column', () => {
     expect(sql).toContain(predicate);
     expect(sql).toMatch(/ts_rank\((m\.)?search_vector,/);
     expect(sql).not.toContain('to_tsvector(');
+    expect(sql).toContain('user_hidden = false');
   });
 });

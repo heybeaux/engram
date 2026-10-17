@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PgVectorProvider } from './pgvector.provider';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VectorRecord, VectorSearchResult } from '../vector.interface';
+import { HybridSearchService } from '../hybrid-search.service';
 
 // bge-base is the default model when EMBEDDING_MODEL / VECTOR_SEARCH_MODEL are unset
 const BGE_DIMS = 768;
@@ -92,26 +93,35 @@ describe('PgVectorProvider', () => {
       mockPrisma.$executeRawUnsafe.mockResolvedValue(undefined);
 
       const largeEmbedding = makeEmbedding(1536, 0.2);
-      const record: VectorRecord = { id: 'mem-large', embedding: largeEmbedding };
+      const record: VectorRecord = {
+        id: 'mem-large',
+        embedding: largeEmbedding,
+      };
 
       await p2.upsert(record);
 
       // Should NOT call inline UPDATE
       const updateCall = mockPrisma.$executeRawUnsafe.mock.calls.find(
-        (c: any[]) => typeof c[0] === 'string' && c[0].includes('UPDATE memories SET embedding'),
+        (c: any[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('UPDATE memories SET embedding'),
       );
       expect(updateCall).toBeUndefined();
 
       // Should call SELECT 1 existence check via $queryRawUnsafe
       const existsCall = mockPrisma.$queryRawUnsafe.mock.calls.find(
-        (c: any[]) => typeof c[0] === 'string' && c[0].includes('SELECT 1') && c[0].includes('FROM memories'),
+        (c: any[]) =>
+          typeof c[0] === 'string' &&
+          c[0].includes('SELECT 1') &&
+          c[0].includes('FROM memories'),
       );
       expect(existsCall).toBeDefined();
       expect(existsCall[1]).toBe('mem-large');
 
       // Should write to memory_embeddings
       const insertCall = mockPrisma.$executeRawUnsafe.mock.calls.find(
-        (c: any[]) => typeof c[0] === 'string' && c[0].includes('memory_embeddings'),
+        (c: any[]) =>
+          typeof c[0] === 'string' && c[0].includes('memory_embeddings'),
       );
       expect(insertCall).toBeDefined();
 
@@ -143,7 +153,8 @@ describe('PgVectorProvider', () => {
 
       // No insert into memory_embeddings
       const insertCall = mockPrisma.$executeRawUnsafe.mock.calls.find(
-        (c: any[]) => typeof c[0] === 'string' && c[0].includes('memory_embeddings'),
+        (c: any[]) =>
+          typeof c[0] === 'string' && c[0].includes('memory_embeddings'),
       );
       expect(insertCall).toBeUndefined();
 
@@ -201,6 +212,54 @@ describe('PgVectorProvider', () => {
   });
 
   describe('search', () => {
+    it('excludes hidden rows in vector SQL', async () => {
+      mockPrisma.$queryRawUnsafe.mockImplementation(async (sql: string) => {
+        if (sql.includes('COUNT(*)')) return [{ count: BigInt(0) }];
+        expect(sql).toContain('m.user_hidden = false');
+        return [];
+      });
+      expect(
+        await provider.search(makeEmbedding(BGE_DIMS), { userId: 'user-1' }),
+      ).toEqual([]);
+    });
+
+    it('rejects hidden Elasticsearch hits before hybrid fusion', async () => {
+      const hybrid = {
+        textSearch: jest.fn().mockResolvedValue([{ id: 'hidden', score: 1 }]),
+        classifyQuery: jest
+          .fn()
+          .mockReturnValue({ vectorWeight: 0.6, textWeight: 0.4 }),
+        fuseResults: jest.fn().mockImplementation((_vector, text) => text),
+      };
+      const module = await Test.createTestingModule({
+        providers: [
+          PgVectorProvider,
+          { provide: PrismaService, useValue: mockPrisma },
+          { provide: HybridSearchService, useValue: hybrid },
+        ],
+      }).compile();
+      const hybridProvider = module.get(PgVectorProvider);
+      mockPrisma.$queryRawUnsafe.mockImplementation(async (sql: string) => {
+        if (sql.includes('COUNT(*)')) return [{ count: BigInt(0) }];
+        if (sql.includes('m.id = ANY($1::text[])')) {
+          expect(sql).toContain('m.user_hidden = false');
+          return [];
+        }
+        return [];
+      });
+      expect(
+        await hybridProvider.search(makeEmbedding(BGE_DIMS), {
+          userId: 'user-1',
+          _queryText: 'hidden',
+        }),
+      ).toEqual([]);
+      expect(hybrid.fuseResults).toHaveBeenCalledWith(
+        [],
+        [],
+        expect.any(Number),
+      );
+    });
+
     beforeEach(() => {
       // Default: runtime check returns 0 unmigrated (skip fallback)
       mockPrisma.$queryRawUnsafe.mockImplementation(

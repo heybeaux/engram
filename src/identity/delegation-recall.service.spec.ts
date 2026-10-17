@@ -35,6 +35,15 @@ describe('DelegationRecallService', () => {
   });
 
   describe('recall', () => {
+    it('excludes hidden task memories', async () => {
+      mockPrisma.memory.findMany.mockImplementation(async ({ where }: any) => {
+        expect(where.userHidden).toBe(false);
+        return [];
+      });
+      const result = await service.recall('Deploy application');
+      expect(result.similarTasks).toEqual([]);
+    });
+
     it('should return empty results when no similar tasks exist', async () => {
       const result = await service.recall('Deploy the application');
 

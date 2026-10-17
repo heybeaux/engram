@@ -32,7 +32,8 @@ export class MemoryQueryRankingService {
       (memory as any).isDuplicateOf == null &&
       (memory as any).supersededById == null &&
       (memory as any).deletedAt == null &&
-      (memory as any).searchable !== false
+      (memory as any).searchable !== false &&
+      (memory as any).userHidden !== true
     );
   }
 
@@ -127,6 +128,7 @@ export class MemoryQueryRankingService {
         deletedAt: null,
         supersededById: null,
         searchable: { not: false },
+        userHidden: false,
         embeddingStatus: { not: EmbeddingStatus.DUPLICATE },
         isDuplicateOf: null,
         importanceScore: { gte: 0.6 },

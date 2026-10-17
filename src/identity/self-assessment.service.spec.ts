@@ -69,6 +69,16 @@ describe('SelfAssessmentService', () => {
   });
 
   describe('list', () => {
+    it('excludes hidden self-assessments', async () => {
+      (prisma.memory.findMany as jest.Mock).mockImplementation(
+        ({ where }: any) => {
+          expect(where.userHidden).toBe(false);
+          return Promise.resolve([]);
+        },
+      );
+      expect(await service.list('user-1', 'agent-1')).toEqual([]);
+    });
+
     it('should list self-assessments', async () => {
       const results = await service.list('user-1', 'agent-1');
       expect(results).toHaveLength(1);

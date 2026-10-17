@@ -49,6 +49,7 @@ export class MemoryGraphService {
       where: {
         userId: { in: userIds },
         deletedAt: null,
+        userHidden: false,
       },
       select: {
         id: true,

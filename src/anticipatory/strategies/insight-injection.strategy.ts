@@ -57,6 +57,7 @@ export class InsightInjectionStrategy implements AnticipatoryStrategy {
           userId: signals.userId,
           layer: 'INSIGHT',
           deletedAt: null,
+          userHidden: false,
           supersededById: null,
           id: { notIn: [...signals.excludeMemoryIds] },
           // Don't return insights the user has explicitly acknowledged

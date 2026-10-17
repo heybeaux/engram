@@ -11,6 +11,18 @@ const rows = (n: number, prefix = 'w') =>
   Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}` }));
 
 describe('gatedLexicalRescue (ENG-36 F2)', () => {
+  it('excludes hidden rows in both window and trigram rescue', async () => {
+    const prisma = {
+      $queryRawUnsafe: jest.fn().mockImplementation((sql: string) => {
+        expect(sql).toContain('user_hidden = false');
+        return Promise.resolve([]);
+      }),
+    };
+    const result = await gatedLexicalRescue(prisma, ['user-1'], ['hidden']);
+    expect(result.rows).toEqual([]);
+    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(2);
+  });
+
   const saved = process.env.RECALL_LEXICAL_RESCUE_GATED;
   afterEach(() => {
     if (saved === undefined) delete process.env.RECALL_LEXICAL_RESCUE_GATED;

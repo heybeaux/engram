@@ -58,6 +58,21 @@ describe('InsightInjectionStrategy', () => {
     expect(strategy.name).toBe('insight_injection');
   });
 
+  it('excludes hidden insights from proactive recall', async () => {
+    mockPrisma.memory.findMany.mockImplementation(async ({ where }: any) => {
+      expect(where.userHidden).toBe(false);
+      return [];
+    });
+    const results = await strategy.execute(
+      makeSignals({ topics: ['project alpha'] }),
+      {
+        maxResults: 5,
+        timeoutMs: 5000,
+      },
+    );
+    expect(results).toEqual([]);
+  });
+
   it('should return empty when no topics or entities', async () => {
     const result = await strategy.execute(makeSignals(), {
       maxResults: 5,

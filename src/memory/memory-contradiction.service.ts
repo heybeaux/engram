@@ -81,6 +81,7 @@ export class MemoryContradictionService {
       'm.embedding IS NOT NULL',
       'm.deleted_at IS NULL',
       'm.searchable = true',
+      'm.user_hidden = false',
       `m.memory_type IN ('FACT', 'PREFERENCE', 'CONSTRAINT', 'LESSON')`,
     ];
     const params: any[] = [

@@ -75,7 +75,10 @@ export class GraphService {
 
     // Get recent memories mentioning this entity
     const mentions = await this.prisma.graphEntityMention.findMany({
-      where: { entityId: entity.id },
+      where: {
+        entityId: entity.id,
+        memory: { userHidden: false, deletedAt: null },
+      },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: {
@@ -210,7 +213,7 @@ export class GraphService {
     limit: number = 20,
   ): Promise<Memory[]> {
     const mentions = await this.prisma.graphEntityMention.findMany({
-      where: { entityId },
+      where: { entityId, memory: { userHidden: false, deletedAt: null } },
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
