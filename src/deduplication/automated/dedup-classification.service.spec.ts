@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DedupClassificationService } from './dedup-classification.service';
 import { ServicePrismaService } from '../../prisma/service-prisma.service';
 import { LLMService } from '../../llm/llm.service';
+import { ConfigService } from '@nestjs/config';
 
 const mockCandidate = {
   id: 'cand-1',
@@ -53,6 +54,7 @@ const mockPrisma = {
 
 const mockLlm = {
   chat: jest.fn(),
+  getProvider: jest.fn().mockReturnValue({ name: 'openai' }),
 };
 
 describe('DedupClassificationService', () => {
@@ -74,6 +76,66 @@ describe('DedupClassificationService', () => {
   });
 
   describe('processPendingCandidates', () => {
+    it('routes gpt-4o-mini to the registered OpenAI provider, even when Anthropic is registered', async () => {
+      const config = {
+        get: (key: string) =>
+          ({
+            OPENAI_API_KEY: 'test-openai-key',
+            ANTHROPIC_API_KEY: 'test-anthropic-key',
+          })[key],
+      } as ConfigService;
+      const llm = new LLMService(config);
+      const openaiChat = jest
+        .spyOn(llm.getProvider('openai')!, 'chat')
+        .mockResolvedValue(mockLlmResponse);
+      const anthropicChat = jest
+        .spyOn(llm.getProvider('anthropic')!, 'chat')
+        .mockResolvedValue(mockLlmResponse);
+      const classifier = new DedupClassificationService(
+        mockPrisma as unknown as ServicePrismaService,
+        llm,
+      );
+      mockPrisma.dedupCandidate.findMany.mockResolvedValue([mockCandidate]);
+      mockPrisma.dedupCandidate.update.mockResolvedValue({});
+
+      const result = await classifier.processPendingCandidates();
+
+      expect(result).toEqual({ processed: 1, errors: 0 });
+      expect(openaiChat).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          temperature: 0.2,
+          maxTokens: 512,
+        }),
+      );
+      expect(anthropicChat).not.toHaveBeenCalled();
+    });
+
+    it('does not send an OpenAI model to Anthropic when OpenAI is unavailable', async () => {
+      const config = {
+        get: (key: string) =>
+          ({
+            ANTHROPIC_API_KEY: 'test-anthropic-key',
+            LLM_PROVIDER: 'anthropic',
+          })[key],
+      } as ConfigService;
+      const llm = new LLMService(config);
+      const anthropicChat = jest
+        .spyOn(llm.getProvider('anthropic')!, 'chat')
+        .mockResolvedValue(mockLlmResponse);
+      const classifier = new DedupClassificationService(
+        mockPrisma as unknown as ServicePrismaService,
+        llm,
+      );
+      mockPrisma.dedupCandidate.findMany.mockResolvedValue([mockCandidate]);
+
+      const result = await classifier.processPendingCandidates();
+
+      expect(result).toEqual({ processed: 0, errors: 1 });
+      expect(anthropicChat).not.toHaveBeenCalled();
+    });
     it('returns zero counts when no pending candidates', async () => {
       mockPrisma.dedupCandidate.findMany.mockResolvedValue([]);
       const result = await service.processPendingCandidates();

@@ -1,0 +1,208 @@
+{
+  "version": 4,
+  "description": "Independent fictional current-property classifier holdout; one replacement and three still-true related facts per cluster.",
+  "candidateDate": "2026-04-01T12:00:00Z",
+  "incomingDate": "2026-10-01T12:00:00Z",
+  "items": [
+    {
+      "id": "cinema-volume",
+      "old": "The Fenwick Cinema sets its main hall audio volume to 72 decibels for matinées.",
+      "incoming": "The Fenwick Cinema now sets its main hall audio volume to 68 decibels for matinées.",
+      "stillTrue": [
+        "The Fenwick Cinema still sets its side hall audio volume to 72 decibels for matinées.",
+        "The Fenwick Cinema still uses the main hall for afternoon screenings.",
+        "The Fenwick Cinema main hall still has 72 red seats."
+      ]
+    },
+    {
+      "id": "robotics-points",
+      "old": "In the Meridian Robotics League, placing a cube on the high shelf earns 8 points.",
+      "incoming": "The Meridian Robotics League revised high-shelf cube scoring to 10 points.",
+      "stillTrue": [
+        "In the Meridian Robotics League, a low-shelf cube still earns 8 points.",
+        "The Meridian Robotics League awards a separate 2-point bonus for a marked cube.",
+        "The Meridian Robotics League still limits each round to eight minutes."
+      ]
+    },
+    {
+      "id": "water-filter-flow",
+      "old": "The Vireo water plant pumps river water through its sand filter at 18 liters per minute.",
+      "incoming": "The Vireo water plant now pumps river water through its sand filter at 22 liters per minute.",
+      "stillTrue": [
+        "The Vireo water plant still pumps well water through its carbon filter at 18 liters per minute.",
+        "The Vireo water plant still backwashes its sand filter each Friday.",
+        "The Vireo water plant still has 18 spare filter screens."
+      ]
+    },
+    {
+      "id": "pool-lanes",
+      "old": "The Quill Community Pool reserves three lanes for morning lap swimming.",
+      "incoming": "The Quill Community Pool now reserves four lanes for morning lap swimming.",
+      "stillTrue": [
+        "The Quill Community Pool still reserves three lanes for evening lap swimming.",
+        "The Quill Community Pool still opens for morning lap swimming at 6 a.m.",
+        "The Quill Community Pool still has three shallow-water steps."
+      ]
+    },
+    {
+      "id": "bird-count-method",
+      "old": "The Willowfen bird census counts herons with shore-based binocular surveys.",
+      "incoming": "The Willowfen bird census switched its heron count to drone photographs.",
+      "stillTrue": [
+        "The Willowfen bird census still counts cranes with shore-based binocular surveys.",
+        "The Willowfen bird census still records herons every Saturday.",
+        "The Willowfen bird census still archives last year's binocular survey forms."
+      ]
+    },
+    {
+      "id": "postage-weight",
+      "old": "A standard Larch Post parcel label covers packages up to 2 kilograms.",
+      "incoming": "Larch Post raised the standard parcel label limit to 3 kilograms.",
+      "stillTrue": [
+        "A standard Larch Post letter label still covers mail up to 2 kilograms.",
+        "Larch Post still sells parcel labels in packs of two.",
+        "Larch Post still requires a fragile sticker on glass parcels."
+      ]
+    },
+    {
+      "id": "beacon-interval",
+      "old": "The Cormorant Harbor beacon flashes once every 12 seconds.",
+      "incoming": "The Cormorant Harbor beacon was reset to flash once every 15 seconds.",
+      "stillTrue": [
+        "The Gull Point beacon still flashes once every 12 seconds.",
+        "The Cormorant Harbor beacon still uses a white lamp.",
+        "The Cormorant Harbor beacon still stands 12 meters above the water."
+      ]
+    },
+    {
+      "id": "lab-freezer",
+      "old": "The Nacre Lab stores its algae samples at minus 18 degrees Celsius.",
+      "incoming": "The Nacre Lab now stores its algae samples at minus 24 degrees Celsius.",
+      "stillTrue": [
+        "The Nacre Lab still stores its soil samples at minus 18 degrees Celsius.",
+        "The Nacre Lab still labels each algae sample by collection date.",
+        "The Nacre Lab still has 18 labeled algae sample trays."
+      ]
+    },
+    {
+      "id": "kite-class",
+      "old": "The Zephyr kite class meets for its beginner lesson at 9 a.m.",
+      "incoming": "The Zephyr kite class moved its beginner lesson to 10 a.m.",
+      "stillTrue": [
+        "The Zephyr kite class still meets for its advanced lesson at 9 a.m.",
+        "The Zephyr kite class still lends helmets to beginner students.",
+        "The Zephyr kite class still gathers at the north beach."
+      ]
+    },
+    {
+      "id": "chess-tiebreak",
+      "old": "The Alder Crown chess tournament uses total wins as its first tie-break criterion.",
+      "incoming": "The Alder Crown chess tournament changed its first tie-break criterion to head-to-head result.",
+      "stillTrue": [
+        "The Alder Crown chess tournament still uses total wins as its second tie-break criterion.",
+        "The Alder Crown chess tournament still records each player's total wins.",
+        "The Alder Crown chess tournament still starts games with a 30-minute clock."
+      ]
+    },
+    {
+      "id": "cistern-capacity",
+      "old": "The Roseglass greenhouse rainwater cistern holds 900 liters.",
+      "incoming": "The Roseglass greenhouse replaced its rainwater cistern with a 1200-liter tank.",
+      "stillTrue": [
+        "The Roseglass greenhouse still keeps a separate 900-liter fertilizer tank.",
+        "The Roseglass greenhouse still waters its seedlings with collected rainwater.",
+        "The Roseglass greenhouse still grows 900 seedling trays each spring."
+      ]
+    },
+    {
+      "id": "drone-altitude",
+      "old": "The Elowen land survey flies its mapping drone at 60 meters above the field.",
+      "incoming": "The Elowen land survey now flies its mapping drone at 80 meters above the field.",
+      "stillTrue": [
+        "The Elowen land survey still flies its inspection drone at 60 meters above the field.",
+        "The Elowen land survey still photographs the field at noon.",
+        "The Elowen land survey still maps a 60-hectare field."
+      ]
+    },
+    {
+      "id": "paper-weight",
+      "old": "The Mossprint workshop uses 160-gram paper for its invitation cards.",
+      "incoming": "The Mossprint workshop changed its invitation cards to 200-gram paper.",
+      "stillTrue": [
+        "The Mossprint workshop still uses 160-gram paper for its thank-you cards.",
+        "The Mossprint workshop still prints invitation cards with green ink.",
+        "The Mossprint workshop still cuts invitation cards to 160 millimeters wide."
+      ]
+    },
+    {
+      "id": "soup-kettle",
+      "old": "The Dune Harbor community kitchen sets its soup kettle to 85 degrees Celsius.",
+      "incoming": "The Dune Harbor community kitchen now sets its soup kettle to 90 degrees Celsius.",
+      "stillTrue": [
+        "The Dune Harbor community kitchen still sets its tea urn to 85 degrees Celsius.",
+        "The Dune Harbor community kitchen still serves soup at lunchtime.",
+        "The Dune Harbor community kitchen still owns an 85-liter soup kettle."
+      ]
+    },
+    {
+      "id": "diving-depth",
+      "old": "The Sable Reef training dive has a maximum depth of 14 meters.",
+      "incoming": "The Sable Reef training dive now has a maximum depth of 18 meters.",
+      "stillTrue": [
+        "The Sable Reef night dive still has a maximum depth of 14 meters.",
+        "The Sable Reef training dive still begins beside the yellow buoy.",
+        "The Sable Reef training dive still includes a 14-minute safety briefing."
+      ]
+    },
+    {
+      "id": "laser-speed",
+      "old": "The Tangle Makerspace cuts its plywood templates at 18 millimeters per second.",
+      "incoming": "The Tangle Makerspace now cuts its plywood templates at 22 millimeters per second.",
+      "stillTrue": [
+        "The Tangle Makerspace still cuts its acrylic templates at 18 millimeters per second.",
+        "The Tangle Makerspace still checks plywood templates for scorch marks.",
+        "The Tangle Makerspace still stocks 18-millimeter plywood boards."
+      ]
+    },
+    {
+      "id": "meteor-camera",
+      "old": "The Nightjar meteor camera takes 20-second exposures.",
+      "incoming": "The Nightjar meteor camera was reconfigured for 25-second exposures.",
+      "stillTrue": [
+        "The Nightjar cloud camera still takes 20-second exposures.",
+        "The Nightjar meteor camera still points toward the northeast sky.",
+        "The Nightjar meteor camera still stores images at 20 megapixels."
+      ]
+    },
+    {
+      "id": "ball-inflation",
+      "old": "The Crescent indoor volleyball club inflates match balls to 4.0 psi.",
+      "incoming": "The Crescent indoor volleyball club now inflates match balls to 4.5 psi.",
+      "stillTrue": [
+        "The Crescent indoor volleyball club still inflates training balls to 4.0 psi.",
+        "The Crescent indoor volleyball club still checks match balls before warm-up.",
+        "The Crescent indoor volleyball club still owns four match balls."
+      ]
+    },
+    {
+      "id": "audio-sample-rate",
+      "old": "The Copper Finch field recorder captures bird calls at 44.1 kilohertz.",
+      "incoming": "The Copper Finch field recorder now captures bird calls at 48 kilohertz.",
+      "stillTrue": [
+        "The Copper Finch studio recorder still captures bird calls at 44.1 kilohertz.",
+        "The Copper Finch field recorder still saves uncompressed audio files.",
+        "The Copper Finch field recorder still has 44 gigabytes of free storage."
+      ]
+    },
+    {
+      "id": "solar-charge-limit",
+      "old": "The Sunvale solar cart stops charging its main battery at 80 percent.",
+      "incoming": "The Sunvale solar cart now stops charging its main battery at 90 percent.",
+      "stillTrue": [
+        "The Sunvale solar cart still stops charging its spare battery at 80 percent.",
+        "The Sunvale solar cart still uses roof-mounted solar panels.",
+        "The Sunvale solar cart still carries 80 kilograms of tools."
+      ]
+    }
+  ]
+}

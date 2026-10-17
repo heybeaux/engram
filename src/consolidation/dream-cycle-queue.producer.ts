@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectFlowProducer } from '@nestjs/bullmq';
 import { FlowProducer, FlowJob } from 'bullmq';
 import { randomUUID } from 'crypto';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 import {
   DREAM_CYCLE_QUEUE,
   DREAM_CYCLE_JOBS,
@@ -17,6 +18,7 @@ export class DreamCycleQueueProducer {
   constructor(
     @InjectFlowProducer(DREAM_CYCLE_QUEUE)
     private readonly flowProducer: FlowProducer,
+    private readonly prisma: ServicePrismaService,
   ) {}
 
   async enqueue(
@@ -49,7 +51,29 @@ export class DreamCycleQueueProducer {
     };
 
     const flow = this.buildFlow(jobData);
-    await this.flowProducer.add(flow);
+    // Make queued runs visible to /health even if no worker consumes the flow.
+    await this.prisma.dreamCycleReport.create({
+      data: {
+        id: runId,
+        userId,
+        startedAt: new Date(),
+        dryRun: jobData.dryRun,
+        status: 'RUNNING',
+      },
+    });
+    try {
+      await this.flowProducer.add(flow);
+    } catch (error) {
+      await this.prisma.dreamCycleReport.update({
+        where: { id: runId },
+        data: {
+          status: 'FAILED',
+          completedAt: new Date(),
+          errors: { push: `Queue enqueue failed: ${(error as Error).message}` },
+        },
+      });
+      throw error;
+    }
 
     this.logger.log(
       `Dream Cycle flow enqueued: runId=${runId} userId=${userId}`,

@@ -1,0 +1,138 @@
+--- pinned-scorer
++++ v4-scorer
+@@ -1,15 +1,35 @@
+-// Recompute all classifier metrics from raw JSONL rows; no model or database calls.
++// Recompute ENG-127 v4 classifier metrics from raw JSONL; no model or database calls.
+ import fs from 'node:fs';
++import { createHash } from 'node:crypto';
++import os from 'node:os';
++import path from 'node:path';
+ const dir = new URL('./results/', import.meta.url);
+-const mode = process.argv[2] ?? 'default';
++const mode = process.argv[2] ?? '--heldout-v4';
++const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
++const fixtureBytes = fs.readFileSync(
++  path.join(os.homedir(), '.engram-team/scorecard/holdouts/eng127-v4.json'),
++);
+ if (
+-  !['default', '--dev-verified', '--dev-property', '--heldout-v3'].includes(
+-    mode,
+-  )
++  hash(fixtureBytes) !==
++  'f47958036d493bb49c85778b325fa466838e1a8e38fad17c39de7e63102cc447'
+ )
+-  throw new Error(
+-    'Usage: node score-supersession.mjs [--dev-verified|--dev-property|--heldout-v3]',
+-  );
++  throw new Error('Fixture hash mismatch');
++const fixture = JSON.parse(fixtureBytes);
++if (
++  fixture.items.length !== 20 ||
++  fixture.items.some((item) => item.stillTrue.length !== 3)
++)
++  throw new Error('Fixture shape mismatch');
++const fixturePairs = new Map(
++  fixture.items.flatMap((item) =>
++    [item.old, ...item.stillTrue].map((_, i) => [
++      `${item.id}:${i}`,
++      { cluster: item.id, gold: i === 0 },
++    ]),
++  ),
++);
++if (mode !== '--heldout-v4')
++  throw new Error('Usage: node score-eng127.mjs [--heldout-v4]');
+ const verifiedDev = mode === '--dev-verified';
+ const propertyDev = mode === '--dev-property';
+ const read = (set, arm) => {
+@@ -33,6 +53,7 @@
+   dev: [420, 70, 70],
+   heldout: [80, 20, 20],
+   'heldout-v3': [80, 20, 20],
++  'heldout-v4': [80, 20, 20],
+ };
+ const f1 = (rows) => {
+   const tp = rows.filter((r) => r.gold && r.predicted).length;
+@@ -63,13 +84,29 @@
+ };
+ let seed = 7;
+ const random = () => (seed = (1664525 * seed + 1013904223) >>> 0) / 2 ** 32;
+-for (const set of mode === '--heldout-v3'
+-  ? ['heldout-v3']
++for (const set of mode === '--heldout-v4'
++  ? ['heldout-v4']
+   : verifiedDev || propertyDev
+     ? ['dev']
+     : ['dev', 'heldout']) {
+   const offRaw = read(set, 'off'),
+     onRaw = read(set, 'on');
++  for (const [arm, raw] of [
++    ['off', offRaw],
++    ['on', onRaw],
++  ]) {
++    for (const row of raw.attempts) {
++      const want = fixturePairs.get(row.id);
++      if (
++        !want ||
++        row.cluster !== want.cluster ||
++        row.gold !== want.gold ||
++        row.arm !== arm ||
++        row.set !== set
++      )
++        throw new Error(`Raw row mismatch: ${arm} ${row.id}`);
++    }
++  }
+   const off = offRaw.rows,
+     on = onRaw.rows;
+   const clusters = [...new Set(on.map((r) => r.cluster))].sort();
+@@ -85,11 +122,22 @@
+     ['on', on],
+   ]) {
+     const index = new Map(rows.map((r) => [r.id, r]));
+-    if (
+-      index.size !== rows.length ||
+-      rows.some((r) => r.error || typeof r.predicted !== 'boolean')
+-    )
+-      throw new Error(`${set} ${arm}: duplicate or invalid classification`);
++    if (index.size !== rows.length)
++      throw new Error(`${set} ${arm}: duplicate classification`);
++    const invalid = rows.filter(
++      (r) => r.error || typeof r.predicted !== 'boolean',
++    );
++    if (invalid.length) {
++      console.log(
++        JSON.stringify({
++          arm,
++          invalid: invalid.map((r) => ({ id: r.id, error: r.error })),
++          raw_attempts: (arm === 'off' ? offRaw : onRaw).attempts.length,
++        }),
++      );
++      process.exitCode = 2;
++      process.exit(2);
++    }
+     if (rows.filter((r) => r.gold).length !== expected[set][2])
+       throw new Error('Gold count mismatch');
+     if (
+@@ -167,6 +215,10 @@
+         estimated_usd_per_classification: dollars / valid.length,
+         estimated_total_attempt_cost_usd: totalCost,
+         raw_attempts: attempts.length,
++        valid_pairs: rows.length,
++        invalid_pairs: 0,
++        api_calls: attempts.reduce((n, r) => n + (r.api_calls || 0), 0),
++        raw_sha256: hash(fs.readFileSync(new URL(`${set}-${arm}.jsonl`, dir))),
+         failed_attempts: attempts.filter((r) => r.error).length,
+         metered: valid.length,
+         total: rows.length,
+@@ -177,6 +229,12 @@
+   console.log(
+     JSON.stringify({
+       paired_f1_delta: delta,
++      fixture_sha256: hash(fixtureBytes),
++      classifier_gate_passes:
++        f1(on).f1 >= 0.6 &&
++        quantile(samples.delta, 0.025) > 0 &&
++        f1(on).fp <= 1,
++      row_effects_tested: false,
+       ci: [quantile(samples.delta, 0.025), quantile(samples.delta, 0.975)],
+     }),
+   );

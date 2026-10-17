@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "description": "Synthetic knowledge-update classifier holdout, frozen before ENG-122 tuning. Each item has one superseded active fact and three still-true candidate facts. All people and organizations are fictional.",
+  "candidateDate": "2025-01-10T12:00:00Z",
+  "incomingDate": "2025-06-10T12:00:00Z",
+  "items": [
+    {
+      "id": "home-city",
+      "old": "Mara's current home city is Portland.",
+      "incoming": "Mara has moved, and her current home city is Seattle.",
+      "stillTrue": [
+        "Mara grew up in Portland.",
+        "Mara's office is in Portland.",
+        "Mara's sister currently lives in Portland."
+      ]
+    },
+    {
+      "id": "job-title",
+      "old": "Niko's current job title at Cedar Labs is data analyst.",
+      "incoming": "Niko was promoted at Cedar Labs; his current job title is analytics manager.",
+      "stillTrue": [
+        "Niko was a data analyst at Cedar Labs last year.",
+        "Niko manages the forecasting project at Cedar Labs.",
+        "Niko's colleague Inez is a data analyst at Cedar Labs."
+      ]
+    },
+    {
+      "id": "main-editor",
+      "old": "Tess uses Vim as her main editor for application code.",
+      "incoming": "Tess switched her main editor for application code to VS Code.",
+      "stillTrue": [
+        "Tess still uses Vim for quick edits on servers.",
+        "Tess's teammate uses Vim as their main editor.",
+        "Tess keeps her old Vim configuration in a repository."
+      ]
+    },
+    {
+      "id": "weekly-distance",
+      "old": "Omar's current weekly running target is 20 kilometers.",
+      "incoming": "Omar raised his current weekly running target to 30 kilometers.",
+      "stillTrue": [
+        "Omar ran 20 kilometers last week.",
+        "Omar's running partner targets 20 kilometers each week.",
+        "Omar's Wednesday route is 20 kilometers long."
+      ]
+    },
+    {
+      "id": "car",
+      "old": "Ava's current personal car is a Honda Civic.",
+      "incoming": "Ava replaced her personal car with a Toyota Corolla.",
+      "stillTrue": [
+        "Ava's spouse drives a Honda Civic.",
+        "Ava sold her Honda Civic in May.",
+        "Ava rented a Honda Civic for a trip last winter."
+      ]
+    },
+    {
+      "id": "coffee-milk",
+      "old": "Ben currently orders oat milk in his morning coffee.",
+      "incoming": "Ben changed his morning coffee order to almond milk.",
+      "stillTrue": [
+        "Ben uses oat milk when baking muffins.",
+        "Ben's partner orders oat milk in coffee.",
+        "Ben keeps oat milk for guests."
+      ]
+    },
+    {
+      "id": "team-meeting",
+      "old": "The Atlas team's regular planning meeting is on Tuesday.",
+      "incoming": "The Atlas team moved its regular planning meeting to Thursday.",
+      "stillTrue": [
+        "The Atlas team's support meeting is on Tuesday.",
+        "The Atlas team held a planning meeting last Tuesday.",
+        "The Atlas team's regular planning meeting lasts 30 minutes."
+      ]
+    },
+    {
+      "id": "personal-phone",
+      "old": "Rui's current personal phone is an iPhone 13.",
+      "incoming": "Rui replaced his personal phone with a Pixel 8.",
+      "stillTrue": [
+        "Rui's work phone is an iPhone 13.",
+        "Rui gave his old iPhone 13 to his cousin.",
+        "Rui's spouse uses an iPhone 13."
+      ]
+    },
+    {
+      "id": "lesson-language",
+      "old": "Lena's weekly language lessons currently focus on Spanish.",
+      "incoming": "Lena switched her weekly language lessons to French.",
+      "stillTrue": [
+        "Lena can still speak Spanish.",
+        "Lena's brother takes weekly Spanish lessons.",
+        "Lena uses Spanish at work on Fridays."
+      ]
+    },
+    {
+      "id": "hotel-checkin",
+      "old": "Pia's hotel check-in for the conference is June 12.",
+      "incoming": "Pia changed her conference hotel reservation; check-in is now June 19.",
+      "stillTrue": [
+        "Pia's flight to the conference is on June 12.",
+        "Pia has a conference dinner reservation on June 12.",
+        "Pia's colleague checks in to a different hotel on June 12."
+      ]
+    },
+    {
+      "id": "contract-rate",
+      "old": "Sol's current hourly rate for the Acorn contract is $80.",
+      "incoming": "Sol and Acorn agreed to raise the current contract rate to $95 per hour.",
+      "stillTrue": [
+        "Sol billed Acorn $80 per hour on the April invoice.",
+        "Sol's hourly rate for the Birch contract remains $80.",
+        "Sol's Acorn teammate bills $80 per hour."
+      ]
+    },
+    {
+      "id": "deploy-region",
+      "old": "The Beacon production app currently runs in us-east-1.",
+      "incoming": "Beacon production has migrated and now runs in eu-west-1.",
+      "stillTrue": [
+        "Beacon staging still runs in us-east-1.",
+        "Beacon's backup archive is stored in us-east-1.",
+        "Beacon production ran in us-east-1 before the migration."
+      ]
+    },
+    {
+      "id": "school",
+      "old": "Eli currently attends Maple School.",
+      "incoming": "Eli transferred and now attends Oak School.",
+      "stillTrue": [
+        "Eli's sister attends Maple School.",
+        "Eli attended Maple School last semester.",
+        "Eli's after-school chess club meets at Maple School."
+      ]
+    },
+    {
+      "id": "alert-channel",
+      "old": "The Harbor app currently sends outage alerts by email.",
+      "incoming": "Harbor changed outage alerts to push notifications.",
+      "stillTrue": [
+        "Harbor still sends billing receipts by email.",
+        "Harbor's marketing newsletter goes out by email.",
+        "Harbor sent an outage alert by email in January."
+      ]
+    },
+    {
+      "id": "home-address",
+      "old": "Dana's current home address is 14 Elm Street.",
+      "incoming": "Dana moved; her current home address is 62 Pine Street.",
+      "stillTrue": [
+        "Dana's parents live at 14 Elm Street.",
+        "Dana received mail at 14 Elm Street last year.",
+        "Dana's office is near Elm Street."
+      ]
+    },
+    {
+      "id": "course-topic",
+      "old": "Jo's current evening course is linear algebra.",
+      "incoming": "Jo changed enrollment; the current evening course is statistics.",
+      "stillTrue": [
+        "Jo completed a linear algebra course last term.",
+        "Jo's friend is taking linear algebra this term.",
+        "Jo uses linear algebra in a statistics assignment."
+      ]
+    },
+    {
+      "id": "vacation-base",
+      "old": "The family's base city for the autumn vacation is Kyoto.",
+      "incoming": "The family changed the autumn vacation base city to Osaka.",
+      "stillTrue": [
+        "The family plans a day trip to Kyoto during the vacation.",
+        "The family's friend will stay in Kyoto during autumn.",
+        "The family booked a Kyoto tour before changing its base city."
+      ]
+    },
+    {
+      "id": "project-deadline",
+      "old": "The current deadline for the Orion launch is November 1.",
+      "incoming": "The Orion launch deadline was extended to November 15.",
+      "stillTrue": [
+        "The Orion design review is due November 1.",
+        "The Vega launch is due November 1.",
+        "Orion's original launch deadline was November 1."
+      ]
+    },
+    {
+      "id": "subscription-plan",
+      "old": "Mika's current Streamly subscription is the Basic plan.",
+      "incoming": "Mika upgraded her Streamly subscription to the Premium plan.",
+      "stillTrue": [
+        "Mika's brother has the Streamly Basic plan.",
+        "Mika paid for Streamly Basic last month.",
+        "Mika's music subscription is still on its Basic plan."
+      ]
+    },
+    {
+      "id": "warehouse",
+      "old": "The Quartz shop's active shipping warehouse is in Denver.",
+      "incoming": "Quartz switched its active shipping warehouse to Phoenix.",
+      "stillTrue": [
+        "Quartz keeps its returns warehouse in Denver.",
+        "Quartz shipped orders from Denver in January.",
+        "Quartz's supplier maintains a warehouse in Denver."
+      ]
+    }
+  ]
+}

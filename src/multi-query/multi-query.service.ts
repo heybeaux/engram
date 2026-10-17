@@ -69,6 +69,13 @@ export interface MultiQuerySearchResult {
   degraded: boolean;
 }
 
+export class QueryVariantEmbeddingError extends Error {
+  constructor() {
+    super('Query variant embedding failed');
+    this.name = 'QueryVariantEmbeddingError';
+  }
+}
+
 /**
  * Presets for common use cases
  */
@@ -243,7 +250,16 @@ export class MultiQueryService {
 
     // 2. Embed all variants in parallel (batch)
     const embedStart = Date.now();
-    const embeddings = await this.embedVariants(expansion.variants);
+    let embeddings: number[][];
+    try {
+      embeddings = await this.embedVariants(expansion.variants);
+    } catch (error) {
+      if (process.env.RECALL_LEXICAL_ON_EMBED_FAILURE !== 'true') throw error;
+      this.logger.warn(
+        `Query variant embedding failed: ${(error as Error).message}`,
+      );
+      throw new QueryVariantEmbeddingError();
+    }
     metrics.embeddingMs = Date.now() - embedStart;
 
     // 3. Search vector store in parallel
@@ -343,6 +359,17 @@ export class MultiQueryService {
     const embeddings = await Promise.all(
       variants.map((v) => this.embedding.generateForRecall(v)),
     );
+    if (
+      process.env.RECALL_LEXICAL_ON_EMBED_FAILURE === 'true' &&
+      embeddings.some(
+        (embedding) =>
+          !Array.isArray(embedding) ||
+          embedding.length === 0 ||
+          !embedding.every(Number.isFinite),
+      )
+    ) {
+      throw new Error('Invalid query variant embedding');
+    }
     // Validate embeddings — filter out any that contain non-numeric values
     return embeddings.filter(
       (emb) =>

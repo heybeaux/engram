@@ -24,7 +24,7 @@ export class DedupClassificationService {
   private readonly logger = new Logger(DedupClassificationService.name);
   private readonly BATCH_SIZE = 10;
 
-  // Preferred cheap model; falls back to provider default if unavailable
+  // This model requires OpenAI; do not silently route it to another provider.
   private readonly CLASSIFICATION_MODEL = 'gpt-4o-mini';
 
   constructor(
@@ -173,8 +173,12 @@ Respond with ONLY valid JSON (no markdown fences):
   "reasoning": "<one sentence>"
 }`;
 
+    if (!this.llm.getProvider('openai')) {
+      throw new Error('OpenAI provider is required for dedup classification');
+    }
+
     const response = await this.llm.chat([{ role: 'user', content: prompt }], {
-      provider: 'anthropic',
+      provider: 'openai',
       model: this.CLASSIFICATION_MODEL,
       maxTokens: 512,
       temperature: 0.2,
@@ -197,12 +201,12 @@ Respond with ONLY valid JSON (no markdown fences):
       );
     }
 
-    const parsed: {
+    const parsed = JSON.parse(jsonMatch[0]) as {
       classification: string;
       confidence: number;
       merged_content?: string | null;
       reasoning?: string;
-    } = JSON.parse(jsonMatch[0]);
+    };
 
     const validLabels: DedupClassification[] = [
       'DUPLICATE',

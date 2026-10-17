@@ -2,9 +2,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DreamCycleQueueProducer } from './dream-cycle-queue.producer';
 import { getFlowProducerToken } from '@nestjs/bullmq';
 import { DREAM_CYCLE_QUEUE, DREAM_CYCLE_JOBS } from './dream-cycle.queue';
+import { ServicePrismaService } from '../prisma/service-prisma.service';
 
 const mockFlowProducer = {
   add: jest.fn().mockResolvedValue({}),
+};
+const mockPrisma = {
+  dreamCycleReport: {
+    create: jest.fn().mockResolvedValue({}),
+    update: jest.fn().mockResolvedValue({}),
+  },
 };
 
 describe('DreamCycleQueueProducer', () => {
@@ -12,9 +19,11 @@ describe('DreamCycleQueueProducer', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockFlowProducer.add.mockResolvedValue({});
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DreamCycleQueueProducer,
+        { provide: ServicePrismaService, useValue: mockPrisma },
         {
           provide: getFlowProducerToken(DREAM_CYCLE_QUEUE),
           useValue: mockFlowProducer,
@@ -29,6 +38,9 @@ describe('DreamCycleQueueProducer', () => {
     it('should return a runId with correct prefix', async () => {
       const runId = await producer.enqueue('user-1');
       expect(runId).toMatch(/^dc-\d+-[a-f0-9]{8}$/);
+      expect(mockPrisma.dreamCycleReport.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ id: runId, status: 'RUNNING' }),
+      });
     });
 
     it('should call flowProducer.add once', async () => {
@@ -153,6 +165,10 @@ describe('DreamCycleQueueProducer', () => {
       await expect(producer.enqueue('user-1')).rejects.toThrow(
         'Queue unavailable',
       );
+      expect(mockPrisma.dreamCycleReport.update).toHaveBeenCalledWith({
+        where: { id: expect.stringMatching(/^dc-/) },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      });
     });
   });
 });
